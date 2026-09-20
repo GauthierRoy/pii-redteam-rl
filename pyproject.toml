@@ -1,0 +1,57 @@
+[project]
+name = "pii-redteam-rl"
+version = "0.1.0"
+description = "RL-guided synthetic data for robust PII detection (M01 scaffolding)"
+readme = "README.md"
+requires-python = ">=3.10"
+# uv is the single dependency-management method (`uv sync`, `uv run`).
+# `requirements.txt` is a Colab/pip fallback exporting the same runtime set.
+# Keep runtime deps minimal; uv.lock pins the tested environment (M01.2).
+dependencies = [
+  "pyyaml",
+]
+
+[dependency-groups]
+dev = [
+  "ruff>=0.16",
+  "ty>=0.0.8",
+  "pre-commit>=4.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src"]
+exclude = [
+  ".git",
+  ".venv",
+  "__pycache__",
+  "artifacts",
+  "outputs",
+  "*.ipynb_checkpoints",
+]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "W"]
+ignore = []
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["pii_redteam"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ty.environment]
+root = ["./src"]
+python-version = "3.12"
+
+[tool.ty.src]
+include = ["src", "scripts"]
+respect-ignore-files = true
+
+# Heavy ML deps (torch, transformers, trl, ...) are NOT installed at M01.
+# Ignore unresolved imports; ruff still catches typos via F821.
+[tool.ty.rules]
+unresolved-import = "ignore"

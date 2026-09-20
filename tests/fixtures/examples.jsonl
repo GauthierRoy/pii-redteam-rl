@@ -1,0 +1,3 @@
+{"example_id": "ex-001", "text": "Hi, my name is Ana Ruiz and I need help.", "spans": [{"label": "PERSON", "start": 15, "end": 23}]}
+{"example_id": "ex-002", "text": "Ticket for Jean Dupont: reset password.", "spans": [{"label": "PERSON", "start": 11, "end": 22}]}
+{"example_id": "ex-003", "text": "The invoice is due on Friday.", "spans": []}

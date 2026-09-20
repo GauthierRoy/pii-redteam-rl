@@ -1,0 +1,13 @@
+# M01 CPU smoke: fake models only. No downloads, no GPU, no network.
+run_name: smoke-cpu
+model_id: fake-generator-001
+seed: 0
+resume: false
+backend:
+  precision: fp32
+  decoder: reference
+data:
+  names: [Ana Ruiz, Jean Dupont]
+  max_examples: 4
+budget:
+  max_candidates: 8

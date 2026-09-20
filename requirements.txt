@@ -1,0 +1,6 @@
+# Colab/pip fallback exporting the same runtime set as pyproject.toml.
+# Primary flow is uv (`uv sync`, `uv run`); this file exists so a Colab
+# notebook can `pip install -r requirements.txt` and invoke the same entry points.
+# Heavy training deps (torch, transformers, trl, peft, vllm, datasets, ...)
+# are intentionally NOT installed until the M03/M05/M08 pilots that need them.
+pyyaml

@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Linters / tools
+.ruff_cache/
+.ty_cache/
+.mypy_cache/
+.pytype/
+
+# Training outputs / logs
+outputs/
+artifacts/
+wandb/
+lightning_logs/
+
+# Notebooks / data scratch
+.ipynb_checkpoints/
+*.ipynb_checkpoints
