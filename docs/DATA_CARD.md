@@ -41,12 +41,38 @@ SOCIALNUMBER 9599, SEX 7496. Plus rare CARDISSUER (5) and GEOCOORD (703).
 `GIVENNAME1/2` + `LASTNAME1/2/3` → PERSON (adjacent given+family merged into one span).
 `TITLE` (e.g. `Sel`), `USERNAME`, and all other labels are NOT PERSON.
 
-## Split roles (provisional, M04 locks final evaluation)
+## Split roles (locked 2026-10-04, M02.3; seed 20260920)
 
-- Train file → detector training/dev, generator SFT pairs, attack development.
-- Validation file → development/calibration only. It is NOT the final test set.
-- Final-evaluation role unassigned: carve a locked held-out partition before M10; no
-  generator training or prompt authoring from it.
+Carved by `scripts/carve_splits.py` at the pinned revision; manifests in `artifacts/splits/`
+(gitignored, regenerable from seed + revision; final-eval sha256 recorded here).
+
+| Role | Rows | Source |
+|---|---|---|
+| `final_eval` (locked) | 1,000 | seeded carve of train file, exact-text-unique, no text in validation file |
+| `train_side` (detector training, generator SFT, attack development) | 28,713 | train file minus final_eval |
+| `dev_calibration` | 7,923 | validation file, minus quarantined |
+
+- **Final-eval lock:** `artifacts/splits/final_eval.jsonl` sha256
+  `513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c`, row ids+hashes in
+  `final_eval_manifest.json`. No generator training, prompt authoring, sample selection, or
+  reward tuning from these rows.
+- **Row-level quarantine:** 195 train / 23 validation rows have ≥1 offset mismatch (the earlier
+  census counted 909/113 mismatching masks; same criterion, different unit).
+- **Duplicates:** 0 exact-text duplicates within or across the two files; every one of the
+  28,713 train-side rows also has a distinct PII-masked template skeleton, so no
+  near-duplicate/template leakage was found at pilot scale.
+- **Composition:** 290/1,000 final-eval rows contain PERSON spans (28.5–29% person-row share
+  holds across roles); the rest serve as negatives for the precision guardrail.
+
+### Name pools (M02.4, `artifacts/splits/name_pools.json`)
+
+- `train_side_pool`: 16,403 distinct PERSON values from train-side rows, with counts.
+  This is the only pool Spark request banks and the sampler may draw names from.
+- `heldout_names`: 200 seeded names occurring only in final-eval rows (593 such names exist;
+  seeded pick), reserved for M04 paired-name tests. Exact-match-disjoint from the train pool;
+  19/200 occur as substrings of train-side full names — recorded limitation, not a blocker.
+- Name overlap between final-eval and train-side texts is not banned: detector-training texts
+  keep their names; the pools govern generation requests, not the training texts.
 
 ## Quarantine rule
 

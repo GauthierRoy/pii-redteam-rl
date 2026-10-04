@@ -25,3 +25,9 @@ service verification by the agent.
 - R02: `grpo_compat` reused from `../rl` with lazy `trl` import (see `docs/REUSE_AUDIT.md`).
 - R03: Offsets are Python str indices, end-exclusive; recorded in `validation.py`.
 - R04: Invalid reward total (-1.0) sits below the valid [0, 1] range; components logged separately.
+- R05: Split roles locked 2026-10-04 (M02.3): seeded final-eval carve (1,000 train-file rows,
+  sha256 in `docs/DATA_CARD.md`); validation file stays development-only; exact-text
+  duplicates banned, template reuse measured (found none at skeleton level).
+- R06: Name pools (M02.4): generation requests draw only from `train_side_pool`
+  (16,403 values); 200 held-out names are final-eval-unique and reserved for M04 paired tests;
+  exact-match disjoint from the pool, substring overlap (19/200) recorded as a limitation.
