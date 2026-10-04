@@ -13,8 +13,33 @@ import random
 REQUEST_SOURCES = ("dataset_derived", "spark_authored", "seeded_sampler")
 
 
-def validate_request(record: dict) -> list[str]:
-    """Return schema errors; empty means the request is importable."""
+def load_person_name_pool(path: str) -> tuple[frozenset[str], dict]:
+    """Load the train-side PERSON name pool from a name_pools.json artifact (M02.4).
+
+    Returns ``(allowed_names, provenance)``. Only ``train_side_pool`` values are
+    allowed in generation requests; held-out names are reserved for evaluation
+    and any request carrying one is rejected.
+    """
+    with open(path, "rb") as f:
+        data = json.load(f)
+    allowed = frozenset(entry["value"] for entry in data["train_side_pool"])
+    provenance = {
+        "path": path,
+        "sha256": hashlib.sha256(open(path, "rb").read()).hexdigest(),
+        "version": data.get("version"),
+        "seed": data.get("seed"),
+        "rule": data.get("heldout_rule"),
+        "size": len(allowed),
+    }
+    return allowed, provenance
+
+
+def validate_request(record: dict, person_name_pool: frozenset[str] | None = None) -> list[str]:
+    """Return schema errors; empty means the request is importable.
+
+    When ``person_name_pool`` is given, every PERSON entity value must come from
+    it (R06: generation requests draw only from the train-side pool).
+    """
     errors: list[str] = []
     if not isinstance(record.get("request_id"), str) or not record["request_id"]:
         errors.append("request needs a non-empty string 'request_id'")
@@ -31,6 +56,12 @@ def validate_request(record: dict) -> list[str]:
         for i, ent in enumerate(entities):
             if not isinstance(ent, dict) or not ent.get("type") or not ent.get("value"):
                 errors.append(f"entities[{i}] needs string 'type' and 'value'")
+            elif person_name_pool is not None and ent.get("type") == "PERSON":
+                if ent["value"] not in person_name_pool:
+                    errors.append(
+                        f"entities[{i}] PERSON value {ent['value']!r} is not in the "
+                        "train-side name pool (held-out/final-eval names are forbidden)"
+                    )
     constraints = task.get("constraints", {})
     if not isinstance(constraints, dict):
         errors.append("task.constraints must be a mapping when present")
@@ -66,11 +97,16 @@ def render_prompt(record: dict) -> str:
     return "\n".join(lines)
 
 
-def load_bank(path: str, *, provenance: dict) -> dict:
+def load_bank(
+    path: str, *, provenance: dict, person_name_pool: tuple[frozenset[str], dict] | None = None
+) -> dict:
     """Import a JSONL request bank with validation + content hash.
 
     `provenance` must carry the authoring brief, creator, and creation date —
     the saved bank (not a future regeneration) is the reproducibility artifact.
+    ``person_name_pool`` is the ``(allowed_names, provenance)`` pair returned by
+    ``load_person_name_pool``; requests carrying PERSON values outside the pool
+    are rejected and the pool provenance is recorded in the manifest.
     """
     for key in ("brief", "created_by", "created_utc"):
         if not provenance.get(key):
@@ -86,7 +122,7 @@ def load_bank(path: str, *, provenance: dict) -> dict:
                 record = json.loads(line)
             except json.JSONDecodeError as e:
                 raise ValueError(f"bank line {lineno}: invalid JSON ({e})") from e
-            errors = validate_request(record)
+            errors = validate_request(record, person_name_pool[0] if person_name_pool else None)
             if errors:
                 raise ValueError(f"bank line {lineno}: " + "; ".join(errors))
             records.append(record)
@@ -100,6 +136,7 @@ def load_bank(path: str, *, provenance: dict) -> dict:
             "count": len(records),
             "by_source": sorted({r["request_source"] for r in records}),
             "provenance": provenance,
+            "person_name_pool_provenance": person_name_pool[1] if person_name_pool else None,
         },
     }
 
@@ -111,8 +148,19 @@ def seeded_sampler(
     contexts: tuple[str, ...] = (),
     language: str = "en",
     prefix: str = "seed",
+    allowed_names: frozenset[str] | None = None,
 ) -> list[dict]:
-    """Minimal programmatic path (Option B): same schema, recorded seed."""
+    """Minimal programmatic path (Option B): same schema, recorded seed.
+
+    When ``allowed_names`` is given, every name must come from the train-side
+    pool (R06); anything else raises instead of being silently dropped.
+    """
+    if allowed_names is not None:
+        rejected = sorted({n for n in names if n not in allowed_names})
+        if rejected:
+            raise ValueError(
+                f"names outside the train-side pool are forbidden in requests: {rejected[:5]}"
+            )
     rng = random.Random(seed)
     pool = list(names)
     rng.shuffle(pool)

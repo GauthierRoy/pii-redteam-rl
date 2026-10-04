@@ -1,7 +1,8 @@
 # STATE — pii-redteam-rl
 
 - **Date:** 2026-10-04
-- **Milestone:** M01 done; M02.1–M02.4 done (plan v1.3). M03/M05 next; M05.1-partial done.
+- **Milestone:** M01 done; M02.1–M02.4 done (plan v1.3). M03.2 offline part done;
+  M05.2 done. GPU-gated work (M03.1/M03.3, Qwen smoke) awaits Colab.
 - **Completed task IDs:** M01.1–M01.3 (see history). M02.1 (PERSON policy in
   `docs/ANNOTATION_POLICY.md`: GIVENNAME*/LASTNAME* → PERSON, TITLE/USERNAME excluded,
   whitespace-adjacent merge). M02.2 (English AI4Privacy files inspected at pinned rev,
@@ -11,8 +12,11 @@
   duplicates found; leakage checks asserted). M02.4 (name pools:
   `train_side_pool` 16,403 values + 200 held-out final-eval-unique names,
   `artifacts/splits/name_pools.json`; substring overlap 19/200 recorded).
-  M05.1-partial (shared request schema §4.1 in `src/pii_redteam/requests.py`: validator,
-  prompt renderer, Spark-bank importer with hash+provenance, seeded sampler second path).
+  M03.2-partial (tokenizer-agnostic BIO labeling/decoding/truncation in
+  `src/pii_redteam/detector.py`, stub-tested offline; real-tokenizer check pending
+  Colab). M05.1-partial (shared request schema §4.1 in `src/pii_redteam/requests.py`:
+  validator, prompt renderer, Spark-bank importer with hash+provenance, seeded sampler
+  second path). M05.2 (train-side pool enforcement in validator/bank/sampler, R06).
 - **Completed task IDs:** M01.1 (skeleton: data/detection/generation/rewards/evaluation/accounting
   seams + config loader + fake-model path), M01.2 (uv env with locked pyyaml, seeds,
   resolved-config + manifest per run), M01.3 (schema/unit/integration/smoke tests, resume
@@ -20,6 +24,23 @@
   written before any code was ported (`docs/REUSE_AUDIT.md`).
   Dependency method: uv only (`uv sync` / `uv run`; `requirements.txt` kept as a
   Colab/pip fallback exporting the same runtime set).
+
+## Tests actually executed (2026-10-04, M03.2/M05.2 session)
+
+- `PYTHONPATH=src uv run python -m unittest discover -s tests -t .` → 64 tests
+  (50 prior + 10 alignment + 4 pool-enforcement), OK.
+- `bash scripts/lint.sh` → ruff check + format + ty, all pass.
+- M03.2 (offline part): `src/pii_redteam/detector.py` gained tokenizer-agnostic
+  `bio_labels_from_spans` / `spans_from_bio_labels` / `truncate_labels` operating on
+  char-offset sequences (the HF fast-tokenizer `return_offsets_mapping` interface).
+  Round-trip, Unicode, subword, special-token, orphan-I, mid-boundary, and truncation
+  behavior all covered by `tests/unit/test_alignment.py` with stub offsets. The real
+  ModernBERT tokenizer still needs verification on Colab (M03.1) — mBERT arrays remain
+  unused. D0 training (M03.3) not started.
+- M05.2: `src/pii_redteam/requests.py` enforces R06 — `load_person_name_pool`,
+  `validate_request(..., person_name_pool=...)` (rejects held-out/final-eval names),
+  `load_bank(..., person_name_pool=...)` (records pool sha256/size in the manifest),
+  `seeded_sampler(..., allowed_names=...)` (raises on out-of-pool names).
 
 ## Tests actually executed (2026-10-04, M02.3–M02.4 session)
 
@@ -61,17 +82,18 @@
 
 ## Next three actions
 
-1. M03.1/M03.2: pick ModernBERT token-classification checkpoint; implement tokenizer
-   offset alignment, subword labeling, BIO decoding, Unicode tests (train on train_side
-   rows only; select on dev_calibration; final_eval untouched).
-2. M05.2: wire `train_side_pool` into the sampler/Spark-bank provenance so no generation
-   request can carry a held-out or final-eval-only name.
-3. M03.1/M05.1: verify Qwen3.5-0.8B text-only loading + adapter-update smoke on Colab
-   (free-first gate: feasibility, memory, checkpoint save/resume before any longer run).
+1. M03.1: on Colab, verify the ModernBERT token-classification checkpoint loads with
+   its own tokenizer, feeds the alignment seam, and reproduces the offline round-trip
+   on real rows; record memory/throughput. (Owner runs Colab; script can be prepared.)
+2. M03.3: train D0 on train_side rows (tokenizer-aware labels), select on dev_calibration,
+   freeze before any RL; requires the Colab/GPU gate.
+3. M05.2-done follow-up: author the first Spark request bank from `train_side_pool`
+   (or run the seeded sampler) and import it through the pool-enforcing loader.
 
 ## Blockers / open decisions
 
 - D01, D04, D06–D11 open (see `docs/DECISIONS.md`). D02/D03/D05/D12 settled per plan v1.3;
   split/name policies recorded as R05/R06. No training, no paid spend, no final-test use.
-  Uncommitted work in this session: `src/pii_redteam/data/splits.py`, `scripts/carve_splits.py`,
-  `tests/unit/test_splits.py`, docs + STATE updates (commit on owner request).
+  GPU-dependent tasks (M03.1/M03.3, Qwen smoke) are blocked on Colab access, not on code.
+  Uncommitted work in this session: `detector.py` + `requests.py` alignment/pool changes
+  + `tests/unit/test_alignment.py` (commit on owner request).
