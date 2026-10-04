@@ -102,11 +102,11 @@ def main() -> None:
         padding=True,
     )
     labels = []
-    for offsets, row in zip(enc["offset_mapping"], batch):
+    for offsets, row in zip(enc["offset_mapping"], batch, strict=True):
         labels.append(
             [
                 -100 if (s, e) == (0, 0) else LABEL2ID[lab]
-                for (s, e), lab in zip(offsets, bio_labels_from_spans(offsets, row["spans"]))
+                for (s, e), lab in zip(offsets, bio_labels_from_spans(offsets, row["spans"]), strict=True)
             ]
         )
     input_ids = torch.tensor(enc["input_ids"])
