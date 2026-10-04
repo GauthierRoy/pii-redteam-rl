@@ -25,6 +25,24 @@
   Dependency method: uv only (`uv sync` / `uv run`; `requirements.txt` kept as a
   Colab/pip fallback exporting the same runtime set).
 
+## Tests actually executed (2026-10-04, ModernBERT CPU gate session)
+
+- **M03.1 partially verified on this laptop (CPU, not Colab)** — isolated venv
+  (`/tmp/mbenv`, not the locked repo env): torch 2.14.1+cpu, transformers 5.18.0.
+  Script: throwaway copy of the notebook's ModernBERT cell over 50 real train-side rows
+  (final-eval ids excluded). Report: `artifacts/cpu_gate/modernbert_cpu_report.json`.
+  - Load: `answerdotai/ModernBERT-base` loads as `ModernBertForTokenClassification`
+    (fresh head: classifier weight/bias newly initialized, as expected).
+  - Round-trip: initially 29/50 off-by-one — root cause: ModernBERT's BPE tokenizer
+    prefixes a word's first token with the preceding space. Fix:
+    `trim_span_whitespace` in `src/pii_redteam/detector.py` (+2 tests) applied to
+    recovered spans before comparison. After the fix: **50/50 exact**.
+  - Training step (batch 4 × 128 tokens): loss finite (1.55, random head), grad_sum
+    8.6e4 > 0, ~2.2 s/step, peak RSS ~3.3 GB on 16-core CPU. Full D0 training stays
+    planned for Colab; per-step cost makes laptop-only training slow but possible.
+- `PYTHONPATH=src uv run python -m unittest discover -s tests -t .` → 66 tests
+  (64 + 2 trim tests), OK. `bash scripts/lint.sh` → all pass.
+
 ## Tests actually executed (2026-10-04, M03.2/M05.2 session)
 
 - `PYTHONPATH=src uv run python -m unittest discover -s tests -t .` → 64 tests

@@ -75,6 +75,26 @@ def truncate_labels(labels: list[str], max_length: int) -> list[str]:
     return labels[:max_length]
 
 
+def trim_span_whitespace(text: str, spans: list[dict]) -> list[dict]:
+    """Trim leading/trailing whitespace from recovered span boundaries.
+
+    BPE-style tokenizers (e.g. ModernBERT's) attach the space before a word to that
+    word's first token, so token-granular recovery yields spans like ``" Ball"`` whose
+    start is one character early. Gold spans never include that whitespace, so
+    comparison must trim both sides. Spans that trim to nothing are dropped.
+    """
+    out = []
+    for span in spans:
+        start, end = span["start"], span["end"]
+        while start < end and text[start].isspace():
+            start += 1
+        while end > start and text[end - 1].isspace():
+            end -= 1
+        if end > start:
+            out.append({"label": span["label"], "start": start, "end": end})
+    return out
+
+
 class FakeDetector:
     """Frozen mock detector: finds no spans, scores 0.0 correctness."""
 
