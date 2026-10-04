@@ -23,7 +23,35 @@
   guard, backend contract with reference path + unsupported-config errors). Reuse audit
   written before any code was ported (`docs/REUSE_AUDIT.md`).
   Dependency method: uv only (`uv sync` / `uv run`; `requirements.txt` kept as a
-  Colab/pip fallback exporting the same runtime set).
+  Colab/pip fallback exporting the same runtime set). Heavy ML deps (torch CPU,
+  transformers, accelerate, peft) live in the locked, opt-in `ml` group:
+  `uv sync --group ml` / `uv run --group ml ...` / `make gate-detector`; torch is pinned
+  to the PyTorch CPU index via `[tool.uv.sources]`. Never hand-built venvs.
+
+## Tests actually executed (2026-10-04, ModernBERT CPU gate session)
+
+- **M03.1 partially verified on this laptop (CPU, not Colab)** — ephemeral uv env
+  (repo lock untouched): `uv run --no-project --with transformers --with torch
+  --default-index https://download.pytorch.org/whl/cpu --index https://pypi.org/simple
+  python /tmp/mb_cpu_gate.py` → torch 2.14.1+cpu, transformers 5.18.0.
+  Script: throwaway copy of the notebook's ModernBERT cell over 50 real train-side rows
+  (final-eval ids excluded). Report: `artifacts/cpu_gate/modernbert_cpu_report.json`.
+  - Load: `answerdotai/ModernBERT-base` loads as `ModernBertForTokenClassification`
+    (fresh head: classifier weight/bias newly initialized, as expected).
+  - Round-trip: initially 29/50 off-by-one — root cause: ModernBERT's BPE tokenizer
+    prefixes a word's first token with the preceding space. Fix:
+    `trim_span_whitespace` in `src/pii_redteam/detector.py` (+2 tests) applied to
+    recovered spans before comparison. After the fix: **50/50 exact**.
+  - Training step (batch 4 × 128 tokens): loss finite (1.55, random head), grad_sum
+    8.6e4 > 0, ~2.2 s/step, peak RSS ~3.3 GB on 16-core CPU. Full D0 training stays
+    planned for Colab; per-step cost makes laptop-only training slow but possible.
+- `PYTHONPATH=src uv run python -m unittest discover -s tests -t .` → 66 tests
+  (64 + 2 trim tests), OK. `bash scripts/lint.sh` → all pass.
+- **Permanent ML env + gate script**: `ml` dependency group added (torch>=2.14 CPU,
+  transformers>=5.18, accelerate, peft), torch pinned to the CPU index; gate moved to
+  `scripts/modernbert_cpu_gate.py` (`make gate-detector`). Reproduced through the
+  project env: round-trip 50/50, train step loss 0.99, grad_sum 6.6e4, 2.5 s/step,
+  peak RSS 3.3 GB. Report: `artifacts/cpu_gate/modernbert_cpu_report.json`.
 
 ## Tests actually executed (2026-10-04, M03.2/M05.2 session)
 
@@ -82,11 +110,12 @@
 
 ## Next three actions
 
-1. M03.1: on Colab, verify the ModernBERT token-classification checkpoint loads with
-   its own tokenizer, feeds the alignment seam, and reproduces the offline round-trip
-   on real rows; record memory/throughput. (Owner runs Colab; script can be prepared.)
-2. M03.3: train D0 on train_side rows (tokenizer-aware labels), select on dev_calibration,
-   freeze before any RL; requires the Colab/GPU gate.
+1. Run `colab/M03_M05_gpu_gate.ipynb` on Colab (free T4, `Runtime -> Run all`): it
+   mounts Drive, clones this repo, rebuilds + asserts the locks, then executes the
+   M03.1 ModernBERT gate and the M05.1 Qwen3.5-0.8B smoke. Copy the printed summary
+   and the `gpu_gate_report.json` Drive path back here as evidence.
+2. M03.3: train D0 on train_side rows (tokenizer-aware labels via the verified
+   alignment seam), select on dev_calibration, freeze before any RL.
 3. M05.2-done follow-up: author the first Spark request bank from `train_side_pool`
    (or run the seeded sampler) and import it through the pool-enforcing loader.
 
@@ -94,6 +123,7 @@
 
 - D01, D04, D06–D11 open (see `docs/DECISIONS.md`). D02/D03/D05/D12 settled per plan v1.3;
   split/name policies recorded as R05/R06. No training, no paid spend, no final-test use.
-  GPU-dependent tasks (M03.1/M03.3, Qwen smoke) are blocked on Colab access, not on code.
-  Uncommitted work in this session: `detector.py` + `requests.py` alignment/pool changes
-  + `tests/unit/test_alignment.py` (commit on owner request).
+  `colab/M03_M05_gpu_gate.ipynb` prepared but NOT yet executed — no M03.1/M05.1 evidence
+  exists until the owner runs it on Colab; model IDs verified to exist on the Hub
+  (`answerdotai/ModernBERT-base`, `Qwen/Qwen3.5-0.8B`, hybrid `Qwen3_5ForConditionalGeneration`).
+  Uncommitted work in this session: the notebook + this STATE update.

@@ -17,6 +17,24 @@ dev = [
   "ty>=0.0.8",
   "pre-commit>=4.0",
 ]
+# Optional ML stack (ModernBERT gate M03, Qwen smoke M05): locked, NOT installed by
+# default. Install on demand: `uv sync --group ml` (or `uv run --group ml ...`).
+# A plain `uv sync` removes it again (exact sync) - by design, it is opt-in.
+ml = [
+  "torch>=2.14",
+  "transformers>=5.18",
+  "accelerate>=1.0",
+  "peft>=0.16",
+]
+
+# CPU-only torch: this machine has no CUDA; pin torch to the PyTorch CPU index.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
 
 [tool.ruff]
 line-length = 100
@@ -51,7 +69,7 @@ python-version = "3.12"
 include = ["src", "scripts"]
 respect-ignore-files = true
 
-# Heavy ML deps (torch, transformers, trl, ...) are NOT installed at M01.
+# Heavy ML deps live in the optional `ml` group (locked, installed on demand).
 # Ignore unresolved imports; ruff still catches typos via F821.
 [tool.ty.rules]
 unresolved-import = "ignore"

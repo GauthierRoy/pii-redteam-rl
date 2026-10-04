@@ -11,6 +11,7 @@ import unittest
 from pii_redteam.detector import (
     bio_labels_from_spans,
     spans_from_bio_labels,
+    trim_span_whitespace,
     truncate_labels,
 )
 
@@ -96,6 +97,22 @@ class TestAlignment(unittest.TestCase):
         self.assertEqual(truncate_labels(labels, 99), labels)
         with self.assertRaises(ValueError):
             truncate_labels(labels, -1)
+
+    def test_bpe_leading_space_trimmed_on_recovery(self):
+        # ModernBERT-style BPE: the token starting a word includes the leading space.
+        text = "Contact Ana"
+        offsets = [(0, 7), (7, 11)]  # tokens "Contact" | " Ana" (space-prefixed)
+        gold = spans((8, 11))
+        labels = bio_labels_from_spans(offsets, gold)
+        self.assertEqual(labels, ["O", "B-PERSON"])
+        raw = spans_from_bio_labels(offsets, labels)
+        self.assertEqual(raw, spans((7, 11)))  # token-granular: includes the space
+        self.assertEqual(trim_span_whitespace(text, raw), gold)
+
+    def test_trim_drops_whitespace_only_and_trims_trailing(self):
+        self.assertEqual(trim_span_whitespace("  ", spans((0, 2))), [])
+        text = "Ana here"
+        self.assertEqual(trim_span_whitespace(text, spans((0, 4))), spans((0, 3)))
 
 
 if __name__ == "__main__":
