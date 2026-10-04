@@ -29,9 +29,23 @@
   `uv sync --group ml` / `uv run --group ml ...` / `make gate-detector`; torch is pinned
   to the PyTorch CPU index via `[tool.uv.sources]`. Never hand-built venvs.
 
-## Colab GPU gate executed (2026-10-04, run-20261004-141053, owner-run)
+## Interim analysis + D0 notebook prepared (2026-10-04)
 
-Report from Colab (T4, 15.6 GB VRAM): python 3.13.15, torch 2.11.0+cu130,
+- **Name-pool quality census** (train_side_pool, 16,403 values): 96.1% name_like
+  (15,767); 3.5% separator values (572 — mostly legitimate hyphenated names, plus
+  `N/A`, `-`); 0.3% digit-containing (45, e.g. `1986rimbiondi`,
+  `1934zinat@gmail.com`, `Lastname1`); 12 pipe artifacts (`Anudari|Buddenhagen`);
+  7 single chars (`F`, `M`). Proposed request-pool filter (generation requests only;
+  detector training texts untouched): exclude digit/@/N-A/pipe/single-char values
+  (~640, ~4%). NOT implemented — open owner decision (see blockers).
+- **`colab/M03_train_d0.ipynb` prepared (not executed)**: trains the D0 candidate on
+  train_side rows (positives + ~71% negatives kept), labels via the verified alignment
+  seam, per-epoch selection on dev_calibration, best checkpoint by dev span-F1 saved
+  to Drive with metrics/curves/errors/manifest. Pilot settings (owner-reviewable):
+  seed 20260920, max_length 512, batch 16, 2 epochs, lr 5e-5, acceptance floor dev
+  span-F1 >= 0.70 + negative-precision guard. Final-eval partition untouched.
+
+## Colab GPU gate executed (2026-10-04, run-20261004-141053, owner-run)Report from Colab (T4, 15.6 GB VRAM): python 3.13.15, torch 2.11.0+cu130,
 transformers 5.18.0, peft 0.21.2, accelerate 1.15.0, repo commit `0ff0568`.
 
 **PASS (7/8):** final-eval lock reproduces on Colab (sha `513335…d39c` identical);
