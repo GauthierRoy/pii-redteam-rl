@@ -23,12 +23,16 @@
   guard, backend contract with reference path + unsupported-config errors). Reuse audit
   written before any code was ported (`docs/REUSE_AUDIT.md`).
   Dependency method: uv only (`uv sync` / `uv run`; `requirements.txt` kept as a
-  Colab/pip fallback exporting the same runtime set).
+  Colab/pip fallback exporting the same runtime set). Heavy ad-hoc deps (torch etc.)
+  go through ephemeral envs: `uv run --no-project --with <pkgs> ...` — never hand-built
+  venvs, never the locked project env.
 
 ## Tests actually executed (2026-10-04, ModernBERT CPU gate session)
 
-- **M03.1 partially verified on this laptop (CPU, not Colab)** — isolated venv
-  (`/tmp/mbenv`, not the locked repo env): torch 2.14.1+cpu, transformers 5.18.0.
+- **M03.1 partially verified on this laptop (CPU, not Colab)** — ephemeral uv env
+  (repo lock untouched): `uv run --no-project --with transformers --with torch
+  --default-index https://download.pytorch.org/whl/cpu --index https://pypi.org/simple
+  python /tmp/mb_cpu_gate.py` → torch 2.14.1+cpu, transformers 5.18.0.
   Script: throwaway copy of the notebook's ModernBERT cell over 50 real train-side rows
   (final-eval ids excluded). Report: `artifacts/cpu_gate/modernbert_cpu_report.json`.
   - Load: `answerdotai/ModernBERT-base` loads as `ModernBertForTokenClassification`
