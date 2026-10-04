@@ -75,7 +75,9 @@ def main() -> None:
     mismatches = []
     t0 = time.time()
     for row in rows:
-        enc = tok(row["text"], return_offsets_mapping=True, truncation=True, max_length=512)
+        enc = tok(  # ty: ignore[call-non-callable]  # transformers 5.x stub union includes None
+            row["text"], return_offsets_mapping=True, truncation=True, max_length=512
+        )
         if len(enc["input_ids"]) >= 512:
             truncated += 1
             continue
@@ -98,7 +100,7 @@ def main() -> None:
 
     model.train()
     batch = rows[:4]
-    enc = tok(
+    enc = tok(  # ty: ignore[call-non-callable]  # transformers 5.x stub union includes None
         [r["text"] for r in batch],
         return_offsets_mapping=True,
         truncation=True,
