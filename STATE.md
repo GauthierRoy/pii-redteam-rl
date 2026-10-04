@@ -2,8 +2,8 @@
 
 - **Date:** 2026-10-04
 - **Milestone:** M01 done; M02.1–M02.4 done (plan v1.3). M03.2 offline part done;
-  M05.2 done. M03.1/M05.1 GPU gate executed on Colab 2026-10-04 (7/8 PASS; LoRA
-  check pending re-run with torchao fix). M03.3 detector training next.
+  M05.2 done. M03.1/M05.1 GPU gate executed on Colab 2026-10-04, re-run 8/8 PASS —
+  gate closed. M03.3 detector training next (notebook ready).
 - **Completed task IDs:** M01.1–M01.3 (see history). M02.1 (PERSON policy in
   `docs/ANNOTATION_POLICY.md`: GIVENNAME*/LASTNAME* → PERSON, TITLE/USERNAME excluded,
   whitespace-adjacent merge). M02.2 (English AI4Privacy files inspected at pinned rev,
@@ -29,6 +29,32 @@
   `uv sync --group ml` / `uv run --group ml ...` / `make gate-detector`; torch is pinned
   to the PyTorch CPU index via `[tool.uv.sources]`. Never hand-built venvs.
 
+- **Option B request bank frozen (M05 groundwork)**: `scripts/build_request_bank.py`
+  → `artifacts/request_bank/sampler_seed20260920_n200.jsonl` (200 requests, sha256
+  `332a9eb0…dc58c`), drawn from the 16,329 requestable names (74 pseudo dropped),
+  re-imported through `load_bank` with pool provenance attached. All 200 entity values
+  verified requestable. Same seed + pool version reproduces the bank; regeneration is
+  never assumed.
+
+## Interim analysis + D0 notebook prepared (2026-10-04)
+
+- **Name-pool quality census + R07 implemented (owner-approved 2026-10-04)**:
+  train_side_pool holds 16,403 raw values; `is_requestable_name` (R07, in
+  `src/pii_redteam/requests.py`) drops 74 artifact values (0.45%): 45 digit-containing
+  (e.g. `1986rimbiondi`, phone numbers), 12 pipe-joined, 1 email, 8 slash/fillers
+  (`-`, `Ajet N/A`), 8 single initials. Hyphenated real names (`Ioan-Ciprian`) stay
+  requestable. Enforcement sits in `load_person_name_pool` (drop count recorded in
+  pool provenance), so sampler and bank loader reject pseudo values even in
+  hand-authored banks. Detector training texts are untouched. The gate notebook's
+  sampler call now draws from the requestable subset (7 of the first 8 raw pool
+  values are artifacts).
+- **`colab/M03_train_d0.ipynb` prepared (not executed)**: trains the D0 candidate on
+  train_side rows (positives + ~71% negatives kept), labels via the verified alignment
+  seam, per-epoch selection on dev_calibration, best checkpoint by dev span-F1 saved
+  to Drive with metrics/curves/errors/manifest. Pilot settings (owner-reviewable):
+  seed 20260920, max_length 512, batch 16, 3 epochs (~1 h on T4), lr 5e-5, acceptance
+  floor dev span-F1 >= 0.70 + negative-precision guard. Final-eval partition untouched.
+
 ## Colab GPU gate executed (2026-10-04, run-20261004-141053, owner-run)
 
 Report from Colab (T4, 15.6 GB VRAM): python 3.13.15, torch 2.11.0+cu130,
@@ -53,6 +79,14 @@ the notebook's install cell now upgrades torchao; re-run should confirm.
   Pool-quality policy (filter or keep) is an open owner decision for M05; not
   silently changed here.
 - Checkpoints/adapter from the run are on Drive under `run-20261004-141053/`.
+
+## Colab GPU gate re-run (2026-10-04, run-20261004-142042): 8/8 PASS — gate closed
+
+Owner re-ran the notebook after the torchao fix. All checks PASS, including the Qwen
+LoRA adapter update (targets auto-discovered: k/o/q/v projections; loss 0.80,
+grad_sum 5.9e2). ModernBERT training step 0.33 s (warm cache), peak 4.63 GB. Output
+contract again PASS (JSON `text` field, name exactly once). **M03.1/M05.1 complete.**
+Report/checkpoints on Drive under `run-20261004-142042/`.
 
 ## Tests actually executed (2026-10-04, ModernBERT CPU gate session)
 
@@ -136,17 +170,16 @@ the notebook's install cell now upgrades torchao; re-run should confirm.
 
 ## Next three actions
 
-1. Re-run `colab/M03_M05_gpu_gate.ipynb` (fast: Drive cache) with the torchao fix to
-   confirm the LoRA adapter-update check passes; then pin the tested stack versions.
-2. M03.3: train D0 on Colab — train_side rows with tokenizer-aware labels via the
-   verified alignment seam, select on dev_calibration, freeze checkpoint before RL.
-3. M05: author the first request bank from `train_side_pool` (Spark brief or sampler),
-   import through the pool-enforcing loader, then first SFT pairs run.
+1. M03.3: run `colab/M03_train_d0.ipynb` on Colab (T4, ~1 h at 3 epochs, Drive cache):
+   train_side rows, dev selection, acceptance floors (dev span-F1 >= 0.70 + negative
+   precision). Review metrics/errors, then freeze D0 and pin the tested stack.
+2. M05: run the frozen sampler bank (Option B) through the generator; owner may also
+   author a Spark bank (Option A) for comparison later — same schema, same loader.
+3. M07 groundwork: wire the frozen D0 into the reward path once it exists.
 
 ## Blockers / open decisions
 
 - D01, D04, D06–D11 open (see `docs/DECISIONS.md`). D02/D03/D05/D12 settled per plan v1.3;
-  split/name policies recorded as R05/R06. No training, no paid spend, no final-test use.
-  M03.1/M05.1 gate executed on Colab (7/8 PASS; LoRA check blocked by Colab's stale
-  torchao, fixed in the notebook install cell, re-run pending). Open owner decision:
-  name-pool quality policy for username-like PERSON values (e.g. "1963soheila.raimoski").
+  split/name policies recorded as R05/R06; pseudo-name filter approved and implemented (R07).
+  No training, no paid spend, no final-test use.
+  M03.1/M05.1 gate closed (8/8 PASS on the 2026-10-04 re-run).

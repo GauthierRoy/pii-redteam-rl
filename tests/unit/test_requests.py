@@ -82,6 +82,34 @@ class TestRequests(unittest.TestCase):
         for r in first:
             self.assertEqual(req.validate_request(r), [])
 
+    def test_is_requestable_name_policy(self):
+        ok = ["Ana Ruiz", "Ioan-Ciprian", "Élodie Martin", "O'Neil", "Ann-Cathrin"]
+        bad = [
+            "1986rimbiondi",
+            "1934zinat@gmail.com",
+            "Anudari|Buddenhagen",
+            "N/A",
+            "-",
+            "F",
+            "Lastname1",
+        ]
+        for value in ok:
+            self.assertTrue(req.is_requestable_name(value), value)
+        for value in bad:
+            self.assertFalse(req.is_requestable_name(value), value)
+
+    def test_pool_loader_drops_pseudo_values(self):
+        pool_path = write_pool(["Ana Ruiz", "1986rimbiondi", "N/A"])
+        try:
+            allowed, pool_prov = req.load_person_name_pool(pool_path)
+            self.assertEqual(allowed, frozenset({"Ana Ruiz"}))
+            self.assertEqual(pool_prov["size"], 1)
+            self.assertEqual(pool_prov["dropped_pseudo"], 2)
+            self.assertEqual(req.validate_request(request("Ana Ruiz"), allowed), [])
+            self.assertTrue(req.validate_request(request("1986rimbiondi"), allowed))
+        finally:
+            os.unlink(pool_path)
+
     def test_person_name_pool_enforced(self):
         pool_path = write_pool(["Ana Ruiz", "Jean Dupont"])
         try:

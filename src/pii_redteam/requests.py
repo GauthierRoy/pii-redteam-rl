@@ -12,17 +12,39 @@ import random
 
 REQUEST_SOURCES = ("dataset_derived", "spark_authored", "seeded_sampler")
 
+# R07: pool values that are dataset artifacts, not requestable person names.
+_PSEUDO_EXACT = {"n/a", "na", "-", "--", "null", "none", "?"}
+
+
+def is_requestable_name(value: str) -> bool:
+    """R07 policy: which train-side pool values may appear as PERSON entities.
+
+    Excludes dataset mask artifacts: digit-containing strings (``1986rimbiondi``),
+    emails (``1934zinat@gmail.com``), pipe-joined fragments (``Anudari|Buddenhagen``),
+    slash-fillers (``N/A``), and single initials. Legitimate hyphenated names
+    (``Ioan-Ciprian``) and accented names (``Élodie Martin``) stay requestable.
+    """
+    v = value.strip()
+    if len(v) < 2:
+        return False
+    if v.lower() in _PSEUDO_EXACT:
+        return False
+    return not any(ch.isdigit() or ch in "@|/\\" for ch in v)
+
 
 def load_person_name_pool(path: str) -> tuple[frozenset[str], dict]:
     """Load the train-side PERSON name pool from a name_pools.json artifact (M02.4).
 
     Returns ``(allowed_names, provenance)``. Only ``train_side_pool`` values are
     allowed in generation requests; held-out names are reserved for evaluation
-    and any request carrying one is rejected.
+    and any request carrying one is rejected. Non-requestable artifact values
+    (R07) are dropped here, so every consumer - sampler, bank loader - rejects
+    them even in hand-authored banks; the drop count is recorded in provenance.
     """
     with open(path, "rb") as f:
         data = json.load(f)
-    allowed = frozenset(entry["value"] for entry in data["train_side_pool"])
+    values = [entry["value"] for entry in data["train_side_pool"]]
+    allowed = frozenset(v for v in values if is_requestable_name(v))
     provenance = {
         "path": path,
         "sha256": hashlib.sha256(open(path, "rb").read()).hexdigest(),
@@ -30,6 +52,9 @@ def load_person_name_pool(path: str) -> tuple[frozenset[str], dict]:
         "seed": data.get("seed"),
         "rule": data.get("heldout_rule"),
         "size": len(allowed),
+        "pool_size_raw": len(values),
+        "dropped_pseudo": len(values) - len(allowed),
+        "filter_policy": "R07: digits/@/pipe/slash fillers/single initials excluded",
     }
     return allowed, provenance
 
