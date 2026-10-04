@@ -1,59 +1,68 @@
-# Coding-Agent Kickoff — Muse Spark 1.3 xhigh
+# Agent Handoff — Continue After M01
 
-You are the implementation agent for **RL-Guided Synthetic Data for Robust PII Detection**. Treat `PROJECT_PLAN.md` as the main long-term project plan. The project uses a small LLM with SFT followed by RL to generate hard, valid synthetic person-name examples, then measures whether those examples improve a ModernBERT-based detector.
+**Plan version:** 1.3 — 2026-09-20  
+**Owner:** Gauthier Roy  
+**Implementation agent:** Muse Spark 1.3 xhigh  
+**Main document:** PROJECT_PLAN.md
 
-You are implementing the project; you are not automatically the research generator, teacher model, or an authorized external data processor.
+## Current state: M01 is already completed
 
-## Start here
+The owner reports that M01 is done. Continue from the existing repository and implementation. This handoff does not independently verify code or claim that later experiments ran.
 
-Read `PROJECT_PLAN.md` in full before implementing research components. Inspect the existing repository, if any, and reconcile this plan with existing work without overwriting it. Then read `STATE.md` and `docs/DECISIONS.md` if they exist.
+Read PROJECT_PLAN.md, STATE.md, docs/DECISIONS.md, existing configs, tests, and run manifests. Reconcile the changes below without resetting completed work. Resume M02 unless the actual state shows it has already advanced. Resolve only genuinely missing prerequisites from M00.
 
-Begin with milestones **M00 and M01**. Establish scope, hardware, data permissions, and budget. While decisions remain open, build only low-cost scaffolding and synthetic CPU fixtures. Do not start training, download large models, spend paid compute, or send data to external services without the relevant approval.
+Do not re-scaffold the repository, create another project, rename packages, replace the dependency manager, or repeat M01 to match a suggested architecture. Fix a concrete gap only when needed for the next task. Preserve prior experiments, decisions, and evidence.
 
-The first deliverable is a small, testable repository foundation, not an impressive-looking but unvalidated RL run.
+## Updated project decisions
 
-## Maintain continuity
+**Dataset:** Start WITH ai4privacy/pii-masking-300k. Use it for baseline detector training and construct generator SFT pairs from its training portion. Generated data augments this foundation rather than replacing it. The owner personally knows the AI4Privacy team and reports their approval. Record that once and proceed; do not reopen licensing as a blocker or switch to Gretel.
 
-At the end of every work session, update `STATE.md` with the current milestone, completed task IDs, next three actions, blockers, open decisions, tests actually executed, artifact locations, and compute usage. Add consequential choices to `docs/DECISIONS.md` with their rationale.
+**Scope:** One language, PERSON names, short texts, one frozen attack detector, one retraining round. Keep an already recorded language/domain choice; otherwise English is the pilot default. Audit actual dataset rows and label mapping rather than trusting advertised counts. Additional languages and PII types can wait.
 
-For each increment, report what changed, what evidence validates it, and what is still unverified. Do not mark a milestone complete merely because code exists. Preserve failures and distinguish mocks, smoke runs, pilots, and final experiments.
+**Models:** Working ladder: Qwen/Qwen3.5-0.8B for real-model smoke tests, Qwen/Qwen3.5-2B for the first substantive SFT/RL run, and Qwen/Qwen3.5-4B only if quality/resources justify escalation. Use non-thinking output and verify a real training update in the chosen hybrid-model stack. Do not run every model size by default or silently replace an already working configuration.
 
-## Preserve the research question
+**SFT task:** Entity types plus exact values → text containing those entities. Derive the input entities from existing AI4Privacy annotations; use the corresponding original text/snippet as the assistant target. Initially choose one clear person name occurring once. Do not create contradictory instruction/target pairs. Compute output spans in code; do not ask the LLM to calculate character offsets.
 
-The key comparison is **RL versus strong non-RL synthetic-data generation**, especially **SFT generate-and-filter**. Keep the original-data continued-training control. Compare matched accepted augmentation sizes, and separately account for full compute cost. SFT, rejected rollouts, filtering, and detector retraining are not free.
+## Keep BOTH ways of producing generation inputs
 
-Keep the detector frozen during the MVP RL phase. Keep final evaluation data out of training, rewards, sample selection, and development. Start with one language, person names, exact supplied-name preservation, short contexts, and one detector-retraining round.
+### Option A: Spark directly authors requests
 
-A missed detection does not mean privacy. Higher generator reward does not demonstrate a better detector. The downstream held-out comparison is the main result.
+The owner may ask Spark directly to produce a bank of generation inputs from a natural-language brief. Spark may create the entity values, context/style choices, structured requests, and complete prompts. It is NOT limited to writing sampler code or proposing a context catalogue.
 
-## Build the generator-acceleration showcase
+The owner reports free/unlimited Spark tokens in the current workflow. Use this as an available authoring option without adding an unnecessary paid teacher-model dependency. Do not infer that a separate API or autonomous service integration exists. Spark can simply export JSONL requests and the pipeline can import them.
 
-Follow Section 6A of the main plan. The sequence is **S00 compatibility checks → S01 FP8 inference baseline → S02 optional AWQ → S03 supported speculative decoding → S04 DFlash draft-model training → S05 integrated benchmark**.
+Validate and save the exact request bank, original brief, provenance, model/settings when known, and hash. Reproducibility comes from replaying the saved bank, not assuming a second Spark call will produce the same inputs. Avoid final-test names/examples/contexts according to the experiment's split rules.
 
-Begin S00 during M00–M01. Verify primary DFlash sources, licenses, exact implementation versions, target/tokenizer support, and the actual GPU/backend feature matrix. Do not invent current compatibility or train a generic draft model and label it DFlash. Keep a higher-precision reference for quality validation; FP8 is the preferred serving baseline, not a requirement for FP8 SFT or RL training.
+### Option B: seeded programmatic sampler
 
-Run initial serving tests on G_sft after M05 and repeat validation for the final G_rl export. Train the DFlash draft only against a stable, frozen target after speculative inference works. AWQ is optional. DFlash training has a separate budget and uses training-side traces, never final evaluation data.
+Keep a lightweight seeded sampler as the second option. It combines training-side name pools, optional contexts, and constraints into the SAME request schema. Record the seed and pool versions. Do not force a fully developed sampler before Spark-authored inputs can be imported.
 
-Measure **valid and retained hard examples per second**, quality, memory, and full costs alongside token throughput. Speculation may not help short outputs or highly batched workloads. Report measured negative results honestly. Separate quantization-induced changes from speculative verification relative to the configured target.
+### Shared rules
 
-Keep the initial acceleration work in offline generation. Do not put quantized or speculative serving into on-policy RL rollouts until behavior-policy probabilities and the trainer's sampling/correction requirements have been tested. Protect the budget for the downstream detector comparison.
+Both sources feed one request loader, validator, prompt/output contract, generator, and reward pipeline. Keep request_source in provenance. Save the actual rendered prompt. If a Spark-written prompt contradicts its structured entities/constraints, reject or repair the record explicitly.
 
-## Compute constraints: free first, paid only after evidence
+Select the request source per run later; the owner has not chosen a permanent winner. Use the same frozen request bank or a matched distribution across ordinary generation, generate-and-filter, and RL. Spark-authored better prompts must not become an unacknowledged advantage for only one method.
 
-Start on Colab. Use Modal Starter only after verifying current credits, GPU availability, runtime, and persistence constraints. Consider Vast.ai for later longer runs. The owner may consider approximately €50 of paid compute depending on need; this is not approval to spend.
+The runtime division is: request bank → Qwen-generated text → code validation and span recovery → frozen detector score → RL update where applicable. Spark is not automatically a per-example reward judge. User-reported free Spark tokens do not make GPU training/rollouts free.
 
-Keep one Python training/generation pipeline and thin provider launchers. Start with CPU fixtures and tiny real-model runs, test checkpoint/resume across sessions, and keep authoritative artifacts in approved durable storage. Do not rely on notebook session disks.
+## Preserve the experiment and compute priorities
 
-Before any paid run, provide a measured feasibility benchmark, runtime/cost estimate using current provider rates, hard cap, and shutdown procedure, then request approval. Prioritize the complete core comparison over larger models or DFlash training. One exploratory result with honest limitations is better than several expensive unfinished components.
+Keep generate-and-filter and original-data-only continued training as controls. Distinguish matched accepted augmentation size from matched total compute. Keep final evaluation data out of training, prompt authoring, sample selection, and reward tuning.
 
-## Handle uncertainty honestly
+Use Colab first, Modal when verified credits/hardware fit, and Vast for later paid jobs. The owner may consider about €50 depending on need; this is not spending authorization. Before a paid run, give a measured feasibility check, current-rate cost estimate, hard cap, checkpoint path, and shutdown plan.
 
-Recommend choices with trade-offs when hardware, datasets, licenses, or statistical requirements are unresolved. Do not invent environment capabilities, training results, benchmark scores, data permissions, or demographic identity labels.
+Retain the acceleration roadmap: S00 compatibility, S01 FP8 with a higher-precision reference, S02 optional AWQ, S03 working speculative baseline, S04 genuine DFlash draft training, and S05 measured showcase. Native Qwen MTP may be a useful first speculative option if supported; it is not DFlash. Do not let unsupported FP8 or custom draft training block the first scientific pilot.
 
-Use name-group metadata only with documented provenance and limitations. Names may have demographic or linguistic associations; they do not establish a person's ethnicity or gender.
+## What to do next
 
-A negative RL result is acceptable. Do not weaken baselines or change final-test criteria to obtain a win.
+Continue M02 by inspecting a small AI4Privacy sample and mapping its real fields/labels into the existing canonical schema. Validate spans, Unicode handling, source-to-PERSON mapping, and split boundaries. If fields contain serialized JSON, parse safely. Do not reuse mBERT token labels with a different tokenizer.
 
-## First handoff
+Produce a small set of dataset-derived SFT input/target pairs and show that the target really satisfies the prompt. Add or adapt the shared generation-request schema and Spark-bank importer. Keep the sampler as a compatible second path rather than making it a prerequisite for the import path.
 
-Provide a concise progress summary linked to milestone IDs, the repository skeleton and tests, commands actually run with their outcomes, the open decision list with recommendations, and a clear next step. Continue in milestone order once prerequisites are satisfied, scheduling the S00–S05 track according to its explicit dependencies.
+The next handoff should contain observed dataset fields/labels, converted examples, exact commands/tests run, artifact locations, genuine blockers, and the next three actions. No need to start large training, design a universal name validator, or build a new multi-provider platform.
+
+## Evidence and continuity
+
+For each completed task, state what was implemented, the exact command actually executed, the resulting artifact/test output, and what remains unverified. Distinguish mocked, smoke-tested, trained, and evaluated work. Do not claim an experiment from code that has not run.
+
+Update STATE.md with milestone/task IDs, progress, next actions, decisions, blockers, artifacts, and resource usage. Preserve failed runs and negative results. The aim is a small trustworthy end-to-end experiment, not an unsupported success story.

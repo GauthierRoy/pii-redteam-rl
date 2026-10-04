@@ -1,0 +1,2 @@
+{"request_id": "demo-001", "request_source": "spark_authored", "task": {"language": "en", "context": "appointment message", "entities": [{"type": "PERSON", "value": "Élodie Martin"}], "constraints": {"occurrences_per_entity": 1, "no_additional_person_names": true, "max_words": 60}}}
+{"request_id": "demo-002", "request_source": "spark_authored", "task": {"language": "en", "entities": [{"type": "PERSON", "value": "Ana Ruiz"}], "constraints": {"occurrences_per_entity": 1}}, "prompt": "Write one short message containing Ana Ruiz exactly once and nothing else."}
