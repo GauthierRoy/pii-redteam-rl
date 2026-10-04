@@ -86,9 +86,13 @@ def main() -> None:
             exact += 1
         else:
             mismatched += 1
-            mismatches.append({"example_id": row["example_id"], "orig": row["spans"], "got": recovered})
+            mismatches.append(
+                {"example_id": row["example_id"], "orig": row["spans"], "got": recovered}
+            )
     roundtrip_s = time.time() - t0
-    print(f"round-trip: exact={exact} mismatched={mismatched} skipped={truncated} ({roundtrip_s:.1f}s)")
+    print(
+        f"round-trip: exact={exact} mismatched={mismatched} skipped={truncated} ({roundtrip_s:.1f}s)"
+    )
     if mismatches:
         print(json.dumps(mismatches[:3], indent=2, ensure_ascii=False))
 
@@ -106,7 +110,9 @@ def main() -> None:
         labels.append(
             [
                 -100 if (s, e) == (0, 0) else LABEL2ID[lab]
-                for (s, e), lab in zip(offsets, bio_labels_from_spans(offsets, row["spans"]), strict=True)
+                for (s, e), lab in zip(
+                    offsets, bio_labels_from_spans(offsets, row["spans"]), strict=True
+                )
             ]
         )
     input_ids = torch.tensor(enc["input_ids"])
@@ -119,7 +125,9 @@ def main() -> None:
     torch.optim.AdamW(model.parameters(), lr=5e-5).step()
     step_s = time.time() - t0
     rss_gb = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6, 2)
-    print(f"train step: loss={out.loss.item():.4f} grad_sum={grad_sum:.3e} step={step_s:.2f}s peak_rss={rss_gb} GB")
+    print(
+        f"train step: loss={out.loss.item():.4f} grad_sum={grad_sum:.3e} step={step_s:.2f}s peak_rss={rss_gb} GB"
+    )
 
     report = {
         "mode": "cpu",
