@@ -31,3 +31,8 @@ service verification by the agent.
 - R06: Name pools (M02.4): generation requests draw only from `train_side_pool`
   (16,403 values); 200 held-out names are final-eval-unique and reserved for M04 paired tests;
   exact-match disjoint from the pool, substring overlap (19/200) recorded as a limitation.
+- R07: Requestable-name filter (owner-approved 2026-10-04): pool values that are
+  dataset artifacts (digits, `@`, pipe/slash fragments, single initials; 74/16,403 =
+  0.45%) are excluded from generation request pools. Enforced in
+  `load_person_name_pool` (`is_requestable_name`), so all request paths reject them;
+  detector training texts are NOT filtered.

@@ -31,13 +31,16 @@
 
 ## Interim analysis + D0 notebook prepared (2026-10-04)
 
-- **Name-pool quality census** (train_side_pool, 16,403 values): 96.1% name_like
-  (15,767); 3.5% separator values (572 — mostly legitimate hyphenated names, plus
-  `N/A`, `-`); 0.3% digit-containing (45, e.g. `1986rimbiondi`,
-  `1934zinat@gmail.com`, `Lastname1`); 12 pipe artifacts (`Anudari|Buddenhagen`);
-  7 single chars (`F`, `M`). Proposed request-pool filter (generation requests only;
-  detector training texts untouched): exclude digit/@/N-A/pipe/single-char values
-  (~640, ~4%). NOT implemented — open owner decision (see blockers).
+- **Name-pool quality census + R07 implemented (owner-approved 2026-10-04)**:
+  train_side_pool holds 16,403 raw values; `is_requestable_name` (R07, in
+  `src/pii_redteam/requests.py`) drops 74 artifact values (0.45%): 45 digit-containing
+  (e.g. `1986rimbiondi`, phone numbers), 12 pipe-joined, 1 email, 8 slash/fillers
+  (`-`, `Ajet N/A`), 8 single initials. Hyphenated real names (`Ioan-Ciprian`) stay
+  requestable. Enforcement sits in `load_person_name_pool` (drop count recorded in
+  pool provenance), so sampler and bank loader reject pseudo values even in
+  hand-authored banks. Detector training texts are untouched. The gate notebook's
+  sampler call now draws from the requestable subset (7 of the first 8 raw pool
+  values are artifacts).
 - **`colab/M03_train_d0.ipynb` prepared (not executed)**: trains the D0 candidate on
   train_side rows (positives + ~71% negatives kept), labels via the verified alignment
   seam, per-epoch selection on dev_calibration, best checkpoint by dev span-F1 saved
@@ -160,7 +163,7 @@ the notebook's install cell now upgrades torchao; re-run should confirm.
 ## Blockers / open decisions
 
 - D01, D04, D06–D11 open (see `docs/DECISIONS.md`). D02/D03/D05/D12 settled per plan v1.3;
-  split/name policies recorded as R05/R06. No training, no paid spend, no final-test use.
+  split/name policies recorded as R05/R06; pseudo-name filter approved and implemented (R07).
+  No training, no paid spend, no final-test use.
   M03.1/M05.1 gate executed on Colab (7/8 PASS; LoRA check blocked by Colab's stale
-  torchao, fixed in the notebook install cell, re-run pending). Open owner decision:
-  name-pool quality policy for username-like PERSON values (e.g. "1963soheila.raimoski").
+  torchao, fixed in the notebook install cell, re-run pending).
