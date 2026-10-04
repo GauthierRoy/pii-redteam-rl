@@ -23,9 +23,10 @@
   guard, backend contract with reference path + unsupported-config errors). Reuse audit
   written before any code was ported (`docs/REUSE_AUDIT.md`).
   Dependency method: uv only (`uv sync` / `uv run`; `requirements.txt` kept as a
-  Colab/pip fallback exporting the same runtime set). Heavy ad-hoc deps (torch etc.)
-  go through ephemeral envs: `uv run --no-project --with <pkgs> ...` — never hand-built
-  venvs, never the locked project env.
+  Colab/pip fallback exporting the same runtime set). Heavy ML deps (torch CPU,
+  transformers, accelerate, peft) live in the locked, opt-in `ml` group:
+  `uv sync --group ml` / `uv run --group ml ...` / `make gate-detector`; torch is pinned
+  to the PyTorch CPU index via `[tool.uv.sources]`. Never hand-built venvs.
 
 ## Tests actually executed (2026-10-04, ModernBERT CPU gate session)
 
@@ -46,6 +47,11 @@
     planned for Colab; per-step cost makes laptop-only training slow but possible.
 - `PYTHONPATH=src uv run python -m unittest discover -s tests -t .` → 66 tests
   (64 + 2 trim tests), OK. `bash scripts/lint.sh` → all pass.
+- **Permanent ML env + gate script**: `ml` dependency group added (torch>=2.14 CPU,
+  transformers>=5.18, accelerate, peft), torch pinned to the CPU index; gate moved to
+  `scripts/modernbert_cpu_gate.py` (`make gate-detector`). Reproduced through the
+  project env: round-trip 50/50, train step loss 0.99, grad_sum 6.6e4, 2.5 s/step,
+  peak RSS 3.3 GB. Report: `artifacts/cpu_gate/modernbert_cpu_report.json`.
 
 ## Tests actually executed (2026-10-04, M03.2/M05.2 session)
 
