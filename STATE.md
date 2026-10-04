@@ -2,7 +2,8 @@
 
 - **Date:** 2026-10-04
 - **Milestone:** M01 done; M02.1–M02.4 done (plan v1.3). M03.2 offline part done;
-  M05.2 done. GPU-gated work (M03.1/M03.3, Qwen smoke) awaits Colab.
+  M05.2 done. M03.1/M05.1 GPU gate executed on Colab 2026-10-04 (7/8 PASS; LoRA
+  check pending re-run with torchao fix). M03.3 detector training next.
 - **Completed task IDs:** M01.1–M01.3 (see history). M02.1 (PERSON policy in
   `docs/ANNOTATION_POLICY.md`: GIVENNAME*/LASTNAME* → PERSON, TITLE/USERNAME excluded,
   whitespace-adjacent merge). M02.2 (English AI4Privacy files inspected at pinned rev,
@@ -27,6 +28,31 @@
   transformers, accelerate, peft) live in the locked, opt-in `ml` group:
   `uv sync --group ml` / `uv run --group ml ...` / `make gate-detector`; torch is pinned
   to the PyTorch CPU index via `[tool.uv.sources]`. Never hand-built venvs.
+
+## Colab GPU gate executed (2026-10-04, run-20261004-141053, owner-run)
+
+Report from Colab (T4, 15.6 GB VRAM): python 3.13.15, torch 2.11.0+cu130,
+transformers 5.18.0, peft 0.21.2, accelerate 1.15.0, repo commit `0ff0568`.
+
+**PASS (7/8):** final-eval lock reproduces on Colab (sha `513335…d39c` identical);
+ModernBERT loads for token classification; BIO round-trip 50/50 exact on real rows
+(trim fix confirmed on T4); ModernBERT real training step (loss 2.18, grad_sum 1.2e5,
+2.28 s, peak 3.11 GB); Qwen3.5-0.8B text-only load via `AutoModelForCausalLM` (bf16);
+non-thinking chat template (`enable_thinking=False` accepted); output contract PASS
+(JSON `text` field, target name exactly once; generation 7 s, peak 2.82 GB).
+
+**FAIL (1/8):** Qwen LoRA adapter update — `ImportError` from Colab's preinstalled
+torchao 0.10.0 (peft/transformers need >0.16.0). Environment issue, not architecture:
+the notebook's install cell now upgrades torchao; re-run should confirm.
+
+**Caveats recorded:**
+- bf16 was used on a T4 (torch reported bf16 supported); if instability or slow
+  generation appears in longer runs, switch to fp16 before debugging anything else.
+- The sampler drew pool value `"1963soheila.raimoski"` as a PERSON entity — the
+  dataset's GIVENNAME* mask values include username-like digit-prefixed strings.
+  Pool-quality policy (filter or keep) is an open owner decision for M05; not
+  silently changed here.
+- Checkpoints/adapter from the run are on Drive under `run-20261004-141053/`.
 
 ## Tests actually executed (2026-10-04, ModernBERT CPU gate session)
 
@@ -110,20 +136,17 @@
 
 ## Next three actions
 
-1. Run `colab/M03_M05_gpu_gate.ipynb` on Colab (free T4, `Runtime -> Run all`): it
-   mounts Drive, clones this repo, rebuilds + asserts the locks, then executes the
-   M03.1 ModernBERT gate and the M05.1 Qwen3.5-0.8B smoke. Copy the printed summary
-   and the `gpu_gate_report.json` Drive path back here as evidence.
-2. M03.3: train D0 on train_side rows (tokenizer-aware labels via the verified
-   alignment seam), select on dev_calibration, freeze before any RL.
-3. M05.2-done follow-up: author the first Spark request bank from `train_side_pool`
-   (or run the seeded sampler) and import it through the pool-enforcing loader.
+1. Re-run `colab/M03_M05_gpu_gate.ipynb` (fast: Drive cache) with the torchao fix to
+   confirm the LoRA adapter-update check passes; then pin the tested stack versions.
+2. M03.3: train D0 on Colab — train_side rows with tokenizer-aware labels via the
+   verified alignment seam, select on dev_calibration, freeze checkpoint before RL.
+3. M05: author the first request bank from `train_side_pool` (Spark brief or sampler),
+   import through the pool-enforcing loader, then first SFT pairs run.
 
 ## Blockers / open decisions
 
 - D01, D04, D06–D11 open (see `docs/DECISIONS.md`). D02/D03/D05/D12 settled per plan v1.3;
   split/name policies recorded as R05/R06. No training, no paid spend, no final-test use.
-  `colab/M03_M05_gpu_gate.ipynb` prepared but NOT yet executed — no M03.1/M05.1 evidence
-  exists until the owner runs it on Colab; model IDs verified to exist on the Hub
-  (`answerdotai/ModernBERT-base`, `Qwen/Qwen3.5-0.8B`, hybrid `Qwen3_5ForConditionalGeneration`).
-  Uncommitted work in this session: the notebook + this STATE update.
+  M03.1/M05.1 gate executed on Colab (7/8 PASS; LoRA check blocked by Colab's stale
+  torchao, fixed in the notebook install cell, re-run pending). Open owner decision:
+  name-pool quality policy for username-like PERSON values (e.g. "1963soheila.raimoski").
