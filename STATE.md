@@ -82,11 +82,12 @@
 
 ## Next three actions
 
-1. M03.1: on Colab, verify the ModernBERT token-classification checkpoint loads with
-   its own tokenizer, feeds the alignment seam, and reproduces the offline round-trip
-   on real rows; record memory/throughput. (Owner runs Colab; script can be prepared.)
-2. M03.3: train D0 on train_side rows (tokenizer-aware labels), select on dev_calibration,
-   freeze before any RL; requires the Colab/GPU gate.
+1. Run `colab/M03_M05_gpu_gate.ipynb` on Colab (free T4, `Runtime -> Run all`): it
+   mounts Drive, clones this repo, rebuilds + asserts the locks, then executes the
+   M03.1 ModernBERT gate and the M05.1 Qwen3.5-0.8B smoke. Copy the printed summary
+   and the `gpu_gate_report.json` Drive path back here as evidence.
+2. M03.3: train D0 on train_side rows (tokenizer-aware labels via the verified
+   alignment seam), select on dev_calibration, freeze before any RL.
 3. M05.2-done follow-up: author the first Spark request bank from `train_side_pool`
    (or run the seeded sampler) and import it through the pool-enforcing loader.
 
@@ -94,6 +95,7 @@
 
 - D01, D04, D06–D11 open (see `docs/DECISIONS.md`). D02/D03/D05/D12 settled per plan v1.3;
   split/name policies recorded as R05/R06. No training, no paid spend, no final-test use.
-  GPU-dependent tasks (M03.1/M03.3, Qwen smoke) are blocked on Colab access, not on code.
-  Uncommitted work in this session: `detector.py` + `requests.py` alignment/pool changes
-  + `tests/unit/test_alignment.py` (commit on owner request).
+  `colab/M03_M05_gpu_gate.ipynb` prepared but NOT yet executed — no M03.1/M05.1 evidence
+  exists until the owner runs it on Colab; model IDs verified to exist on the Hub
+  (`answerdotai/ModernBERT-base`, `Qwen/Qwen3.5-0.8B`, hybrid `Qwen3_5ForConditionalGeneration`).
+  Uncommitted work in this session: the notebook + this STATE update.
