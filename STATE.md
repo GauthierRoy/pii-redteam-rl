@@ -83,6 +83,16 @@ the notebook's install cell now upgrades torchao; re-run should confirm.
   silently changed here.
 - Checkpoints/adapter from the run are on Drive under `run-20261004-141053/`.
 
+## Owner decision (2026-10-10): skip 0.8B re-proof; go straight to 2B, overnight-capable
+
+The notebook (`colab/M05_generator_sft.ipynb`, now "M05b") is switched to
+**Qwen/Qwen3.5-2B** — the model the M06 baseline and the RL arm must share (D05).
+Hardened for multi-hour/overnight runs: the report and the LoRA adapter are flushed
+to Drive after every stage AND after every SFT epoch, so a Colab disconnect costs at
+most one epoch. Same QLoRA + auto-probed token budget + budget-aligned target filter
++ truncation-aware reporting as the 0.8B build. The 0.8B run remains the pipeline
+proof; its numbers are not comparable to 2B.
+
 ## M05 0.8B pipeline-proof run executed (2026-10-10, m05-20261010-211905, owner-run)
 
 Run at repo `effe2ea`, T4, torch 2.11.0+cu130, transformers 5.19.0. All locks PASS
