@@ -143,6 +143,15 @@ output contract. Zero-shot/SFT/post-SFT all use the same 4-bit model for
 within-run consistency (pipeline proof; cross-quantization comparison is out of
 scope for 0.8B).
 
+**Target selection is now budget-aligned token-space (2026-10-10, owner request):**
+the ≤60-word proxy was replaced by a direct criterion: a pair trains only if its
+JSON-wrapped ANSWER tokenizes to ≤ `GEN_MAX_NEW_TOKENS - 32` (288 tokens at the
+current 320 budget) and its conversation fits the probed training budget. Measured
+on the full pool (3,806 single-name-once rows, no word filter): answers median 151 /
+p99 273 / max 357; the 288-token cap keeps 99% (3,782). Every trained pattern is
+therefore reproducible within the generation budget. `is_short_text` remains a repo
+utility but is no longer the notebook's criterion.
+
 **Decision needed from owner:** re-run the 0.8B proof with the short-text fix
 (another ~1 h Colab), or skip to the 2B M06 baseline (the model the RL arm uses,
 per D05) with the fix already in. My recommendation: skip to 2B — the 0.8B run has
