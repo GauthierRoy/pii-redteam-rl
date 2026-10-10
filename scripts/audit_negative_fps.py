@@ -84,7 +84,7 @@ def main() -> None:
     with torch.no_grad():
         for i in range(0, len(negatives), args.batch_size):
             chunk = negatives[i : i + args.batch_size]
-            enc = tok(
+            enc = tok(  # ty: ignore[call-non-callable]  # transformers 5.x stub union includes None
                 [c["text"] for c, _ in chunk],
                 return_offsets_mapping=True,
                 truncation=True,
