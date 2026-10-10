@@ -129,6 +129,20 @@ median 212 / p99 332. Notebook updated: `GEN_MAX_NEW_TOKENS 150 -> 320` (covers 
 `SFT_MAX_TOKENS 256 -> 384` (keeps 100% of the pool). Truncation-failure share should
 drop to ~1%.
 
+**QLoRA + auto-probed budget (2026-10-10, owner request):** the notebook now loads
+Qwen3.5-0.8B as a 4-bit NF4 QLoRA base (double-quantized; ~0.4 GB instead of ~1.6 GB),
+trains with `prepare_model_for_kbit_training` (gradient checkpointing on), batch 1 +
+gradient accumulation 8, and a runtime **probe** that finds the LARGEST sequence
+length surviving a real forward+backward on the actual T4 (candidates 512..8192,
+headroom rule: stop at first OOM or >85% peak VRAM; runs after D0 is resident so it
+measures the true budget). `SFT_MAX_TOKENS = 0` means "probed, not guessed". For the
+current short pool (max 414 tokens) the probed cap is pure headroom - it matters for
+the 2B run and later stages. The ≤60-word target filter and the measured 320-token
+generation budget stay: they keep outputs inside the short-text scope and the
+output contract. Zero-shot/SFT/post-SFT all use the same 4-bit model for
+within-run consistency (pipeline proof; cross-quantization comparison is out of
+scope for 0.8B).
+
 **Decision needed from owner:** re-run the 0.8B proof with the short-text fix
 (another ~1 h Colab), or skip to the 2B M06 baseline (the model the RL arm uses,
 per D05) with the fix already in. My recommendation: skip to 2B — the 0.8B run has
