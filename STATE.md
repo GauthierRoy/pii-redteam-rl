@@ -28,6 +28,10 @@
   transformers, accelerate, peft) live in the locked, opt-in `ml` group:
   `uv sync --group ml` / `uv run --group ml ...` / `make gate-detector`; torch is pinned
   to the PyTorch CPU index via `[tool.uv.sources]`. Never hand-built venvs.
+  Convention for LOCAL batch inference: export the checkpoint to ONNX first
+  (optimum/onnxruntime) instead of raw PyTorch forward loops — CPU throughput should
+  improve several-fold; verify with a measured comparison on the next audit run.
+  (Not applied to the running 2026-10-10 audit, which was already in flight.)
 
 - **Option B request bank frozen (M05 groundwork)**: `scripts/build_request_bank.py`
   → `artifacts/request_bank/sampler_seed20260920_n200.jsonl` (200 requests, sha256
