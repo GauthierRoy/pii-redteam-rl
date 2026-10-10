@@ -122,14 +122,26 @@ def main() -> None:
         "false_positives": len(fps),
         "rows_with_fp": len({fp["example_id"] for fp in fps}),
         "summary": dict(sorted(summary.items(), key=lambda kv: -kv[1])),
-        "examples": {k: [fp["value"] for fp in fps if fp["kind"] + (f"({','.join(fp['labels'])})" if fp["labels"] else "") == k][:12] for k in summary},
+        "examples": {
+            k: [
+                fp["value"]
+                for fp in fps
+                if fp["kind"] + (f"({','.join(fp['labels'])})" if fp["labels"] else "") == k
+            ][:12]
+            for k in summary
+        },
         "detail": fps,
         "created_utc": datetime.datetime.now(datetime.UTC).isoformat(),
     }
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
-    print(json.dumps({k: report[k] for k in ("negative_rows", "false_positives", "rows_with_fp", "summary")}, indent=2))
+    print(
+        json.dumps(
+            {k: report[k] for k in ("negative_rows", "false_positives", "rows_with_fp", "summary")},
+            indent=2,
+        )
+    )
     print(f"report: {args.out}")
 
 

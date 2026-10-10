@@ -2,7 +2,7 @@
 
 **Version:** 1.3 — 2026-09-20  
 **Owner:** Gauthier Roy  
-**Implementation agent:** Muse Spark 1.3 xhigh  
+**Implementation agent:** GLM 5.3 Max  
 **Status:** M01 is completed, as reported by the owner. This update does not independently verify repository code or experimental results.  
 **Resume point:** Reconcile the existing implementation and STATE.md, then continue with M02. Do not restart M01 or re-scaffold the repository.  
 **Scope of this revision:** Consolidated replacement for v1.2. Preserve existing M00–M13 and S00–S05 identifiers, working code, configurations, artifacts, and experiment history.
