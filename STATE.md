@@ -1,9 +1,9 @@
 # STATE — pii-redteam-rl
 
 - **Date:** 2026-10-04
-- **Milestone:** M01 done; M02.1–M02.4 done (plan v1.3). M03.2 offline part done;
-  M05.2 done. M03.1/M05.1 GPU gate executed on Colab 2026-10-04, re-run 8/8 PASS —
-  gate closed. M03.3 detector training next (notebook ready).
+- **Milestone:** M01 done; M02.1–M02.4 done; M03 complete (D0 trained, audited,
+  FROZEN 2026-10-10, dev span-F1 0.9633); M05.1/M05.2 done. Next: M05 0.8B pipeline
+  proof run, then M06 baseline on Qwen3.5-2B (same model as the RL arm, per D05).
 - **Completed task IDs:** M01.1–M01.3 (see history). M02.1 (PERSON policy in
   `docs/ANNOTATION_POLICY.md`: GIVENNAME*/LASTNAME* → PERSON, TITLE/USERNAME excluded,
   whitespace-adjacent merge). M02.2 (English AI4Privacy files inspected at pinned rev,
@@ -28,10 +28,9 @@
   transformers, accelerate, peft) live in the locked, opt-in `ml` group:
   `uv sync --group ml` / `uv run --group ml ...` / `make gate-detector`; torch is pinned
   to the PyTorch CPU index via `[tool.uv.sources]`. Never hand-built venvs.
-  Convention for LOCAL batch inference: export the checkpoint to ONNX first
-  (optimum/onnxruntime) instead of raw PyTorch forward loops — CPU throughput should
-  improve several-fold; verify with a measured comparison on the next audit run.
-  (Not applied to the running 2026-10-10 audit, which was already in flight.)
+  Convention for local inference: prefer running audits on **Colab GPU** (checkpoints
+  and dataset cache already live on Drive). ONNX export for local CPU inference is
+  deferred — revisit only if Colab access becomes a bottleneck.
 
 - **Option B request bank frozen (M05 groundwork)**: `scripts/build_request_bank.py`
   → `artifacts/request_bank/sampler_seed20260920_n200.jsonl` (200 requests, sha256
@@ -83,6 +82,39 @@ the notebook's install cell now upgrades torchao; re-run should confirm.
   Pool-quality policy (filter or keep) is an open owner decision for M05; not
   silently changed here.
 - Checkpoints/adapter from the run are on Drive under `run-20261004-141053/`.
+
+## D0 trained and FROZEN (M03.3 done) + negative-FP audit (2026-10-10)
+
+**Run `d0-20261004-142714`** (owner-run on Colab T4, repo commit `da0b7d3`,
+torch 2.11.0+cu130, transformers 5.18.0): 28,713 train-side rows (8,191 positive,
+negatives kept) / 7,923 dev (2,261 positive); 5,385 steps, 99 min, 7.9 GB peak,
+0 truncated spans lost. Curve (dev span P/R/F1): epoch 1 0.9456/0.9672/0.9563,
+epoch 2 0.9587/0.9680/**0.9633** (best — saved), epoch 3 0.9591/0.9597/0.9594.
+
+- **M03.3 acceptance vs the 0.70 floor: PASS** (dev span-F1 0.9633; 0.9587 precision
+  refutes "labels every capitalized token").
+- **Negative-precision floor (2% pilot guess): FAIL** — 129 FPs on 5,662 negative dev
+  rows (2.28%) for the frozen epoch-2 checkpoint.
+- **Audit (2026-10-10, `scripts/audit_negative_fps.py`, frozen checkpoint, local CPU
+  ~40 min):** all 129 FPs classified. 43% are the row's own `privacy_mask` values under
+  PERSON-excluded labels (USERNAME 14, SEX 9 — real names the dataset tagged as
+  gender, TITLE 8, CITY 6, BOD 6, STATE/STREET/EMAIL/PASS 6); 57% unannotated
+  name-like strings (`Yuto Druga`, `Druga`, `Danusa`); only ~6% hard artifacts
+  (4 single/empty, 2 separator fragments). Conclusion: negative-row FPs are
+  gold/policy noise, not detector hallucination — freeze justified.
+- **D0 FROZEN (owner-approved 2026-10-10):** `d0-best` (epoch 2), Drive path
+  `pii-redteam-rl/d0-20261004-142714/d0-best`, `model.safetensors` sha256
+  `0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb`.
+  No further detector tuning; D0 is the frozen scorer for M07+.
+- Audit execution: future audits run on **Colab GPU** (checkpoint + cache already on
+  Drive) — ONNX export deferred, not worth local investment now.
+
+## M05 generator run = 0.8B PIPELINE PROOF (M06 must match the RL arm)
+
+The `colab/M05_generator_sft.ipynb` run is a plumbing/proof run on Qwen3.5-0.8B.
+Per D05, the M06 ordinary-generation baseline and the RL arm must use the SAME
+model — Qwen3.5-2B. Zero-shot/SFT numbers from the 0.8B run are not comparable
+across model sizes and feed no method comparison.
 
 ## Colab GPU gate re-run (2026-10-04, run-20261004-142042): 8/8 PASS — gate closed
 
@@ -174,12 +206,15 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
 
 ## Next three actions
 
-1. M03.3: run `colab/M03_train_d0.ipynb` on Colab (T4, ~1 h at 3 epochs, Drive cache):
-   train_side rows, dev selection, acceptance floors (dev span-F1 >= 0.70 + negative
-   precision). Review metrics/errors, then freeze D0 and pin the tested stack.
-2. M05: run the frozen sampler bank (Option B) through the generator; owner may also
-   author a Spark bank (Option A) for comparison later — same schema, same loader.
-3. M07 groundwork: wire the frozen D0 into the reward path once it exists.
+1. Run `colab/M05_generator_sft.ipynb` on Colab (T4, ~1 h): bank lock, zero-shot
+   contract check, LoRA SFT (full-conversation template, end-of-turn verified,
+   ≤2k pairs, 512-token cap), post-SFT re-check, sampled diversity (temp 0.8, n=4),
+   and frozen-D0 extra-PERSON flagging (flag only, not reward). This is the 0.8B
+   pipeline proof, not a method comparison.
+2. M06 baseline: same pipeline on Qwen3.5-2B (same model as the RL arm, per D05) —
+   ordinary generation over the frozen bank with the SFT'd 2B generator.
+3. M07: wire frozen D0 (sha `0314ebe3…c43cb`) into the reward path; difficulty
+   feedback for RL.
 
 ## Blockers / open decisions
 

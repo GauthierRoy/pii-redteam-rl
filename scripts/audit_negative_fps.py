@@ -10,9 +10,10 @@ Usage:
   uv run --group ml python scripts/audit_negative_fps.py \
     --checkpoint <d0-best dir> --cache-dir /tmp/pii-redteam-cache
 
-Note: raw PyTorch CPU inference is slow (the 2026-10-10 run took ~40 min for 5.6k
-rows). Convention (STATE.md): export the checkpoint to ONNX (optimum/onnxruntime)
-before local batch inference. The next audit run should use it.
+Note: this audit took ~40 min on laptop CPU (2026-10-10). Convention (STATE.md):
+run audits on Colab GPU (checkpoint + cache already on Drive) —
+    python scripts/audit_negative_fps.py --checkpoint <Drive>/d0-best ...
+ONNX export for local CPU is deferred.
 """
 
 from __future__ import annotations
@@ -75,7 +76,8 @@ def main() -> None:
     print(f"negative dev rows: {len(negatives)}")
 
     tok = AutoTokenizer.from_pretrained(args.checkpoint)
-    model = AutoModelForTokenClassification.from_pretrained(args.checkpoint)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = AutoModelForTokenClassification.from_pretrained(args.checkpoint).to(device)
     model.eval()
 
     fps = []
@@ -89,8 +91,8 @@ def main() -> None:
                 max_length=MAX_LENGTH,
                 padding=True,
             )
-            input_ids = torch.tensor(enc["input_ids"])
-            attn = torch.tensor(enc["attention_mask"])
+            input_ids = torch.tensor(enc["input_ids"]).to(device)
+            attn = torch.tensor(enc["attention_mask"]).to(device)
             logits = model(input_ids=input_ids, attention_mask=attn).logits
             for j, (row, mask_labels) in enumerate(chunk):
                 offsets = enc["offset_mapping"][j]
