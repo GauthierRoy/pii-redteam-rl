@@ -83,6 +83,16 @@ the notebook's install cell now upgrades torchao; re-run should confirm.
   silently changed here.
 - Checkpoints/adapter from the run are on Drive under `run-20261004-141053/`.
 
+## M05 Colab attempt 1: fail-fast triggered, fixed (2026-10-10)
+
+The SFT end-of-turn/prefix gate stopped the run before any training: transformers 5.x
+`apply_chat_template(tokenize=True)` returns a `BatchEncoding`, not a list of ids, so
+the notebook compared the wrong objects. Fix (verified locally with the real
+Qwen3.5-0.8B tokenizer on a real SFT pair): normalize via `out["input_ids"]`; common
+prefix is then 100%, label tail ends with `<|im_end|>`. The template's
+`return_assistant_tokens_mask` is unsupported (no `{% generation %}` keyword), so
+prefix masking remains the method. Notebook cell updated; re-run pending.
+
 ## D0 trained and FROZEN (M03.3 done) + negative-FP audit (2026-10-10)
 
 **Run `d0-20261004-142714`** (owner-run on Colab T4, repo commit `da0b7d3`,
