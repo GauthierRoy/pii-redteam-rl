@@ -94,6 +94,16 @@ def is_single_person_once(canonical: dict) -> bool:
     return canonical["text"].count(name) == 1
 
 
+def is_short_text(canonical: dict, max_words: int = 60) -> bool:
+    """True when the text is short enough to be an SFT target (plan §4.2).
+
+    M05 lesson (2026-10-10): training on full AI4Privacy records taught the generator
+    to emit long PII-stuffed documents; generation then could not close the JSON
+    output contract. SFT targets must be short records (or extracted snippets).
+    """
+    return len(canonical["text"].split()) <= max_words
+
+
 def build_sft_pair(canonical: dict, *, request_id: str) -> tuple[dict, str]:
     """Build a (generation request, assistant target) SFT pair (plan §4.1–4.2).
 

@@ -64,6 +64,14 @@ class TestAi4privacy(unittest.TestCase):
         self.assertEqual(target.count(name), 1)
         self.assertEqual(request["request_source"], "dataset_derived")
 
+    def test_is_short_text_m05_lesson(self):
+        rows = load_rows()
+        short = ai4privacy.to_canonical(rows[0])  # "Please send the appointment..."
+        self.assertTrue(ai4privacy.is_short_text(short, max_words=60))
+        long = ai4privacy.to_canonical(rows[3])
+        self.assertFalse(ai4privacy.is_short_text(long, max_words=5))
+        self.assertTrue(ai4privacy.is_short_text(long, max_words=200))
+
 
 if __name__ == "__main__":
     unittest.main()

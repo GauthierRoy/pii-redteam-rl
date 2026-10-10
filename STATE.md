@@ -83,6 +83,50 @@ the notebook's install cell now upgrades torchao; re-run should confirm.
   silently changed here.
 - Checkpoints/adapter from the run are on Drive under `run-20261004-141053/`.
 
+## M05 0.8B pipeline-proof run executed (2026-10-10, m05-20261010-211905, owner-run)
+
+Run at repo `effe2ea`, T4, torch 2.11.0+cu130, transformers 5.19.0. All locks PASS
+(final-eval, request bank, frozen-D0 sha). SFT: 1,728 items (272 dropped >256 tokens),
+LoRA 1.08M trainable, epoch losses 1.985 → 1.767 → 1.682, 36 min.
+
+**Results:**
+
+| Metric | Zero-shot | Post-SFT |
+|---|---|---|
+| valid JSON | 98.5% | **1.5%** |
+| name exactly once (word-boundary) | 93.5% | **1.5%** |
+| frozen-D0 extra-PERSON flags | 1 / 200 | 2 / 200 |
+
+Diversity (post-SFT, temp 0.8, n=4, 50 reqs): duplicate_rate 0.0, distinct-1 0.765,
+distinct-2 0.952, mean 421 chars.
+
+**Interpretation (recorded honestly):**
+- **Headline positive:** the BASE 0.8B already follows the output contract (93.5%
+  name-exactly-once, 98.5% valid JSON). For pipeline purposes the generator does not
+  need SFT to obey the contract.
+- **Headline negative — my error, not the model's:** SFT collapsed the contract rate.
+  The SFT targets were FULL AI4Privacy records (any single-name-once row), so the
+  model learned to emit long bureaucratic PII documents ("Subject: Important Notice:
+  Health Insurance…"), which cannot close the JSON inside 150 tokens. This violated
+  the plan's own §4.2 ("select SHORT records or extracted snippets") — the fault was
+  target selection, not the training.
+- **Fix implemented:** `is_short_text` (≤60 words) added to the data adapter
+  (+tests); SFT pair selection in the notebook now filters on it. Pool is adequate:
+  2,910 train-side rows are single-name-once AND ≤60 words (1,503 at ≤40).
+- Frozen-D0 flagging worked as a flag-only signal: outputs contain almost no
+  extra person names (1-2 per 200 texts).
+- Notebook build consolidated: all fixes (tokenization BatchEncoding, memory
+  batch-2/grad-acc-4/256-cap, dirty-GPU guard, allocator conf, no device_map,
+  short-text filter) now live in the generator and were verified present in one
+  build. Earlier in-place notebook edits had been silently reverted by a
+  regeneration — process lesson recorded.
+
+**Decision needed from owner:** re-run the 0.8B proof with the short-text fix
+(another ~1 h Colab), or skip to the 2B M06 baseline (the model the RL arm uses,
+per D05) with the fix already in. My recommendation: skip to 2B — the 0.8B run has
+already proven the pipeline mechanics (locks, gates, flagging, diversity), and the
+SFT-quality question only matters at 2B where the real comparison happens.
+
 ## M05 Colab attempt 1: fail-fast triggered, fixed (2026-10-10)
 
 The SFT end-of-turn/prefix gate stopped the run before any training: transformers 5.x
