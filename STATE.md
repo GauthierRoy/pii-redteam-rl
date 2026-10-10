@@ -121,6 +121,14 @@ distinct-2 0.952, mean 421 chars.
   build. Earlier in-place notebook edits had been silently reverted by a
   regeneration — process lesson recorded.
 
+**Token budgets are now measured, not guessed (2026-10-10 follow-up):** on the short
+pool (2,910 items, real Qwen tokenizer), JSON-wrapped answers run median 154 / p95 227 /
+p99 275 tokens (escaping inflates counts); the old 150 budget would have truncated
+54% of the intended targets even after the short-text fix. Full conversations run
+median 212 / p99 332. Notebook updated: `GEN_MAX_NEW_TOKENS 150 -> 320` (covers p99),
+`SFT_MAX_TOKENS 256 -> 384` (keeps 100% of the pool). Truncation-failure share should
+drop to ~1%.
+
 **Decision needed from owner:** re-run the 0.8B proof with the short-text fix
 (another ~1 h Colab), or skip to the 2B M06 baseline (the model the RL arm uses,
 per D05) with the fix already in. My recommendation: skip to 2B — the 0.8B run has
