@@ -339,7 +339,7 @@ def run_probe(config: dict, repo_dir: str) -> dict:
     # ty: ignore[next-line]  # transformers 5.x tokenizer stub union includes None
     if tok.pad_token_id is None:  # ty: ignore[unresolved-attribute]
         tok.pad_token = tok.eos_token  # ty: ignore[invalid-assignment,unresolved-attribute]
-    model = AutoModelForCausalLM.from_pretrained(config["model_id"], dtype=dtype).to("cuda")
+    model = AutoModelForCausalLM.from_pretrained(config["model_id"], dtype=dtype).to("cuda")  # ty: ignore[invalid-argument-type]  # stub union
     model.eval()
     d0_tok = AutoTokenizer.from_pretrained(config["detector"]["path"])
     d0 = AutoModelForTokenClassification.from_pretrained(config["detector"]["path"]).to("cuda")
@@ -445,7 +445,7 @@ def run_probe(config: dict, repo_dir: str) -> dict:
         ]
         _score_with_d0(d0, d0_tok, copies, config["detector"]["max_length"])
         same = all(
-            math.isclose(a["p_target_mean"] or 0.0, b["p_target_mean"] or 0.0, abs_tol=1e-5)
+            math.isclose(float(a["p_target_mean"] or 0.0), float(b["p_target_mean"] or 0.0), abs_tol=1e-5)
             and a["outcome"] == b["outcome"]
             for a, b in zip(originals, copies, strict=True)
         )
