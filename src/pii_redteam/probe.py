@@ -336,7 +336,7 @@ def run_probe(config: dict, repo_dir: str) -> dict:
 
     # ---- models
     tok = AutoTokenizer.from_pretrained(config["model_id"])
-    # ty: ignore[next-line]  # transformers 5.x tokenizer stub union includes None
+    # transformers 5.x tokenizer stub union includes None
     if tok.pad_token_id is None:  # ty: ignore[unresolved-attribute]
         tok.pad_token = tok.eos_token  # ty: ignore[invalid-assignment,unresolved-attribute]
     model = AutoModelForCausalLM.from_pretrained(config["model_id"], dtype=dtype).to("cuda")  # ty: ignore[invalid-argument-type]  # stub union
