@@ -83,6 +83,44 @@ the notebook's install cell now upgrades torchao; re-run should confirm.
   silently changed here.
 - Checkpoints/adapter from the run are on Drive under `run-20261004-141053/`.
 
+## M05b 2B run executed overnight (2026-10-10/11, m05-20261010-222751, owner-run)
+
+Run at repo `a2b0d0a`, T4, transformers 5.19.0, QLoRA 4-bit. All locks PASS
+(GPU fresh 15.5 GB, final-eval, bank, frozen-D0). Probe: max training tokens **512**
+(next candidate exceeded the 85% headroom rule); 1,987/2,000 pairs trained
+(13 answers > 288-token answer cap; 0 conversation skips). SFT 2h06m, losses
+1.867 → 1.667 → 1.593. Per-epoch saves worked as designed.
+
+| Metric | 2B zero-shot | 2B post-SFT |
+|---|---|---|
+| valid JSON | **100%** | 86.5% |
+| name exactly once | **97.5%** | 75.5% |
+| truncated | 0 | few |
+| extra names (D0 flags) | 2/200 | 4/200 |
+| diversity (post-SFT) | not measured | dup 0.0, distinct-1 0.679, mean 670 chars |
+
+**Failure anatomy (20 recorded post-SFT failures):** 8 finished-but-invalid JSON
+(model ends turn before closing, or malformed content), 9 valid JSON but the
+requested name is missing (occ 0), 3 truncated. NOT a budget problem this time —
+genuine behavior drift: the SFT'd model writes AI4Privacy form-letters
+("Subject: Important Update on Your Health Insurance Plan…", bracketed
+placeholders like "Dear [Lucas],") and loses the exact-name contract in a quarter
+of cases.
+
+**Decisive negative result:** dataset-derived SFT degrades contract compliance at
+BOTH sizes tested (0.8B: 93.5% → 1.5% with long targets; 2B: 97.5% → 75.5% with
+budget-aligned targets). The target style (synthetic form-letter records) is the
+cause, not budgets or tokenization. Meanwhile the BASE 2B already exceeds the
+contract zero-shot (100% JSON / 97.5% once).
+
+**Recommendation (owner decision):** adopt the BASE Qwen3.5-2B as the generator —
+M06 ordinary-generation baseline AND the RL arm's starting state — and drop the SFT
+stage, recording this evidence as the justification (the plan accepts valid negative
+results). Caveat to close first: only the SFT'd model's diversity was measured;
+run the base-2B diversity check (sampled, temp 0.8) before freezing, since generic
+zero-shot outputs could be less varied. If diversity is acceptable, M07 proceeds
+directly: frozen D0 as reward scorer, RL from base 2B.
+
 ## Owner decision (2026-10-10): skip 0.8B re-proof; go straight to 2B, overnight-capable
 
 The notebook (`colab/M05_generator_sft.ipynb`, now "M05b") is switched to
