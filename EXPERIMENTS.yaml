@@ -1,0 +1,166 @@
+# EXPERIMENTS — registry of executed runs (append-only index).
+#
+# Conventions:
+#   - `run_id` is the artifact directory name (Drive folder for Colab runs,
+#     `artifacts/...` for local runs).
+#   - Every entry records the repo commit it ran on and where its artifacts live.
+#     Full detail lives in the run's own report (m05_report.json, d0_metrics.json,
+#     gpu_gate_report.json, ...) and in the corresponding STATE.md section.
+#   - Negative results are recorded as first-class outcomes, never deleted.
+#   - Update from the run's own report JSON; do not hand-copy numbers from memory.
+
+schema: 1
+
+locks:
+  final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
+  request_bank_sha256: 332a9eb0b682bc7213aa556290d1eeb9f616be81b3146c382bcf9c37300dc58c
+  d0_model_sha256: 0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb
+
+runs:
+  - run_id: run-20261004-141053
+    kind: gpu-gate
+    milestone: M03.1/M05.1
+    executed: 2026-10-04
+    where: colab-T4
+    repo_commit: 0ff0568
+    environment:
+      gpu: Tesla T4
+      vram_gb: 15.6
+      python: 3.13.15
+      torch: 2.11.0+cu130
+      transformers: 5.18.0
+    artifacts: "Drive: pii-redteam-rl/run-20261004-141053/ (gpu_gate_report.json)"
+    checks: { pass: 7, fail: 1 }
+    metrics:
+      modernbert_roundtrip: "50/50 exact"
+      modernbert_train_step: { loss: 2.18, seconds: 2.28, peak_mem_gb: 3.11 }
+      qwen_lora: "FAIL - Colab torchao 0.10.0 below required >0.16.0 (ImportError)"
+    outcome: "Gate attempt 1: LoRA check blocked by environment, not architecture; notebook install cell fixed (torchao upgrade)."
+
+  - run_id: run-20261004-142042
+    kind: gpu-gate
+    milestone: M03.1/M05.1
+    executed: 2026-10-04
+    where: colab-T4
+    repo_commit: "0ff0568 (env details in Drive gpu_gate_report.json)"
+    environment:
+      gpu: Tesla T4
+    artifacts: "Drive: pii-redteam-rl/run-20261004-142042/ (gpu_gate_report.json)"
+    checks: { pass: 8, fail: 0 }
+    metrics:
+      modernbert_train_step: { seconds: 0.33, peak_mem_gb: 4.63 }
+      qwen_lora: { loss: 0.8023, grad_sum: 5.889e2, targets: "k/o/q/v_proj" }
+      qwen_output_contract: "PASS (JSON text field, name exactly once)"
+    outcome: "8/8 PASS - M03.1/M05.1 gate CLOSED. Stack considered verified."
+
+  - run_id: modernbert-cpu-gate
+    kind: detector-cpu-gate
+    milestone: M03.1 (partial, laptop)
+    executed: 2026-10-04
+    where: laptop-CPU (16 cores)
+    repo_commit: 0c299a7
+    environment:
+      torch: 2.14.1+cpu
+      transformers: 5.18.0
+    artifacts: "artifacts/cpu_gate/modernbert_cpu_report.json"
+    checks: { pass: 1, fail: 0 }
+    metrics:
+      roundtrip_exact: "50/50 (after BPE whitespace-trim fix; was 29/50 off-by-one)"
+      train_step: { loss: 1.55, seconds: 2.3, peak_rss_gb: 3.3 }
+    outcome: "Found the BPE leading-space boundary bug before Colab; trim_span_whitespace added to the alignment seam."
+
+  - run_id: d0-20261004-142714
+    kind: detector-training
+    milestone: M03.3
+    executed: 2026-10-04
+    where: colab-T4
+    repo_commit: da0b7d3
+    environment:
+      gpu: Tesla T4
+      python: 3.13.15
+      torch: 2.11.0+cu130
+      transformers: 5.18.0
+    artifacts: "Drive: pii-redteam-rl/d0-20261004-142714/ (d0-best/, d0_metrics.json)"
+    checks: { pass: 3, fail: 1 }
+    metrics:
+      train_rows: 28713
+      dev_rows: 7923
+      steps: 5385
+      train_seconds: 5954
+      peak_mem_gb: 7.88
+      truncated_spans_lost: 0
+      dev_span_f1_by_epoch: [0.9563, 0.9633, 0.9594]
+      best_epoch: 2
+      negative_false_positives: "129 on 5662 negative dev rows (2.28%) - guard floor 2% FAIL"
+    outcome: "M03.3 PASS vs 0.70 floor (F1 0.9633). D0 FROZEN (epoch 2, model sha256 0314ebe3...); negative-guard FAIL audited next."
+
+  - run_id: d0-negative-fp-audit
+    kind: detector-audit
+    milestone: M03.3 follow-up
+    executed: 2026-10-10
+    where: laptop-CPU (~40 min)
+    repo_commit: cf1c33c-era script
+    environment:
+      torch: 2.14.1+cpu
+      transformers: 5.18.0
+    artifacts: "artifacts/d0_audit/negative_fp_audit.json"
+    checks: { pass: 1, fail: 0 }
+    metrics:
+      negative_rows: 5662
+      false_positives: 129
+      classification:
+        mask_value_excluded_labels: "56/129 (USERNAME 14, SEX 9, TITLE 8, CITY 6, BOD 6, other 6)"
+        unannotated_name_like: "73/129"
+        hard_artifacts: "~8/129"
+    outcome: "Negative-row FPs are gold/policy noise, not detector hallucination - freeze justified. Future audits: Colab GPU."
+
+  - run_id: m05-20261010-211905
+    kind: generator-sft
+    milestone: M05 (0.8B pipeline proof)
+    executed: 2026-10-10
+    where: colab-T4
+    repo_commit: effe2ea
+    environment:
+      gpu: Tesla T4
+      python: 3.13.15
+      torch: 2.11.0+cu130
+      transformers: 5.19.0
+    artifacts: "Drive: pii-redteam-rl/m05-20261010-211905/ (m05_report.json, qwen-sft-lora/)"
+    checks: { pass: 8, fail: 1 }
+    metrics:
+      model: Qwen/Qwen3.5-0.8B
+      load: "AutoModelForCausalLM bf16 (pre-QLoRA build)"
+      zeroshot: { json: 0.985, name_once: 0.935 }
+      sft_items: 1728
+      sft_epoch_losses: [1.9852, 1.7665, 1.6815]
+      post_sft: { json: 0.015, name_once: 0.015 }
+      diversity: { duplicate_rate: 0.0, distinct1: 0.7647, mean_chars: 421.1 }
+      d0_extra_person_flags: { zeroshot: 1, post_sft: 2 }
+    outcome: "NEGATIVE RESULT: SFT collapsed the contract (long PII-record targets; 150-token budget could not close document JSON). Root cause: target selection violated plan 4.2. Fixes: budget-aligned token filter, measured budgets, truncation-aware reporting, QLoRA."
+
+  - run_id: m05-20261010-222751
+    kind: generator-sft
+    milestone: M05b (2B baseline / RL starting state)
+    executed: 2026-10-10/11 (overnight)
+    where: colab-T4
+    repo_commit: a2b0d0a
+    environment:
+      gpu: Tesla T4
+      python: 3.13.15
+      torch: 2.11.0+cu130
+      transformers: 5.19.0
+      quantization: "QLoRA 4-bit nf4"
+    artifacts: "Drive: pii-redteam-rl/m05-20261010-222751/ (m05_report.json, qwen-sft-lora/)"
+    checks: { pass: 9, fail: 1 }
+    metrics:
+      model: Qwen/Qwen3.5-2B
+      probed_max_train_tokens: 512
+      sft_items: 1987
+      sft_epoch_losses: [1.8674, 1.6674, 1.5926]
+      sft_seconds: 7532.6
+      zeroshot: { json: 1.0, name_once: 0.975, truncated: 0 }
+      post_sft: { json: 0.865, name_once: 0.755 }
+      post_sft_failure_anatomy: "8 finished-invalid-JSON / 9 name-lost / 3 truncated (of 20 recorded)"
+      diversity_post_sft: { duplicate_rate: 0.0, distinct1: 0.679, mean_chars: 669.9 }
+      d0_extra_person_flags: { zeroshot: 2, post_sft: 4 }
+    outcome: "DECISIVE NEGATIVE RESULT: SFT degrades contract at both sizes tested; base 2B zero-shot exceeds requirements (100% JSON / 97.5% once). RECOMMENDATION: adopt base Qwen3.5-2B as generator (M06 baseline + RL starting state); pending base-diversity check."

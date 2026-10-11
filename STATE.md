@@ -328,6 +328,11 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
 
 ## Artifacts
 
+- **`EXPERIMENTS.yaml` (repo root)** — append-only registry of every executed run:
+  run_id, milestone, where, repo commit, environment, artifacts location, pass/fail
+  checks, key metrics, outcome (negative results kept as first-class entries).
+  Validated by `tests/unit/test_experiments_registry.py`. Update from each run's own
+  report JSON, never from memory.
 - `artifacts/splits/` (regenerable from seed 20260920 + pinned revision, gitignored):
   locked final-eval partition + manifests, per-role row indexes, name pools, report
 - `artifacts/smoke-cpu/{manifest.json,resolved_config.yaml,report.json}` (regenerable, gitignored)
