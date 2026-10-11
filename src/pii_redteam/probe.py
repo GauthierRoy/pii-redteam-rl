@@ -124,7 +124,7 @@ def _generate(
                 "top_p": top_p,
                 "num_return_sequences": n,
             }
-        gen = model.generate(**enc, **gen_kwargs)  # ty: ignore[invalid-argument-type]  # stub union
+        gen = model.generate(**enc, **gen_kwargs)  # stub union
         n_prompt = enc["input_ids"].shape[1]
         for j, request in enumerate(chunk):
             reps = n if temperature is not None else 1
