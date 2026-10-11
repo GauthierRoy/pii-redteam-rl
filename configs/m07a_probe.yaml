@@ -1,0 +1,46 @@
+# M07a base-sampling probe — thresholds committed BEFORE the run (spec §7).
+# Greedy reference must reproduce the M05b zero-shot numbers (spec §2).
+
+run_id_prefix: m07a
+model_id: Qwen/Qwen3.5-2B
+adapter: null
+seed: 20260920
+repo_dir: /content/pii-redteam-rl        # Colab default; local runs override
+cache_dir: /content/drive/MyDrive/pii-redteam-rl/cache
+work_dir: /content/drive/MyDrive/pii-redteam-rl
+rebuild_locks: true                       # carve + bank rebuild with lock asserts
+hf_upload: null                           # artifact store is Drive until HF repo configured
+
+locks:
+  final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
+
+bank:
+  n: 200
+  seed: 20260920
+  sha256: 332a9eb0b682bc7213aa556290d1eeb9f616be81b3146c382bcf9c37300dc58c
+
+detector:
+  path: /content/drive/MyDrive/pii-redteam-rl/d0-20261004-142714/d0-best
+  sha256: 0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb
+  max_length: 512
+
+generation:
+  max_new_tokens: 320                     # same as M05b zero-shot check
+  temperatures: [1.0, 0.7]                # 1.0 first (spec: run it first if time-limited)
+  top_p: 0.95
+  n: 8
+  greedy_reference: true
+  batch_prompts: 8                        # 8 prompts x 8 returns = 64 sequences per forward
+  pilot: { requests: 10, n: 2 }
+
+rewards:
+  logit_clip: 10.0
+  invalid_reward: -1.0
+
+thresholds:                              # spec §7 go/no-go (pre-committed)
+  format_valid_min: 0.90
+  exact_dup_max: 0.05
+  unique_per_group_median_min: 6
+  live_group_share_min: 0.30
+  miss_rate_range: [0.01, 0.30]
+  target_spans_lost_max: 0

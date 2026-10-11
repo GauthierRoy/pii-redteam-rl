@@ -25,6 +25,7 @@ ml = [
   "transformers>=5.18",
   "accelerate>=1.0",
   "peft>=0.16",
+  "matplotlib>=3.8",
 ]
 
 # CPU-only torch: this machine has no CUDA; pin torch to the PyTorch CPU index.
