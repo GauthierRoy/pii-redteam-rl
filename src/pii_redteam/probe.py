@@ -41,15 +41,15 @@ def _sha256(path: str) -> str:
     return hashlib.sha256(open(path, "rb").read()).hexdigest()
 
 
-def _device_dtype() -> tuple[str, torch.dtype]:
-    """fp16 on T4 (sm < 8.0), bf16 on L4 or better; log the choice."""
+def _device_dtype() -> tuple[str, str, torch.dtype]:
+    """fp16 on T4 (sm < 8.0), bf16 on L4 or better, fp32 on CPU; log the choice."""
     if torch.cuda.is_available():
         major = torch.cuda.get_device_capability(0)[0]
         gpu = torch.cuda.get_device_name(0)
         if major >= 8:
-            return gpu, torch.bfloat16
-        return gpu, torch.float16
-    return "cpu", torch.float32
+            return "cuda", gpu, torch.bfloat16
+        return "cuda", gpu, torch.float16
+    return "cpu", "cpu", torch.float32
 
 
 def _load_bank(config: dict, repo_dir: str) -> list[dict]:
@@ -105,7 +105,17 @@ def _load_bank(config: dict, repo_dir: str) -> list[dict]:
 
 @torch.no_grad()
 def _generate(
-    tok, model, requests, *, temperature, n, top_p, max_new_tokens, batch_prompts, log_prefix
+    tok,
+    model,
+    requests,
+    *,
+    temperature,
+    n,
+    top_p,
+    max_new_tokens,
+    batch_prompts,
+    log_prefix,
+    device,
 ):
     """Batched sampling (or greedy when temperature is None); left padding."""
     tok.padding_side = "left"
@@ -114,7 +124,7 @@ def _generate(
     for i in range(0, len(requests), batch_prompts):
         chunk = requests[i : i + batch_prompts]
         texts = [_chat_text(tok, r) for r in chunk]
-        enc = tok(texts, return_tensors="pt", padding=True).to(model.device)
+        enc = tok(texts, return_tensors="pt", padding=True).to(device)
         gen_kwargs = {"max_new_tokens": max_new_tokens, "do_sample": False}
         if temperature is not None:
             gen_kwargs = {
@@ -234,7 +244,6 @@ def _finalize_samples(samples: list[dict], clip: float) -> None:
             )
             rv = reward_variants(s["p_target_mean"])
             s["r_prob"], s["r_logit"] = rv["r_prob"], rv["r_logit"]
-            s["outcome"] = s["d0"]["outcome"]
         else:
             s["r_prob"] = s["r_logit"] = -1.0
             s["outcome"] = "invalid"
@@ -255,7 +264,7 @@ def _panels(samples: list[dict], rng: random.Random) -> None:
             f"outcome={s['outcome']}\n  {s['text'][:220]!r}"
         )
     print("\n--- 20 lowest-p_target valid samples (genuinely hard, or weird?) ---")
-    for s in sorted(valid, key=lambda x: x["d0"]["p_target_mean"])[:20]:
+    for s in sorted(valid, key=lambda x: x["p_target_mean"])[:20]:
         print(
             f"[{s['group_id']} #{s['sample_idx']}] p_target={s['p_target_mean']:.3f} "
             f"outcome={s['outcome']}\n  {s['text'][:220]!r}"
@@ -318,7 +327,7 @@ def run_probe(config: dict, repo_dir: str) -> dict:
     config_seed_holder[0] = config["seed"]
     gen_cfg = config["generation"]
 
-    gpu, dtype = _device_dtype()
+    device, gpu, dtype = _device_dtype()
     checks: dict[str, dict] = {}
 
     def check(name, ok, detail=""):
@@ -327,6 +336,10 @@ def run_probe(config: dict, repo_dir: str) -> dict:
 
     # ---- locks (spec 1)
     requests_bank = _load_bank(config, repo_dir)
+    max_req = config["generation"].get("max_requests")
+    if max_req:
+        requests_bank = requests_bank[:max_req]
+        print(f"SMOKE: limited to {len(requests_bank)} requests")
     check("bank + final-eval locks reproduce", True, f"bank sha {config['bank']['sha256'][:12]}…")
 
     d0_sha = _sha256(os.path.join(config["detector"]["path"], "model.safetensors"))
@@ -339,10 +352,10 @@ def run_probe(config: dict, repo_dir: str) -> dict:
     # transformers 5.x tokenizer stub union includes None
     if tok.pad_token_id is None:  # ty: ignore[unresolved-attribute]
         tok.pad_token = tok.eos_token  # ty: ignore[invalid-assignment,unresolved-attribute]
-    model = AutoModelForCausalLM.from_pretrained(config["model_id"], dtype=dtype).to("cuda")  # ty: ignore[invalid-argument-type]  # stub union
+    model = AutoModelForCausalLM.from_pretrained(config["model_id"], dtype=dtype).to(device)  # ty: ignore[invalid-argument-type]  # stub union
     model.eval()
     d0_tok = AutoTokenizer.from_pretrained(config["detector"]["path"])
-    d0 = AutoModelForTokenClassification.from_pretrained(config["detector"]["path"]).to("cuda")
+    d0 = AutoModelForTokenClassification.from_pretrained(config["detector"]["path"]).to(device)
     d0.eval()
     check("models loaded (base 2B, no adapter; frozen D0 eval-mode)", True, f"{gpu} dtype={dtype}")
     env = {
@@ -363,6 +376,7 @@ def run_probe(config: dict, repo_dir: str) -> dict:
         temperature=gen_cfg["temperatures"][0],
         n=gen_cfg["pilot"]["n"],
         top_p=gen_cfg["top_p"],
+        device=device,
         max_new_tokens=gen_cfg["max_new_tokens"],
         batch_prompts=gen_cfg["batch_prompts"],
         log_prefix="pilot",
@@ -391,6 +405,7 @@ def run_probe(config: dict, repo_dir: str) -> dict:
             max_new_tokens=gen_cfg["max_new_tokens"],
             batch_prompts=gen_cfg["batch_prompts"],
             log_prefix=f"t={temp}",
+            device=device,
         )
     greedy: list[dict] = []
     if gen_cfg.get("greedy_reference", True):
@@ -405,6 +420,7 @@ def run_probe(config: dict, repo_dir: str) -> dict:
             max_new_tokens=gen_cfg["max_new_tokens"],
             batch_prompts=gen_cfg["batch_prompts"],
             log_prefix="greedy",
+            device=device,
         )
 
     # ---- validation (spec 3)

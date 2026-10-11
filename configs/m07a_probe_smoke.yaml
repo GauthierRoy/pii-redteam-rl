@@ -1,0 +1,40 @@
+# LOCAL CPU smoke config for the M07a probe (tiny; verifies the whole pipeline
+# end-to-end without a GPU). The Colab run uses configs/m07a_probe.yaml.
+run_id_prefix: m07a-smoke
+model_id: Qwen/Qwen3.5-2B
+adapter: null
+seed: 20260920
+repo_dir: /home/gauthier/code/pii-redteam-rl
+cache_dir: /tmp/d0zip/pii-redteam-rl/cache
+work_dir: /tmp/probe_out
+rebuild_locks: true
+hf_upload: null
+locks:
+  final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
+bank:
+  n: 200
+  seed: 20260920
+  sha256: 332a9eb0b682bc7213aa556290d1eeb9f616be81b3146c382bcf9c37300dc58c
+detector:
+  path: /tmp/d0zip/pii-redteam-rl/d0-20261004-142714/d0-best
+  sha256: 0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb
+  max_length: 512
+generation:
+  max_new_tokens: 320
+  temperatures: [1.0]
+  top_p: 0.95
+  n: 2
+  greedy_reference: false
+  batch_prompts: 3
+  max_requests: 3
+  pilot: { requests: 2, n: 1 }
+rewards:
+  logit_clip: 10.0
+  invalid_reward: -1.0
+thresholds:
+  format_valid_min: 0.90
+  exact_dup_max: 0.05
+  unique_per_group_median_min: 6
+  live_group_share_min: 0.30
+  miss_rate_range: [0.01, 0.30]
+  target_spans_lost_max: 0
