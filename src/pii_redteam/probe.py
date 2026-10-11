@@ -445,7 +445,9 @@ def run_probe(config: dict, repo_dir: str) -> dict:
         ]
         _score_with_d0(d0, d0_tok, copies, config["detector"]["max_length"])
         same = all(
-            math.isclose(float(a["p_target_mean"] or 0.0), float(b["p_target_mean"] or 0.0), abs_tol=1e-5)
+            math.isclose(
+                float(a["p_target_mean"] or 0.0), float(b["p_target_mean"] or 0.0), abs_tol=1e-5
+            )
             and a["outcome"] == b["outcome"]
             for a, b in zip(originals, copies, strict=True)
         )
