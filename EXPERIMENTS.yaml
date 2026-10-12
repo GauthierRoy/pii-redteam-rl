@@ -164,3 +164,30 @@ runs:
       diversity_post_sft: { duplicate_rate: 0.0, distinct1: 0.679, mean_chars: 669.9 }
       d0_extra_person_flags: { zeroshot: 2, post_sft: 4 }
     outcome: "DECISIVE NEGATIVE RESULT: SFT degrades contract at both sizes tested; base 2B zero-shot exceeds requirements (100% JSON / 97.5% once). RECOMMENDATION: adopt base Qwen3.5-2B as generator (M06 baseline + RL starting state); pending base-diversity check."
+
+  - run_id: m07b-20261012-224819
+    kind: prompt-variant-comparison
+    milestone: M07b
+    executed: 2026-10-12
+    where: laptop-CPU (16 cores, fp32; report field was cpu-cpu)
+    repo_commit: 7193374
+    environment:
+      device: cpu
+      dtype: torch.float32
+      torch: 2.14.1+cpu
+      transformers: 5.18.0
+      python: 3.12.3
+    artifacts: "results/m07b_prompt_v2/m07b-20261012-224819/ (samples_raw.jsonl, prompt_compare_report.json)"
+    checks: { pass: 2, fail: 4 }   # pass-by-cell: P1|t1.0 and P1|t0.7 PASS; all P0/P2 cells FAIL
+    metrics:
+      generations: 960
+      gen_seconds: 3526.1
+      request_bank: "banks/v2_prompting/spark_seed20260920_v2_n20.jsonl sha 1f0b9960...a7708fb7 (v2; frozen v1 bank untouched)"
+      P0|t1.0: { validity_rate: 0.3063, name_at_start_share: 0.4898, top10_opening_share: 0.2041, unique_per_group_median: 3, failure_breakdown: { invalid:name_missing: 8, invalid:name_only: 17, invalid:no_content: 3, invalid:too_short: 83 } }
+      P0|t0.7: { validity_rate: 0.275, name_at_start_share: 0.6364, top10_opening_share: 0.2955, unique_per_group_median: 2, failure_breakdown: { invalid:name_missing: 6, invalid:name_only: 16, invalid:no_content: 4, invalid:too_short: 90 } }
+      P1|t1.0: { validity_rate: 0.9, name_at_start_share: 0.2569, top10_opening_share: 0.0833, unique_per_group_median: 7, failure_breakdown: { invalid:json: 4, invalid:name_dup: 3, invalid:name_missing: 6, invalid:refusal: 3 } }
+      P1|t0.7: { validity_rate: 0.9375, name_at_start_share: 0.3667, top10_opening_share: 0.1733, unique_per_group_median: 8, failure_breakdown: { invalid:name_dup: 5, invalid:name_missing: 4, invalid:refusal: 1 } }
+      P2|t1.0: { validity_rate: 0.8313, name_at_start_share: 0.391, top10_opening_share: 0.0827, unique_per_group_median: 7, failure_breakdown: { invalid:json: 1, invalid:name_dup: 2, invalid:name_missing: 23, invalid:name_only: 1 } }
+      P2|t0.7: { validity_rate: 0.925, name_at_start_share: 0.4189, top10_opening_share: 0.1216, unique_per_group_median: 8, failure_breakdown: { invalid:name_dup: 1, invalid:name_missing: 9, invalid:refusal: 2 } }
+      d0_stats: "PENDING SCORER VERIFICATION (local reference-pipeline replica): complete_miss 0.24-0.39; live_group_share_r_prob P0 0.37-0.47 vs P1/P2 0.85-0.95; dead groups 0"
+    outcome: "variant cell P1|t0.7 passes all pre-committed criteria - candidate prompt for M06/M08. Prompting alone is enough (P1 passes at BOTH temps); P0 baseline confirms template collapse; P2 few-shot trades name fidelity for style (23 name_missing @ t1.0). SFT-v2 trigger does NOT fire."

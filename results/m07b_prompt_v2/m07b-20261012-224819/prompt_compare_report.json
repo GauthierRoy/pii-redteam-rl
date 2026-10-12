@@ -1,0 +1,870 @@
+{
+  "kind": "prompt-variant-comparison",
+  "role": "M07b: can prompt changes alone make the base Qwen3.5-2B produce varied, realistic short messages? If no variant passes, trigger SFT v2.",
+  "started_utc": "2026-10-12T21:49:05.732246+00:00",
+  "environment": {
+    "device": "cpu",
+    "gpu": "cpu",
+    "dtype": "torch.float32",
+    "torch": "2.14.1+cpu",
+    "transformers": "5.18.0",
+    "python": "3.12.3"
+  },
+  "config": {
+    "run_id_prefix": "m07b",
+    "model_id": "Qwen/Qwen3.5-2B",
+    "adapter": null,
+    "seed": 20260920,
+    "repo_dir": null,
+    "work_dir": "artifacts/m07b",
+    "repo_commit": null,
+    "bank": {
+      "path": "banks/v2_prompting/spark_seed20260920_v2_n20.jsonl",
+      "sha256": "1f0b9960ac797c3fbbc5e26dc2658a11e76837ca47a79da9b0443d37a7708fb7"
+    },
+    "variants": [
+      "P0",
+      "P1",
+      "P2"
+    ],
+    "generation": {
+      "temperatures": [
+        1.0,
+        0.7
+      ],
+      "top_p": 0.95,
+      "n": 8,
+      "max_new_tokens": 192,
+      "batch_prompts": 4
+    },
+    "detector": {
+      "enabled": true,
+      "path": "/tmp/d0zip/pii-redteam-rl/d0-20261004-142714/d0-best",
+      "sha256": "0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb",
+      "max_length": 512
+    },
+    "rewards": {
+      "logit_clip": 10.0
+    },
+    "thresholds": {
+      "validity_min": 0.9,
+      "name_at_start_max": 0.4,
+      "top10_openings_max": 0.3,
+      "median_unique_valid_min": 6
+    }
+  },
+  "generations_total": 960,
+  "gen_seconds": 3526.1,
+  "per_cell": {
+    "P0|t1.0": {
+      "total": 160,
+      "valid": 49,
+      "validity_rate": 0.3063,
+      "failure_breakdown": {
+        "invalid:name_missing": 8,
+        "invalid:name_only": 17,
+        "invalid:no_content": 3,
+        "invalid:too_short": 83
+      },
+      "name_at_start_share": 0.4898,
+      "name_position": {
+        "start": 0.8367,
+        "middle": 0.1429,
+        "end": 0.0204
+      },
+      "top10_opening_share": 0.2041,
+      "top10_openings": [
+        [
+          "hi mermolja i just wanted",
+          1
+        ],
+        [
+          "narumol and i are planning",
+          1
+        ],
+        [
+          "dear presset we hope you",
+          1
+        ],
+        [
+          "i heard you will be",
+          1
+        ],
+        [
+          "presset is the main character",
+          1
+        ],
+        [
+          "dear fatajo please let me",
+          1
+        ],
+        [
+          "fatajo told us that the",
+          1
+        ],
+        [
+          "dear fatajo this message is",
+          1
+        ],
+        [
+          "brayn has just arrived at",
+          1
+        ],
+        [
+          "hello brayn are you free",
+          1
+        ]
+      ],
+      "distinct1": 0.4953,
+      "distinct2": 0.8663,
+      "unique_per_group_median": 3,
+      "unique_per_group_min": 1,
+      "groups": 19,
+      "length_words": {
+        "p10": 8,
+        "p50": 10,
+        "p90": 15,
+        "min": 8,
+        "max": 32
+      },
+      "thresholds": {
+        "validity": {
+          "ok": false,
+          "detail": "validity_rate=0.3063 (min 0.9)"
+        },
+        "name_at_start": {
+          "ok": false,
+          "detail": "name_at_start_share=0.4898 (max 0.4)"
+        },
+        "top10_openings": {
+          "ok": true,
+          "detail": "top10_opening_share=0.2041 (max 0.3)"
+        },
+        "unique_per_group": {
+          "ok": false,
+          "detail": "median=3 (min 6)"
+        }
+      },
+      "reward": {
+        "valid_scored": 49,
+        "invalid_excluded": 111,
+        "outcome_rates": {
+          "exact_hit": 0.3673,
+          "partial_overlap": 0.2449,
+          "boundary_error": 0.0,
+          "complete_miss": 0.3878
+        },
+        "p_target_mean": {
+          "p1": 0.007228767033666372,
+          "p5": 0.016889747232198715,
+          "p25": 0.20087571442127228,
+          "p50": 0.4701840654015541
+        },
+        "p_target_min_p5": 0.0167755838483572,
+        "dead_group_share": 0.0,
+        "live_group_share_r_prob": 0.4737,
+        "within_group_std_mean_r_prob": 0.0719,
+        "live_group_share_r_logit": 0.6842,
+        "within_group_std_mean_r_logit": 0.4589,
+        "exploit_correlations": {
+          "length": -0.042,
+          "name_position": -0.5264,
+          "extra_person_flag": 0.0
+        }
+      },
+      "scorer_flag": "pending scorer verification (M07a scorer under separate fix)"
+    },
+    "P0|t0.7": {
+      "total": 160,
+      "valid": 44,
+      "validity_rate": 0.275,
+      "failure_breakdown": {
+        "invalid:name_missing": 6,
+        "invalid:name_only": 16,
+        "invalid:no_content": 4,
+        "invalid:too_short": 90
+      },
+      "name_at_start_share": 0.6364,
+      "name_position": {
+        "start": 0.9318,
+        "middle": 0.0682,
+        "end": 0.0
+      },
+      "top10_opening_share": 0.2955,
+      "top10_openings": [
+        [
+          "hello kavisan are you available",
+          2
+        ],
+        [
+          "hello tr molat how can",
+          2
+        ],
+        [
+          "shelibare soraya posteraro wrote a",
+          2
+        ],
+        [
+          "mermolja is a real person",
+          1
+        ],
+        [
+          "mermolja is a person who",
+          1
+        ],
+        [
+          "narumol is a person who",
+          1
+        ],
+        [
+          "narumol sent a quick message",
+          1
+        ],
+        [
+          "dear presset please contact us",
+          1
+        ],
+        [
+          "dear presset we hope you",
+          1
+        ],
+        [
+          "fatajo is a real person",
+          1
+        ]
+      ],
+      "distinct1": 0.4519,
+      "distinct2": 0.727,
+      "unique_per_group_median": 2,
+      "unique_per_group_min": 1,
+      "groups": 19,
+      "length_words": {
+        "p10": 8,
+        "p50": 9,
+        "p90": 14,
+        "min": 8,
+        "max": 29
+      },
+      "thresholds": {
+        "validity": {
+          "ok": false,
+          "detail": "validity_rate=0.275 (min 0.9)"
+        },
+        "name_at_start": {
+          "ok": false,
+          "detail": "name_at_start_share=0.6364 (max 0.4)"
+        },
+        "top10_openings": {
+          "ok": true,
+          "detail": "top10_opening_share=0.2955 (max 0.3)"
+        },
+        "unique_per_group": {
+          "ok": false,
+          "detail": "median=2 (min 6)"
+        }
+      },
+      "reward": {
+        "valid_scored": 44,
+        "invalid_excluded": 116,
+        "outcome_rates": {
+          "exact_hit": 0.3409,
+          "partial_overlap": 0.3864,
+          "boundary_error": 0.0,
+          "complete_miss": 0.2727
+        },
+        "p_target_mean": {
+          "p1": 0.002261158311739564,
+          "p5": 0.054127627052366734,
+          "p25": 0.3275294788181782,
+          "p50": 0.6110689640045166
+        },
+        "p_target_min_p5": 0.019545935094356537,
+        "dead_group_share": 0.0,
+        "live_group_share_r_prob": 0.3684,
+        "within_group_std_mean_r_prob": 0.0585,
+        "live_group_share_r_logit": 0.5789,
+        "within_group_std_mean_r_logit": 0.3074,
+        "exploit_correlations": {
+          "length": 0.0195,
+          "name_position": -0.3331,
+          "extra_person_flag": 0.0
+        }
+      },
+      "scorer_flag": "pending scorer verification (M07a scorer under separate fix)"
+    },
+    "P1|t1.0": {
+      "total": 160,
+      "valid": 144,
+      "validity_rate": 0.9,
+      "failure_breakdown": {
+        "invalid:json": 4,
+        "invalid:name_dup": 3,
+        "invalid:name_missing": 6,
+        "invalid:refusal": 3
+      },
+      "name_at_start_share": 0.2569,
+      "name_position": {
+        "start": 0.7153,
+        "middle": 0.2361,
+        "end": 0.0486
+      },
+      "top10_opening_share": 0.0833,
+      "top10_openings": [
+        [
+          "dear mermolja we have received",
+          2
+        ],
+        [
+          "shelibare soraya posteraro is a",
+          2
+        ],
+        [
+          "hi mermolja i hope you're",
+          1
+        ],
+        [
+          "i have an urgent inquiry",
+          1
+        ],
+        [
+          "hello mermolja i have just",
+          1
+        ],
+        [
+          "i need to schedule an",
+          1
+        ],
+        [
+          "thank you mermolja for your",
+          1
+        ],
+        [
+          "dear team please see the",
+          1
+        ],
+        [
+          "hi narumol i hope you're",
+          1
+        ],
+        [
+          "dear narumol thank you for",
+          1
+        ]
+      ],
+      "distinct1": 0.3279,
+      "distinct2": 0.7619,
+      "unique_per_group_median": 7,
+      "unique_per_group_min": 5,
+      "groups": 20,
+      "length_words": {
+        "p10": 12,
+        "p50": 20,
+        "p90": 30,
+        "min": 8,
+        "max": 62
+      },
+      "thresholds": {
+        "validity": {
+          "ok": true,
+          "detail": "validity_rate=0.9 (min 0.9)"
+        },
+        "name_at_start": {
+          "ok": true,
+          "detail": "name_at_start_share=0.2569 (max 0.4)"
+        },
+        "top10_openings": {
+          "ok": true,
+          "detail": "top10_opening_share=0.0833 (max 0.3)"
+        },
+        "unique_per_group": {
+          "ok": true,
+          "detail": "median=7 (min 6)"
+        }
+      },
+      "reward": {
+        "valid_scored": 144,
+        "invalid_excluded": 16,
+        "outcome_rates": {
+          "exact_hit": 0.4653,
+          "partial_overlap": 0.25,
+          "boundary_error": 0.0,
+          "complete_miss": 0.2847
+        },
+        "p_target_mean": {
+          "p1": 0.0055160378105938435,
+          "p5": 0.018446961417794228,
+          "p25": 0.2806732542812824,
+          "p50": 0.6277096271514893
+        },
+        "p_target_min_p5": 0.01242908090353012,
+        "dead_group_share": 0.0,
+        "live_group_share_r_prob": 0.9,
+        "within_group_std_mean_r_prob": 0.157,
+        "live_group_share_r_logit": 1.0,
+        "within_group_std_mean_r_logit": 1.0882,
+        "exploit_correlations": {
+          "length": -0.1211,
+          "name_position": -0.2555,
+          "extra_person_flag": 0.0
+        }
+      },
+      "scorer_flag": "pending scorer verification (M07a scorer under separate fix)"
+    },
+    "P1|t0.7": {
+      "total": 160,
+      "valid": 150,
+      "validity_rate": 0.9375,
+      "failure_breakdown": {
+        "invalid:name_dup": 5,
+        "invalid:name_missing": 4,
+        "invalid:refusal": 1
+      },
+      "name_at_start_share": 0.3667,
+      "name_position": {
+        "start": 0.8333,
+        "middle": 0.1533,
+        "end": 0.0133
+      },
+      "top10_opening_share": 0.1733,
+      "top10_openings": [
+        [
+          "rahima haudebert sinueno is currently",
+          5
+        ],
+        [
+          "shelibare soraya posteraro is a",
+          3
+        ],
+        [
+          "hi j rg this is",
+          3
+        ],
+        [
+          "fithi bettschen is currently listed",
+          3
+        ],
+        [
+          "hey brayn did you get",
+          2
+        ],
+        [
+          "dear kavisan your appointment with",
+          2
+        ],
+        [
+          "tr molat signed the form",
+          2
+        ],
+        [
+          "shelibare soraya posteraro is currently",
+          2
+        ],
+        [
+          "hey jahan hope you're doing",
+          2
+        ],
+        [
+          "dear d riye we have",
+          2
+        ]
+      ],
+      "distinct1": 0.2646,
+      "distinct2": 0.6229,
+      "unique_per_group_median": 8,
+      "unique_per_group_min": 5,
+      "groups": 20,
+      "length_words": {
+        "p10": 13,
+        "p50": 21,
+        "p90": 30,
+        "min": 8,
+        "max": 58
+      },
+      "thresholds": {
+        "validity": {
+          "ok": true,
+          "detail": "validity_rate=0.9375 (min 0.9)"
+        },
+        "name_at_start": {
+          "ok": true,
+          "detail": "name_at_start_share=0.3667 (max 0.4)"
+        },
+        "top10_openings": {
+          "ok": true,
+          "detail": "top10_opening_share=0.1733 (max 0.3)"
+        },
+        "unique_per_group": {
+          "ok": true,
+          "detail": "median=8 (min 6)"
+        }
+      },
+      "reward": {
+        "valid_scored": 150,
+        "invalid_excluded": 10,
+        "outcome_rates": {
+          "exact_hit": 0.46,
+          "partial_overlap": 0.2667,
+          "boundary_error": 0.0,
+          "complete_miss": 0.2733
+        },
+        "p_target_mean": {
+          "p1": 0.00664226058870554,
+          "p5": 0.023667074119051296,
+          "p25": 0.32610051706433296,
+          "p50": 0.6519220098853111
+        },
+        "p_target_min_p5": 0.01208571158349514,
+        "dead_group_share": 0.0,
+        "live_group_share_r_prob": 0.85,
+        "within_group_std_mean_r_prob": 0.1343,
+        "live_group_share_r_logit": 1.0,
+        "within_group_std_mean_r_logit": 0.9173,
+        "exploit_correlations": {
+          "length": -0.0143,
+          "name_position": -0.5037,
+          "extra_person_flag": 0.0
+        }
+      },
+      "scorer_flag": "pending scorer verification (M07a scorer under separate fix)"
+    },
+    "P2|t1.0": {
+      "total": 160,
+      "valid": 133,
+      "validity_rate": 0.8313,
+      "failure_breakdown": {
+        "invalid:json": 1,
+        "invalid:name_dup": 2,
+        "invalid:name_missing": 23,
+        "invalid:name_only": 1
+      },
+      "name_at_start_share": 0.391,
+      "name_position": {
+        "start": 0.797,
+        "middle": 0.1654,
+        "end": 0.0376
+      },
+      "top10_opening_share": 0.0827,
+      "top10_openings": [
+        [
+          "hi yanil could you please",
+          2
+        ],
+        [
+          "hello i am the account",
+          1
+        ],
+        [
+          "good morning mermolja your ticket",
+          1
+        ],
+        [
+          "hi mermolja i need to",
+          1
+        ],
+        [
+          "mermolja wants to know why",
+          1
+        ],
+        [
+          "hello mermolja just checking in",
+          1
+        ],
+        [
+          "mermolja just mentioned she'd add",
+          1
+        ],
+        [
+          "hello narumol please check your",
+          1
+        ],
+        [
+          "please add narumol to the",
+          1
+        ],
+        [
+          "narumol does the team know",
+          1
+        ]
+      ],
+      "distinct1": 0.3057,
+      "distinct2": 0.7392,
+      "unique_per_group_median": 7,
+      "unique_per_group_min": 5,
+      "groups": 20,
+      "length_words": {
+        "p10": 15,
+        "p50": 22,
+        "p90": 29,
+        "min": 10,
+        "max": 49
+      },
+      "thresholds": {
+        "validity": {
+          "ok": false,
+          "detail": "validity_rate=0.8313 (min 0.9)"
+        },
+        "name_at_start": {
+          "ok": true,
+          "detail": "name_at_start_share=0.391 (max 0.4)"
+        },
+        "top10_openings": {
+          "ok": true,
+          "detail": "top10_opening_share=0.0827 (max 0.3)"
+        },
+        "unique_per_group": {
+          "ok": true,
+          "detail": "median=7 (min 6)"
+        }
+      },
+      "reward": {
+        "valid_scored": 133,
+        "invalid_excluded": 27,
+        "outcome_rates": {
+          "exact_hit": 0.4436,
+          "partial_overlap": 0.3158,
+          "boundary_error": 0.0,
+          "complete_miss": 0.2406
+        },
+        "p_target_mean": {
+          "p1": 0.0069783092476427555,
+          "p5": 0.02122839167714119,
+          "p25": 0.35908930500348407,
+          "p50": 0.6396612326304117
+        },
+        "p_target_min_p5": 0.010879550129175186,
+        "dead_group_share": 0.0,
+        "live_group_share_r_prob": 0.95,
+        "within_group_std_mean_r_prob": 0.2165,
+        "live_group_share_r_logit": 1.0,
+        "within_group_std_mean_r_logit": 1.4212,
+        "exploit_correlations": {
+          "length": -0.0896,
+          "name_position": -0.3674,
+          "extra_person_flag": -0.0108
+        }
+      },
+      "scorer_flag": "pending scorer verification (M07a scorer under separate fix)"
+    },
+    "P2|t0.7": {
+      "total": 160,
+      "valid": 148,
+      "validity_rate": 0.925,
+      "failure_breakdown": {
+        "invalid:name_dup": 1,
+        "invalid:name_missing": 9,
+        "invalid:refusal": 2
+      },
+      "name_at_start_share": 0.4189,
+      "name_position": {
+        "start": 0.8243,
+        "middle": 0.1622,
+        "end": 0.0135
+      },
+      "top10_opening_share": 0.1216,
+      "top10_openings": [
+        [
+          "rahima haudebert sinueno requested a",
+          3
+        ],
+        [
+          "fatajo is meeting with the",
+          2
+        ],
+        [
+          "the meeting notes confirm that",
+          2
+        ],
+        [
+          "tr molat has been notified",
+          2
+        ],
+        [
+          "shelibare soraya posteraro requested an",
+          2
+        ],
+        [
+          "hey everyone just a quick",
+          2
+        ],
+        [
+          "hi j rg just wanted",
+          2
+        ],
+        [
+          "hi mermolja just wanted to",
+          1
+        ],
+        [
+          "hi mermolja your support ticket",
+          1
+        ],
+        [
+          "hi mermolja just checking on",
+          1
+        ]
+      ],
+      "distinct1": 0.2251,
+      "distinct2": 0.5854,
+      "unique_per_group_median": 8,
+      "unique_per_group_min": 5,
+      "groups": 20,
+      "length_words": {
+        "p10": 16,
+        "p50": 23,
+        "p90": 30,
+        "min": 9,
+        "max": 45
+      },
+      "thresholds": {
+        "validity": {
+          "ok": true,
+          "detail": "validity_rate=0.925 (min 0.9)"
+        },
+        "name_at_start": {
+          "ok": false,
+          "detail": "name_at_start_share=0.4189 (max 0.4)"
+        },
+        "top10_openings": {
+          "ok": true,
+          "detail": "top10_opening_share=0.1216 (max 0.3)"
+        },
+        "unique_per_group": {
+          "ok": true,
+          "detail": "median=8 (min 6)"
+        }
+      },
+      "reward": {
+        "valid_scored": 148,
+        "invalid_excluded": 12,
+        "outcome_rates": {
+          "exact_hit": 0.4189,
+          "partial_overlap": 0.2838,
+          "boundary_error": 0.0,
+          "complete_miss": 0.2973
+        },
+        "p_target_mean": {
+          "p1": 0.0024145334027707577,
+          "p5": 0.013076952658593655,
+          "p25": 0.302645872036616,
+          "p50": 0.6225082278251648
+        },
+        "p_target_min_p5": 0.009083570912480354,
+        "dead_group_share": 0.0,
+        "live_group_share_r_prob": 0.95,
+        "within_group_std_mean_r_prob": 0.1918,
+        "live_group_share_r_logit": 1.0,
+        "within_group_std_mean_r_logit": 1.2562,
+        "exploit_correlations": {
+          "length": -0.1274,
+          "name_position": -0.4202,
+          "extra_person_flag": 0.0583
+        }
+      },
+      "scorer_flag": "pending scorer verification (M07a scorer under separate fix)"
+    }
+  },
+  "pass_by_cell": {
+    "P0|t1.0": false,
+    "P0|t0.7": false,
+    "P1|t1.0": true,
+    "P1|t0.7": true,
+    "P2|t1.0": false,
+    "P2|t0.7": false
+  },
+  "best_cell": "P1|t0.7",
+  "recommendation": "variant cell P1|t0.7 passes all pre-committed criteria - candidate prompt for M06/M08",
+  "run_id": "m07b-20261012-224819",
+  "finished_utc": "2026-10-12T22:48:19.994818+00:00",
+  "samples_raw_path": "/home/gauthier/.vibe/worktrees/pii-redteam-rl-e35b3d1393f1/request-v2-prompting/artifacts/m07b/m07b-20261012-224819/samples_raw.jsonl",
+  "d0_scored_samples": 668,
+  "experiments_entry": {
+    "run_id": "m07b-20261012-224819",
+    "kind": "prompt-variant-comparison",
+    "milestone": "M07b",
+    "executed": "2026-10-12",
+    "where": "cpu-cpu",
+    "repo_commit": null,
+    "environment": {
+      "device": "cpu",
+      "gpu": "cpu",
+      "dtype": "torch.float32",
+      "torch": "2.14.1+cpu",
+      "transformers": "5.18.0",
+      "python": "3.12.3"
+    },
+    "artifacts": "/home/gauthier/.vibe/worktrees/pii-redteam-rl-e35b3d1393f1/request-v2-prompting/artifacts/m07b/m07b-20261012-224819 (samples_raw.jsonl, prompt_compare_report.json)",
+    "metrics": {
+      "P0|t1.0": {
+        "validity_rate": 0.3063,
+        "name_at_start_share": 0.4898,
+        "top10_opening_share": 0.2041,
+        "unique_per_group_median": 3,
+        "failure_breakdown": {
+          "invalid:name_missing": 8,
+          "invalid:name_only": 17,
+          "invalid:no_content": 3,
+          "invalid:too_short": 83
+        }
+      },
+      "P0|t0.7": {
+        "validity_rate": 0.275,
+        "name_at_start_share": 0.6364,
+        "top10_opening_share": 0.2955,
+        "unique_per_group_median": 2,
+        "failure_breakdown": {
+          "invalid:name_missing": 6,
+          "invalid:name_only": 16,
+          "invalid:no_content": 4,
+          "invalid:too_short": 90
+        }
+      },
+      "P1|t1.0": {
+        "validity_rate": 0.9,
+        "name_at_start_share": 0.2569,
+        "top10_opening_share": 0.0833,
+        "unique_per_group_median": 7,
+        "failure_breakdown": {
+          "invalid:json": 4,
+          "invalid:name_dup": 3,
+          "invalid:name_missing": 6,
+          "invalid:refusal": 3
+        }
+      },
+      "P1|t0.7": {
+        "validity_rate": 0.9375,
+        "name_at_start_share": 0.3667,
+        "top10_opening_share": 0.1733,
+        "unique_per_group_median": 8,
+        "failure_breakdown": {
+          "invalid:name_dup": 5,
+          "invalid:name_missing": 4,
+          "invalid:refusal": 1
+        }
+      },
+      "P2|t1.0": {
+        "validity_rate": 0.8313,
+        "name_at_start_share": 0.391,
+        "top10_opening_share": 0.0827,
+        "unique_per_group_median": 7,
+        "failure_breakdown": {
+          "invalid:json": 1,
+          "invalid:name_dup": 2,
+          "invalid:name_missing": 23,
+          "invalid:name_only": 1
+        }
+      },
+      "P2|t0.7": {
+        "validity_rate": 0.925,
+        "name_at_start_share": 0.4189,
+        "top10_opening_share": 0.1216,
+        "unique_per_group_median": 8,
+        "failure_breakdown": {
+          "invalid:name_dup": 1,
+          "invalid:name_missing": 9,
+          "invalid:refusal": 2
+        }
+      }
+    },
+    "outcome": "variant cell P1|t0.7 passes all pre-committed criteria - candidate prompt for M06/M08"
+  }
+}

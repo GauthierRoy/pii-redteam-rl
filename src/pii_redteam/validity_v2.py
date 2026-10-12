@@ -54,11 +54,14 @@ _REFUSAL_RE = re.compile("|".join(REFUSAL_PATTERNS), re.IGNORECASE)
 _GREETING_WORDS = frozenset(
     """
     a am and afternoon are best catch chat day dear doing evening fine finds for friend
-    good greetings have hey hello hi hope how i is it its lets lovely meet meeting morning my
-    name nice regards see seeing soon talk thank thanks the this to today tonight
-    touches up warm well wishes you your
+    good greetings have having hey hello hi hope how i is it its lets lovely meet meeting
+    morning my name nice regards see seeing soon talk thank thanks the this to today
+    tonight touches up warm well wishes you your
     """.split()
 )
+# "having" is part of pure small talk ("hope you are having a good day"); it was
+# missing from the first lexicon version and would have flipped exactly one
+# P0 sample in run m07b-20261012-224819 (quantified post-run, no pass/fallout).
 
 
 def word_count(text: str) -> int:
