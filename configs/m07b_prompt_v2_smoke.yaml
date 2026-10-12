@@ -1,0 +1,33 @@
+# LOCAL CPU smoke config for the M07b comparison (tiny; verifies the whole
+# comparison pipeline end-to-end without a GPU). The full run uses
+# configs/m07b_prompt_v2.yaml (locally on CPU after owner go, or on Colab).
+run_id_prefix: m07b-smoke
+model_id: Qwen/Qwen3.5-2B
+adapter: null
+seed: 20260920
+repo_dir: null
+work_dir: /tmp/m07b_smoke
+repo_commit: smoke
+bank:
+  path: banks/v2_prompting/spark_seed20260920_v2_n20.jsonl
+  sha256: 1f0b9960ac797c3fbbc5e26dc2658a11e76837ca47a79da9b0443d37a7708fb7
+variants: [P0, P2]
+generation:
+  temperatures: [1.0]
+  top_p: 0.95
+  n: 2
+  max_new_tokens: 192
+  batch_prompts: 2
+  max_requests: 2
+detector:
+  enabled: true
+  path: /tmp/d0zip/pii-redteam-rl/d0-20261004-142714/d0-best
+  sha256: 0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb
+  max_length: 512
+rewards:
+  logit_clip: 10.0
+thresholds:
+  validity_min: 0.90
+  name_at_start_max: 0.40
+  top10_openings_max: 0.30
+  median_unique_valid_min: 6
