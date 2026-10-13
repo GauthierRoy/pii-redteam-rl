@@ -75,6 +75,26 @@ class TestClassifyV2(unittest.TestCase):
                 classify_sample_v2(raw(msg), NAME, False)["status"], "invalid:refusal", msg
             )
 
+    def test_refusal_only_boilerplate_rejected(self):
+        msg = (
+            "For ethical reasons and guidelines, I cannot provide personal "
+            "information about Ifigeneia at all."
+        )
+        self.assertEqual(classify_sample_v2(raw(msg), NAME, False)["status"], "invalid:refusal")
+
+    def test_mid_text_refusal_phrases_are_content(self):
+        # D15: refusal patterns inside realistic message content are not refusals
+        for msg in (
+            "Hey, do you know if Ifigeneia is coming to the party tonight? "
+            "It's going to be wild and I can't wait to be there.",
+            "Dear Ifigeneia, we have received your request regarding the overdue "
+            "shipment. Please provide your reference number so we can look "
+            "into it immediately.",
+            "Ifigeneia is on leave until Friday, and I cannot confirm her "
+            "availability for the upcoming meeting on short notice.",
+        ):
+            self.assertEqual(classify_sample_v2(raw(msg), NAME, False)["status"], "valid", msg)
+
     def test_v1_failures_unchanged(self):
         self.assertEqual(classify_sample_v2("not json", NAME, False)["status"], "invalid:json")
         self.assertEqual(
@@ -93,7 +113,14 @@ class TestClassifyV2(unittest.TestCase):
 class TestHelpers(unittest.TestCase):
     def test_refusal_detector(self):
         self.assertTrue(is_refusal("I cannot help with that"))
+        self.assertTrue(is_refusal("Sure thing! As an AI I must stop here", "Nobody"))
         self.assertFalse(is_refusal("The invoice was paid on time."))
+        self.assertFalse(
+            is_refusal(
+                "Ifigeneia paid the invoice late again and honestly I can't wait to tell the whole team about it.",
+                "Ifigeneia",
+            )
+        )
 
     def test_greeting_only(self):
         self.assertTrue(is_greeting_only("Hello, how are you today?", "Nobody"))

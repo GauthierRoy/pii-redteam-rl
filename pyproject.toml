@@ -26,6 +26,8 @@ ml = [
   "accelerate>=1.0",
   "peft>=0.16",
   "matplotlib>=3.8",
+  "spacy>=3.7",
+  "en-core-web-sm",
 ]
 
 # CPU-only torch: this machine has no CUDA; pin torch to the PyTorch CPU index.
@@ -36,6 +38,8 @@ explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
+# spaCy English NER model, pinned by release URL (M07b.2 extra-person gate).
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
 
 [tool.ruff]
 line-length = 100

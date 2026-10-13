@@ -1,10 +1,13 @@
 # PROMPT_V2_RESULTS — M07b: prompt variants vs template collapse (base Qwen3.5-2B)
 
-**Status: EXECUTED 2026-10-12/13, run `m07b-20261012-224819` (local CPU).**
+**Status: EXECUTED 2026-10-12/13, run `m07b-20261012-224819` (local CPU);
+re-scored 2026-10-13 under the owner decisions D14/D15 (official probe scorer,
+tightened refusal rule, position compliance, independent person checks).**
 Everything up to §7 was final and committed BEFORE the generation run (pass
-criteria included); §8-§9 are filled from `prompt_compare_report.json`
-(committed at `results/m07b_prompt_v2/m07b-20261012-224819/`), and the
-`EXPERIMENTS.yaml` entry is appended from the report's `experiments_entry`.
+criteria included); §8-§10 are filled from `prompt_compare_report.json` and
+`rescore_report.json` / `person_check_report.json` (committed under
+`results/m07b_prompt_v2/m07b-20261012-224819/`), and the `EXPERIMENTS.yaml`
+entries are appended from those reports' `experiments_entry` fields.
 
 Question: can prompting alone make the BASE Qwen3.5-2B (no adapter,
 non-thinking) produce varied, realistic short messages instead of
@@ -243,24 +246,29 @@ Reading:
   by 2-3x. distinct-1 is not among the pass criteria; the opening-pattern and
   unique-per-group metrics are the ones that measure the actual failure mode.
 
-### 8.3 p_target / live-group stats — **pending scorer verification**
+### 8.3 p_target / live-group stats — official probe scorer (flag dropped)
 
-Computed with a local reference-pipeline replica of the frozen-D0 eval path
-(sha-verified `0314ebe3…c43cb`), NOT the M07a probe scorer (under separate
-fix). Do not use these numbers for go/no-go until re-scored:
+Re-scored 2026-10-13 with the OFFICIAL probe scorer
+(`pii_redteam.probe._score_with_d0`, frozen D0 sha `0314ebe3…c43cb`), which the
+M07a scorer-sanity work verified against the D0 training eval pipeline
+(dev 124/124, pilot 32/32 — PR #5). Cross-check on this run: the as-run local
+reference-replica and the official scorer agree to max |Δp_target| = 8.05e-07
+(mean 1.38e-08) over 667 common samples, so the as-run numbers stand. Numbers
+below are the official-scorer values over the D15-valid samples:
 
-| Metric | P0 t1.0 | P0 t0.7 | P1 t1.0 | P1 t0.7 | P2 t1.0 | P2 t0.7 |
+| Metric (official scorer, D15-valid) | P0 t1.0 | P0 t0.7 | P1 t1.0 | P1 t0.7 | P2 t1.0 | P2 t0.7 |
 |---|---|---|---|---|---|---|
-| p_target mean p50 | 0.470 | 0.611 | 0.628 | 0.652 | 0.640 | 0.623 |
-| complete_miss rate | 0.388 | 0.273 | 0.285 | 0.273 | 0.241 | 0.297 |
-| exact_hit rate | 0.367 | 0.341 | 0.465 | 0.460 | 0.444 | 0.419 |
+| p_target mean p50 | 0.519 | 0.611 | 0.621 | 0.652 | 0.640 | 0.623 |
+| complete_miss rate | 0.375 | 0.273 | 0.286 | 0.272 | 0.241 | 0.293 |
 | live-group share (r_prob) | 0.474 | 0.368 | 0.900 | 0.850 | 0.950 | 0.950 |
 | dead groups | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
 
 Directionally: valid P1/P2 outputs sit in a p_target band (~0.2-0.9) that
 gives much stronger within-group reward variance than P0 (live-group 0.85-0.95
-vs 0.37-0.47) — a healthy RL training signal, if it survives scorer
-verification.
+vs 0.37-0.47). Note (D13): D0 still misses ~24-39% of these short-conversational
+names — complete_miss is a REAL detector gap, not a scoring artifact, which is
+exactly why D13 stages D1 before any RL and why the M07b.2 data gates
+(§10) do not rely on D0.
 
 ### 8.4 Manual-review samples (10 random valid per variant, t=1.0)
 
@@ -297,28 +305,64 @@ P2 (style-rich but leaky):
 - 'Good morning! Did you see the new specs for the project? Al-Asadi is ready...'
 - "Val and Dorotea Lunvik confirmed the schedule adjustment..." (few-shot name leaked in)
 
-### 8.5 Known detector issues found by this run (quantified, as-run numbers kept)
+### 8.4b D15 re-label of the saved 960 (both numbers)
 
-- **Refusal-detector false positives** (6 hits across cells; at least 4 are
-  in-message phrases, not refusals): "I can't wait to see how the feedback
-  comes in", "I can't figure out what it is", "Please provide your reference
-  number so we can look into it" inside otherwise realistic support emails.
-  All 3 P1|t1.0 refusals look like false positives — with them relabeled
-  valid, P1|t1.0 validity would be ~0.94 instead of 0.90 (still passes).
-  Rule was pre-committed, so as-run numbers stand; tightening "i can't" /
-  "please provide" to refusal-at-start-of-answer only is a follow-up owner
-  decision.
-- **Greeting-lexicon gap** ("having" was missing): would have flipped exactly
-  one P0|t1.0 sample ("Hi Val, hope you are having a good day."). No
-  pass/fallout impact; lexicon fixed in code after the run.
+Owner decision D15 (2026-10-13): refusal patterns flag only refusal/meta-text at
+the answer start or refusal-only answers. Re-labeled via
+`scripts/rescore_v2.py` over `samples_raw.jsonl`:
+
+| Cell | validity as-run | validity D15 | flips |
+|---|---|---|---|
+| P0 t1.0 | 0.3063 | 0.3000 | 1 valid -> invalid:no_content (greeting-lexicon "having" fix) |
+| P0 t0.7 | 0.2750 | 0.2750 | - |
+| **P1 t1.0** | 0.9000 | **0.9187** | 3 invalid:refusal -> valid (in-message "I can't wait"/"please provide") |
+| **P1 t0.7** | 0.9375 | **0.9437** | 1 invalid:refusal -> valid |
+| P2 t1.0 | 0.8313 | 0.8313 | - |
+| P2 t0.7 | 0.9250 | **0.9375** | 2 invalid:refusal -> valid |
+
+All 6 as-run refusal labels that flipped were false positives (confirmed by
+manual reading); P1 passes at both temperatures with wider margins under D15.
+Pass/fallout table unchanged.
+
+### 8.4c Per-hint name-position compliance (owner request, 2026-10-13)
+
+Compliance of D15-valid outputs with the request's `name_position` hint
+(`prompt_v2.hint_compliance`; P0 ignores hints, so it is the control):
+
+| Hint | P0 t1.0 | P1 t1.0 | P2 t1.0 | P0 t0.7 | P1 t0.7 | P2 t0.7 |
+|---|---|---|---|---|---|---|
+| start | 0.83 | 0.94 | 0.92 | 1.00 | 1.00 | 0.80 |
+| middle | 0.18 | 0.48 | 0.19 | 0.07 | 0.31 | 0.11 |
+| end | 0.00 | 0.14 | 0.09 | 0.00 | 0.07 | 0.04 |
+| signature | 0.00 | 0.13 | 0.07 | 0.00 | 0.00 | 0.07 |
+
+Finding: the model follows `start` hints almost perfectly, but `middle`/`end`/
+`signature` hints are weakly followed — the name lands early in most outputs
+regardless (name-position start-share 0.72-0.93 across cells). Position hints
+beyond `start` should not be relied on for D1 data construction.
+
+### 8.5 Known detector issues found by this run (quantified; D15 resolved them)
+
+- **Refusal-detector false positives** (6 hits across cells, all confirmed
+  false by manual reading): in-message "I can't wait…", "please provide your
+  reference number" inside realistic support emails. Resolved by D15
+  (answer-start / refusal-only scope); see §8.4b for both numbers.
+- **Greeting-lexicon gap** ("having" was missing): flipped exactly one P0|t1.0
+  sample. Lexicon fixed in code; the D15 re-label applies it (§8.4b).
 - P1 shows occasional extra names ("Sarah") inside otherwise valid outputs —
-  that is the D0 extra-person-flag channel's job to police, not v2 validity.
+  policed by the independent D1 data gate (§10), not by v2 validity.
 
 ## 9. What is (still) unverified
 
-- Every p_target / outcome / live-group number in §8.3: **pending scorer
-  verification** until the M07a scorer fix lands and is re-run over
-  `samples_raw.jsonl` (raw outputs are saved for exactly this).
+- p_target / outcome / live-group numbers (§8.3) now come from the official
+  probe scorer (verified by the M07a scorer-sanity regression, PR #5); the
+  remaining caveat is D0 itself (D13: ~24-39% complete-miss on these texts) —
+  by design, D1 exists to close that gap, and the D1 gates do not rely on D0.
+- The person-sense judge never rejected (0/673): its discrimination is
+  unvalidated — no counterexample appeared in this run or the audit.
+- The LLM judge is Qwen3.5-0.8B (owner asked for a small judge; the 2B judge
+  was tried first but was ~15x slower on CPU). A stronger judge could reduce
+  the 87 unclear answers (12.9% overall, concentrated in P2 texts).
 - The run is CPU fp32 on this laptop, not a GPU: sample-level outputs differ
   from what a T4/fp16 run would produce, but the variant ordering (P1 >> P2 >
   P0 on the pre-committed criteria) has wide margins and is unlikely to flip.
@@ -327,4 +371,54 @@ P2 (style-rich but leaky):
 - The 6th pilot sample (see §2); the complete pilot file remains on Drive.
 - Colab notebook path (Drive D0 / config overrides) is untested until the
   owner opens it — it mirrors the M07a launcher pattern exactly.
-- Refusal-detector scope (see §8.5) — owner decision pending.
+
+## 10. M07b.2 D1 training-data gates (owner decisions, 2026-10-13)
+
+Before ANY generation from this run becomes D1 training data (D13 Stage 1):
+
+1. **Extra-person check — independent of D0** (R08). Checker =
+   spaCy `en_core_web_sm` NER (filtered: digit-strings and role titles like
+   "Team Lead" are not person names) OR a small LLM judge (Qwen3.5-0.8B,
+   bf16 CPU, greedy, non-thinking, 2-token yes/no). Policy: **conservative —
+   an unclear judge answer rejects the row** (the audit showed the leaked
+   few-shot name sits exactly in that bucket). "Introduce no additional person
+   names" was already in the P0/P1/P2 prompt contract (§5), so no prompt
+   change was needed.
+2. **Person-sense check** (name = a person, not a place/organization/object/
+   work): LLM judge + manual audit of 50 stratified rows.
+
+Executed over the 673 D15-valid samples of this run
+(`scripts/person_check_v2.py`, judge pass 10.2 min CPU; outputs:
+`samples_person_checked.jsonl`, `person_check_report.json`):
+
+| Cell | n valid | spaCy extras | LLM yes (unclear) | sense "no" | accepted for D1 |
+|---|---|---|---|---|---|
+| P0 t1.0 | 48 | 0.000 | 0.021 (0) | 0.000 | 47/48 (0.979) |
+| P0 t0.7 | 44 | 0.000 | 0.000 (0) | 0.000 | 44/44 (1.000) |
+| **P1 t1.0** | 147 | 0.095 | 0.000 (14) | 0.000 | 132/147 (0.898) |
+| **P1 t0.7** | 151 | 0.093 | 0.000 (17) | 0.000 | 133/151 (0.881) |
+| P2 t1.0 | 133 | 0.053 | 0.015 (34) | 0.000 | 95/133 (0.714) |
+| P2 t0.7 | 150 | 0.033 | 0.007 (22) | 0.000 | 127/150 (0.847) |
+| **overall** | 673 | 0.062 | 0.006 (87) | 0.000 | **578/673 (0.859)** |
+
+Under the lenient policy (unclear counts as clean): rejection 6.4%,
+acceptance 93.6%. The conservative policy costs ~8 points of yield for zero
+gate misses (see audit).
+
+**Manual audit of 50 stratified rows (25 flagged / 25 clean; agent-reviewed,
+verdicts in `audit_manual_verdicts.jsonl`):**
+- final gate agreement **46/50 (92%)**; **0 false acceptances** (no extra
+  person slipped through), 4 over-rejections (2 LLM judge false "yes" on
+  texts that contain only the requested name; 2 role-title rows rejected only
+  by the conservative unclear-reject policy)
+- person-sense: the judge answered "yes" on all 673 samples; the audit
+  confirms all 50 audited rows do use the name as a person — the check never
+  fired on this run (0% rejection), so its discrimination is UNVALIDATED
+  (no counterexamples existed to test it on; keep it as a guard)
+- the audit caught 2 rows where the P2 few-shot name "Dorotea Lunvik" leaked
+  into outputs and spaCy missed it — the conservative unclear-reject policy
+  is what catches that class; also another argument for P1 (adopted, D14)
+  over P2
+
+For the adopted configuration (D14: P1 at t=0.7): **88.1% of D15-valid
+outputs would be accepted as D1 data** after the person gates.

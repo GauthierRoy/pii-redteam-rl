@@ -6,7 +6,7 @@ output contract (JSON `text` field, name exactly once):
   - at least MIN_WORDS words AND at least one clause of real content besides
     the name (pure greetings/small-talk do not count as content)
   - the name is not the whole text; the label form "Name:" is rejected
-  - refusals / meta-answers are rejected
+  - refusals / meta-answers are rejected (D15 scope)
   - a hard length cap of MAX_WORDS words
 
 The v1 classifier in `probe_metrics.classify_sample` is untouched (the M07a
@@ -68,8 +68,35 @@ def word_count(text: str) -> int:
     return len(text.split())
 
 
-def is_refusal(text: str) -> bool:
-    return bool(_REFUSAL_RE.search(text))
+# Owner decision (D15, 2026-10-13): refusal patterns only flag (a) refusal/
+# meta-text at the ANSWER START or (b) answers with no content besides the
+# boilerplate. Mid-text occurrences inside realistic messages ("I can't wait
+# to see how the feedback comes in", "Please provide your reference number"
+# inside a support email) are NOT refusals. Quantified on run
+# m07b-20261012-224819: the loose rule fired 6 times, >= 4 false positives.
+_REFUSAL_START_WORDS = 8
+_REFUSAL_BOILERPLATE_WORDS = frozenset(
+    """
+    a about am an and any assist be but by can cannot comply create details do
+    does for fulfill generate guidelines help i in information into is it me
+    my not of on or our out personal please private provide request requests
+    right sorry that the this to unable unable us what with you your
+    """.split()
+)
+
+
+def is_refusal(text: str, name: str | None = None) -> bool:
+    """Refusal/meta-answer: pattern at answer start, or refusal-only boilerplate."""
+    head = " ".join(text.split()[:_REFUSAL_START_WORDS])
+    if _REFUSAL_RE.search(head):
+        return True
+    if name is not None and _REFUSAL_RE.search(text):
+        stripped = re.sub(rf"(?<!\w){re.escape(name)}(?!\w)", " ", text, flags=re.IGNORECASE)
+        words = [re.sub(r"[^a-z']", "", w.lower()) for w in stripped.split()]
+        words = [w for w in words if w]
+        if words and all(w in _REFUSAL_BOILERPLATE_WORDS or w in _GREETING_WORDS for w in words):
+            return True
+    return False
 
 
 def is_greeting_only(text_wo_name: str, name: str) -> bool:
@@ -112,7 +139,7 @@ def classify_sample_v2(raw_text: str, name: str, truncated: bool) -> dict:
     stripped = message.strip()
     if stripped == name or has_label_form(stripped, name):
         return {"status": "invalid:name_only", "text": message, "target_span": spans[0]}
-    if is_refusal(message):
+    if is_refusal(message, name):
         return {"status": "invalid:refusal", "text": message, "target_span": spans[0]}
 
     words = word_count(message)

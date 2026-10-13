@@ -160,6 +160,49 @@ def comparison_metrics(samples: list[dict], group_size: int = 8) -> dict:
     return out
 
 
+def position_matches_hint(hint: str, span: tuple[int, int], text: str) -> bool:
+    """Compliance with the request's name_position hint (start/middle/end/signature)."""
+    if not text:
+        return False
+    frac = (span[0] + span[1]) / 2 / len(text)
+    if hint == "start":
+        return frac < 0.25
+    if hint == "middle":
+        return 0.25 <= frac < 0.75
+    if hint == "end":
+        return frac >= 0.75
+    if hint == "signature":
+        return span[0] >= int(len(text) * 0.8)  # signature names sit at the very end
+    return False
+
+
+def hint_compliance(samples: list[dict], hints: dict[str, str | None]) -> dict:
+    """Per-hint compliance rates for valid samples of hint-carrying requests.
+
+    `samples` need status/text/target_span/request_id (D15 labels); `hints` maps
+    request_id -> name_position hint (None = no hint).
+    """
+    stats: dict[str, dict] = {}
+    for s in samples:
+        if s["status"] != "valid":
+            continue
+        hint = hints.get(s["request_id"])
+        if not hint:
+            continue
+        ok = position_matches_hint(hint, s["target_span"], s["text"])
+        cell = f"{s.get('variant', '?')}|t{s.get('temperature', '?')}"
+        stats.setdefault(hint, {}).setdefault(cell, [0, 0])
+        stats[hint][cell][1] += 1
+        stats[hint][cell][0] += int(ok)
+    return {
+        hint: {
+            cell: {"compliant": ok, "n": tot, "rate": round(ok / tot, 4)}
+            for cell, (ok, tot) in sorted(cells.items())
+        }
+        for hint, cells in sorted(stats.items())
+    }
+
+
 def variant_threshold_report(metrics: dict, thresholds: dict) -> dict:
     """M07b pass criteria (pre-committed before the run)."""
 

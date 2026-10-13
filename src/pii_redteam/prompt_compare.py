@@ -24,13 +24,18 @@ import time
 import torch
 from transformers import AutoModelForCausalLM, AutoModelForTokenClassification, AutoTokenizer
 
-from pii_redteam.detector import bio_labels_from_spans, spans_from_bio_labels, trim_span_whitespace
-from pii_redteam.probe_metrics import outcome_for_sample, reward_metrics
-from pii_redteam.prompt_v2 import PROMPT_VARIANTS, comparison_metrics, render_prompt_v2
+from pii_redteam.probe import _score_with_d0
+from pii_redteam.probe_metrics import reward_metrics
+from pii_redteam.prompt_v2 import (
+    PROMPT_VARIANTS,
+    comparison_metrics,
+    hint_compliance,
+    render_prompt_v2,
+)
 from pii_redteam.prompt_v2 import variant_threshold_report as threshold_report
 from pii_redteam.validity_v2 import classify_sample_v2
 
-PENDING_SCORER = "pending scorer verification (M07a scorer under separate fix)"
+SCORER_NOTE = "official probe scorer (probe._score_with_d0), verified vs the D0 eval pipeline by the M07a scorer-sanity regression (PR #5)"
 
 
 def _sha256(path: str) -> str:
@@ -123,54 +128,6 @@ def _generate(
     return results
 
 
-@torch.no_grad()
-def _score_with_d0_local(d0, d0_tok, samples: list[dict], max_length: int) -> None:
-    """Reference-pipeline D0 scoring (single-row semantics, batched I/O).
-
-    Mirrors the D0 training-notebook evaluate() path used by the scorer-sanity
-    audit: same tokenizer settings, same trim, same p_target label choice.
-    """
-    to_score = [s for s in samples if s["status"] == "valid"]
-    for i in range(0, len(to_score), 32):
-        chunk = to_score[i : i + 32]
-        enc = d0_tok(
-            [s["text"] for s in chunk],
-            return_offsets_mapping=True,
-            truncation=True,
-            max_length=max_length,
-            padding=True,
-        )
-        input_ids = torch.tensor(enc["input_ids"]).to(d0.device)
-        attn = torch.tensor(enc["attention_mask"]).to(d0.device)
-        logits = d0(input_ids=input_ids, attention_mask=attn).logits.float()
-        probs = torch.softmax(logits, dim=-1)
-        label2id = {lab: idx for idx, lab in d0.config.id2label.items()}
-        for j, s in enumerate(chunk):
-            offsets = enc["offset_mapping"][j]
-            labels = [d0.config.id2label[p] for p in logits[j].argmax(-1).tolist()]
-            pred = [
-                (sp["start"], sp["end"])
-                for sp in trim_span_whitespace(s["text"], spans_from_bio_labels(offsets, labels))
-            ]
-            gold_labels = bio_labels_from_spans(
-                offsets,
-                [{"label": "PERSON", "start": s["target_span"][0], "end": s["target_span"][1]}],
-            )
-            target_idx = [t for t, lab in enumerate(gold_labels) if lab != "O"]
-            s["pred_spans"] = pred
-            if not target_idx:
-                s["d0_truncated_target"] = True
-                s["p_target_mean"] = None
-                s["p_target_min"] = None
-                s["outcome"] = "d0_truncated"
-                continue
-            s["d0_truncated_target"] = False
-            p_vals = [float(probs[j, t, label2id[gold_labels[t]]]) for t in target_idx]
-            s["p_target_mean"] = sum(p_vals) / len(p_vals)
-            s["p_target_min"] = min(p_vals)
-            s["outcome"] = outcome_for_sample(s["target_span"], pred)
-
-
 def _panels(samples: list[dict], rng: random.Random) -> None:
     print("\n" + "=" * 78)
     print("MANUAL REVIEW PANELS (t=1.0 cells)")
@@ -234,7 +191,7 @@ def run_compare(config: dict, repo_dir: str) -> dict:
         d0_tok = AutoTokenizer.from_pretrained(detector_cfg["path"])
         d0 = AutoModelForTokenClassification.from_pretrained(detector_cfg["path"]).to(device)
         d0.eval()
-        print(f"frozen D0 loaded (sha {d0_sha[:12]}…) - p_target stats {PENDING_SCORER}")
+        print(f"frozen D0 loaded (sha {d0_sha[:12]}…) - scoring with {SCORER_NOTE}")
     env = {
         "device": device,
         "gpu": gpu,
@@ -284,7 +241,7 @@ def run_compare(config: dict, repo_dir: str) -> dict:
     # ---- D0 scoring (flagged; every raw output is kept regardless)
     scored = 0
     if d0 is not None:
-        _score_with_d0_local(d0, d0_tok, samples, detector_cfg["max_length"])
+        _score_with_d0(d0, d0_tok, samples, detector_cfg["max_length"])
         scored = sum(1 for s in samples if s.get("p_target_mean") is not None)
         for s in samples:
             if s["status"] == "valid":
@@ -348,7 +305,7 @@ def run_compare(config: dict, repo_dir: str) -> dict:
                     ],
                     clip,
                 )
-                metrics["scorer_flag"] = PENDING_SCORER
+                metrics["scorer_note"] = SCORER_NOTE
             per_cell[f"{variant}|t{temp}"] = metrics
     report["per_cell"] = per_cell
 
@@ -358,6 +315,8 @@ def run_compare(config: dict, repo_dir: str) -> dict:
 
     passed = {k: cell_pass(m) for k, m in per_cell.items()}
     report["pass_by_cell"] = passed
+    hints = {r["request_id"]: r["task"].get("name_position") for r in bank}
+    report["position_compliance_by_hint"] = hint_compliance(samples, hints)
     best = None
     for key, ok in passed.items():
         if not ok:
