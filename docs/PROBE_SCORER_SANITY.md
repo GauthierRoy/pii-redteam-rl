@@ -69,11 +69,12 @@ conversational messages are out of that distribution.
 
 1. **p_target and the probe outcomes are trustworthy.** No fix applied to the
    scorer; nothing to re-score.
-2. **The M07a reward signal is strong by construction:** ~53% of valid pilot
-   samples are complete misses with low p_target — high within-group reward
-   variance is expected, and the go/no-go "miss rate 1–30%" OR "live-group"
-   framing needs revisiting upward (the pilot miss rate ALONE exceeds the 30%
-   band). This is good news for RL: there is real headroom to optimize.
+2. **The 1–30% miss-rate go/no-go band is KEPT; D0 fails it on the high side
+   (D13).** The pilot miss rate (~53%) exceeds the band, meaning D0 is too weak on
+   short messages to be a meaningful RL target. The recorded response is the D13
+   two-stage structure: Stage 1 closes the domain gap without RL (D1 = D0 + plain
+   short-message augmentation), the probe is re-run against frozen D1 with the SAME
+   go/no-go table, and only then does RL (Stage 2) proceed with D1 as reward model.
 3. **D0's short-message blind spot is the experiment's target**: the augmentation
    arms exist precisely to teach the detector short-conversational names.
 
@@ -81,10 +82,11 @@ conversational messages are out of that distribution.
 
 `tests/integration/test_probe_scorer_regression.py` (+ fixture
 `tests/fixtures/probe_scorer_regression.json`): 5 fixed AI4Privacy dev rows that
-must score exact_hit with p_target > 0.9, and one guard asserting the
-"Hey Lucas…" sentence stays a complete_miss (if that ever flips, D0's behavior
-changed and the reward design must be revisited). Requires `PII_D0_PATH` env var
-pointing at the frozen d0-best; skipped otherwise.
+must score exact_hit with p_target > 0.9, and the "Hey Lucas…" REAL-SHIFT tripwire
+**pinned to frozen D0's sha** (`0314ebe3…`) — it asserts complete_miss only when
+the loaded checkpoint IS frozen D0, and skips for any other checkpoint (a future D1
+is expected to hit that text). Requires `PII_D0_PATH` env var pointing at the
+frozen d0-best; skipped otherwise.
 
 ## Commands run / environment
 

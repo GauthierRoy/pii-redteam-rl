@@ -26,6 +26,11 @@ except ImportError:
 D0_PATH = os.environ.get("PII_D0_PATH", "")
 HAS_D0 = bool(D0_PATH) and os.path.exists(os.path.join(D0_PATH, "model.safetensors"))
 
+# The REAL-SHIFT tripwire is pinned to frozen D0 specifically (sanity verdict,
+# docs/PROBE_SCORER_SANITY.md). Against a different checkpoint (e.g. a future D1,
+# where short-message misses are EXPECTED to shrink) it must not fire.
+FROZEN_D0_SHA_PREFIX = "0314ebe36d7f4dc6"
+
 
 @unittest.skipUnless(HAS_ML and HAS_D0, "needs torch/transformers and PII_D0_PATH")
 class TestProbeScorerRegression(unittest.TestCase):
@@ -56,11 +61,21 @@ class TestProbeScorerRegression(unittest.TestCase):
             )
 
     def test_short_conversational_text_is_a_genuine_miss(self):
-        """REAL SHIFT guard: D0 truly misses short conversational names (sanity verdict).
+        """REAL SHIFT tripwire, PINNED TO FROZEN D0 (sha 0314ebe3…).
 
-        If this ever flips to exact_hit, D0's domain behavior changed - revisit
+        Frozen D0 truly misses short conversational names (sanity verdict). If this
+        flips to exact_hit on frozen D0, D0's behavior changed - revisit
         docs/PROBE_SCORER_SANITY.md and the probe reward design before trusting it.
+        Skipped for any other checkpoint (a future D1 SHOULD hit this text).
         """
+        sha = hashlib.sha256(
+            open(os.path.join(D0_PATH, "model.safetensors"), "rb").read()
+        ).hexdigest()
+        if not sha.startswith(FROZEN_D0_SHA_PREFIX):
+            self.skipTest(
+                f"tripwire pinned to frozen D0 ({FROZEN_D0_SHA_PREFIX}…); "
+                f"loaded checkpoint is not D0 ({sha[:16]}…)"
+            )
         s = {
             "text": "Hey Lucas, how are you doing today?",
             "target_span": (4, 9),

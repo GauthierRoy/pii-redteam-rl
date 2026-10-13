@@ -145,8 +145,10 @@ Verdict **REAL SHIFT, not a scorer bug** (docs/PROBE_SCORER_SANITY.md): probe sc
 controlled dumps show D0 itself assigns p(B-PERSON) 0.02–0.08 to short-message
 names; specials/id2label/alignment/single-token checks all clean. Regression guard:
 `tests/integration/test_probe_scorer_regression.py` (+ fixture; 5 fixed dev rows
-must exact-hit; "Hey Lucas…" must stay a complete_miss). Consequence: pilot miss
-rate 53% exceeds the probe's 1–30% band → D13 two-stage structure above.
+must exact-hit; the "Hey Lucas…" tripwire is pinned to frozen D0's sha). The 1–30%
+miss-rate band is KEPT: D0's pilot miss rate (~53%) fails it on the high side —
+D0 is too weak on short messages to be the RL target, so RL moves to frozen D1
+per the D13 two-stage structure above.
 
 ## Owner decision (2026-10-10): skip 0.8B re-proof; go straight to 2B, overnight-capable
 
