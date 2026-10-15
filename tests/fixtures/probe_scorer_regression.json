@@ -1,0 +1,46 @@
+{
+ "d0_sha256_prefix": "0314ebe36d7f4dc6",
+ "source": "AI4Privacy dev rows, seed 20260920 sample",
+ "rows": [
+  {
+   "example_id": "ai4privacy:45115A",
+   "text": "**Product Liability Incident Report Form**\n\nDate of Incident: 3rd August 1953\n\nIncident Details:\n- Individual Involved: Tjeerd Rettenmund\n- Identification Details: CO28065LQ, 760796429\n- Contact Number: +75 58 246.6629\n- IP Address: 49a1:487a:ec52:5337:6cf6:2e2e:63a1:440f\n- Incident Description:\n\nWit",
+   "target_span": [
+    120,
+    137
+   ]
+  },
+  {
+   "example_id": "ai4privacy:41400A",
+   "text": "Conflict Resolution Practicum Evaluation Form\n\nStudent Information:\n- Student Name: Miss Gassan\n- Username: mxbjbuxxsorum97\n- Email: 1956KN1956@hotmail.com\n- Social Security Number: 765 643 1342\n- ID Card: DB22102HW\n- Telephone: +1-057 088.6240\n- Password: >g;d3P\n\nPracticum Details:\n- Practicum Time: 11\n\nConflict Resolution Performance:\n- Abili",
+   "target_span": [
+    89,
+    95
+   ]
+  },
+  {
+   "example_id": "ai4privacy:44986A",
+   "text": "\"**Safety Inspection Certification**\n\n**Certification ID:** EAJ494DHDE8\n**Issue Date:** February/19 at 22:19:24\n**Location:** 839, Great Britain\n\n**Inspector Details:**\n- **Name:** Duke Kumarasooriyar\n- **Sex:** Masculine\n- **Date of Birth:** 06/02/1941\n- **Social Number:** Dmi Kum 06 E 63 8 CCU\n- **ID Card:** ERL878934F\n- **IP Address:** 109.28.64.",
+   "target_span": [
+    186,
+    200
+   ]
+  },
+  {
+   "example_id": "ai4privacy:46942A",
+   "text": "{\n  \"Evaluation ID\": \"E123456789\",\n  \"Participants\": [\n    {\n      \"Participant_ID\": \"1\",\n      \"Attributes\": {\n        \"Sex\": \"F\",\n        \"Identification\": \"HT62424SM\",\n        \"Telephone\": \"+1 218.515 0489\",\n        \"IP Address\": \"1d25:15fd:6b3d:a88e:dbb4:4c78:343c:48a9\",\n        \"Evaluation Time\": \"17 o'clock\",\n        \"First Name\": \"Dityaa\"\n      },\n   ",
+   "target_span": [
+    340,
+    346
+   ]
+  },
+  {
+   "example_id": "ai4privacy:51516D",
+   "text": "\n   - Passport Number: 980182915\n   - Telephone: +8995893-6717\n   - Password: w*gXk0<K\n   - Preferred Time: 02\n   - Given Name 1: Vicente\n\nWe look forward to a fruitful exchange of ideas and insights during the discussion on green building and sustainable development. Let the exploration of legal frameworks and environmental responsibility pave the way for a more sustainable future.",
+   "target_span": [
+    130,
+    137
+   ]
+  }
+ ]
+}
