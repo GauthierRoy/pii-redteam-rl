@@ -326,6 +326,25 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
   909 mismatches (0.47%); validation 7,946 rows / 51,184 masks / 113 mismatches (0.22%).
   Mismatch pattern is masking-template leakage in values (e.g. `[GIVENNAME_B(…`), quarantined.
 
+## spark-sft-v1 dataset done (2026-10-15, feat/spark-sft-data)
+
+- **Synthetic SFT v2 complete**: `data/synthetic/spark_sft_v1/` — train 1195
+  (idx 0–1149 + 45 gap-fill over 15 tail cells), dev 100 (balanced 100-subset
+  of 150 quota rows), short_eval 300 (held-out names only). Manifest with
+  sha256 per file. Registered in `EXPERIMENTS.yaml` as `spark-sft-v1`
+  (`kind: dataset-synthetic`, milestone M05).
+- **Validation**: `scripts/validate_sft_v2.py` over all authored batches —
+  0 failures on all 7 checks, 0 exact dupes, 0 near-dupes (>0.7);
+  top-10 opening share 0.0752, name-at-start 0.2508.
+- **Method note**: seeded quotas (20260920, regenerated bit-identically after
+  a /tmp wipe destroyed all staging) + committed template-bank generator
+  (`scripts/sft_v2_gen/`, texts seed 777001) with synonym paraphrase and
+  Jaccard acceptance rewrite. D0 extra-name flags **pending** (frozen
+  checkpoint unavailable at finalize time; flag script ready).
+- **Tests**: 94 unit tests OK. `ruff check` + `ruff format` pass; `ty` clean
+  in new files (6 remaining warnings pre-exist in untouched main files).
+- No scorer/prompt-code changes. No training.
+
 ## Artifacts
 
 - **`EXPERIMENTS.yaml` (repo root)** — append-only registry of every executed run:

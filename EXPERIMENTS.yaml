@@ -164,3 +164,23 @@ runs:
       diversity_post_sft: { duplicate_rate: 0.0, distinct1: 0.679, mean_chars: 669.9 }
       d0_extra_person_flags: { zeroshot: 2, post_sft: 4 }
     outcome: "DECISIVE NEGATIVE RESULT: SFT degrades contract at both sizes tested; base 2B zero-shot exceeds requirements (100% JSON / 97.5% once). RECOMMENDATION: adopt base Qwen3.5-2B as generator (M06 baseline + RL starting state); pending base-diversity check."
+
+  - run_id: spark-sft-v1
+    kind: dataset-synthetic
+    milestone: M05
+    executed: 2026-10-15
+    where: laptop-CPU
+    repo_commit: 80a18de
+    artifacts: "data/synthetic/spark_sft_v1/ (train.jsonl, dev.jsonl, short_eval_v1.jsonl, manifest.json)"
+    checks: { pass: 94, fail: 0 }
+    metrics:
+      rows: { train: 1195, dev: 100, short_eval: 300 }
+      sha256:
+        train: 64ce19c6338546a35e2c509b6b2452a647c04c125f5d3a8707706a33ffd09853
+        dev: ba04919d53445d42e08862a9aad7798c2ca65bede9907a80ba9d19d17c0f4dc2
+        short_eval: c86052657640a3b4a07022f3e62ba96dfa31bd1d8ce828aa10dac5e3ba04988d
+      validator: { failures: 0, exact_dup_pairs: 0, near_dup_pairs_gt_0.7: 0 }
+      top10_opening_share: 0.0752
+      name_at_start_share: 0.2508
+      d0_extra_name_flags: pending
+    outcome: "Synthetic SFT v2 dataset complete: 1195 train (idx 0-1149 + 45 gap-fill over 15 tail cells), 100 dev (balanced 100-subset of 150), 300 short_eval (held-out names only). Seeded quotas (20260920) + template-bank generation with synonym paraphrase; validator ground truth. /tmp wipe mid-flight destroyed all staging; quotas regenerated bit-identically and texts re-generated. D0 flagging pending (frozen checkpoint unavailable at finalize time). No training."
