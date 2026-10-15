@@ -1,28 +1,37 @@
 {
   "dataset": "spark-sft-v1",
-  "creator": "spark_authored",
+  "creator": "template_paraphrase",
+  "relabel": {
+    "date": "2026-10-15",
+    "from": "spark_authored",
+    "to": "template_paraphrase",
+    "reason": "audit: texts are seeded template-bank + synonym-paraphrase script outputs (scripts/sft_v2_gen, seed 777001), not individually LLM-written; contain filler padding, near-identical template rows, and synonym artifacts",
+    "usage": "usable ONLY as the M10 'template baseline' arm (D16); not LLM-authored data"
+  },
   "seed": 20260920,
   "files": {
     "train": {
       "path": "data/synthetic/spark_sft_v1/train.jsonl",
       "rows": 1195,
-      "sha256": "64ce19c6338546a35e2c509b6b2452a647c04c125f5d3a8707706a33ffd09853"
+      "sha256": "f62df1780fbf50502fd4824c77deaf138d7e620401b26a581ab8513fde03f45f"
     },
     "dev": {
       "path": "data/synthetic/spark_sft_v1/dev.jsonl",
       "rows": 100,
-      "sha256": "ba04919d53445d42e08862a9aad7798c2ca65bede9907a80ba9d19d17c0f4dc2"
-    },
-    "short_eval": {
-      "path": "data/synthetic/spark_sft_v1/short_eval_v1.jsonl",
+      "sha256": "cb33d9504d319d2cf017883f34608a445519187c4a7aee34f0d5ab588f406856"
+    }
+  },
+  "deprecated": {
+    "short_eval_v1": {
+      "path": "data/deprecated/spark_sft_v1_short_eval_v1.jsonl",
       "rows": 300,
-      "sha256": "c86052657640a3b4a07022f3e62ba96dfa31bd1d8ce828aa10dac5e3ba04988d"
+      "sha256": "14b56660db1f5e1d47cb8ec500a26a5406cba835cb36ae701c146ad8ed2add16",
+      "reason": "contaminated: 298/300 rows share a name/number-normalized 8-word shingle with train rows (same template bank); must never be used for evaluation (see data/deprecated/README.md)"
     }
   },
   "counts": {
     "train": 1195,
-    "dev": 100,
-    "short_eval": 300
+    "dev": 100
   },
   "generation_spec": {
     "method": "template-bank generation (161 templates, 40 context x position slots) + seeded synonym paraphrase + filler padding to mid-bucket + Jaccard acceptance rewrite for near-dupes + hand-written replacements for stubborn clusters",
@@ -43,7 +52,7 @@
     },
     "train_gap": "idx 0-1149 from quota_train + 45 gap rows (tail cells, idx>=1150); tail quota idx 1153/1169/1173/1189/1196 unused",
     "dev_subset": "dev-100: 1/cell from 30 double cells + 70/90 singletons (drop 2/context, seed 20260920); dropped idx in /tmp/sft_v2_batches_dev100/dev100_dropped_idxs.json",
-    "name_disjointness": "train/dev names disjoint by quota construction; short_eval uses held-out names only (asserted in quota script)"
+    "name_disjointness": "train/dev names disjoint by quota construction; short_eval used held-out names only (asserted in quota script) but is deprecated for template contamination, not name leakage"
   },
   "validation": {
     "validator": "scripts/validate_sft_v2.py over all authored batches",

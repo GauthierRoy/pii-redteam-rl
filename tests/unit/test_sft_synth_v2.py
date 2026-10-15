@@ -17,7 +17,7 @@ def row(**over):
             "entities": [{"type": "PERSON", "value": "Amélie Rousseau"}],
         },
         "target": {"text": "", "span": None},
-        "provenance": "spark_authored",
+        "provenance": "template_paraphrase",
         "name_form": "full",
     }
     base.update(over)

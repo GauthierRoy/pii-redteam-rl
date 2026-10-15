@@ -61,7 +61,7 @@ def build_row(a: dict) -> dict:
             "entities": [{"type": "PERSON", "value": name}],
         },
         "target": {"text": text, "span": [span[0], span[1]]},
-        "provenance": "spark_authored",
+        "provenance": "template_paraphrase",
         "name_form": a["name_form"],
     }
 
@@ -140,7 +140,7 @@ def main() -> None:
 
     manifest = {
         "dataset": "spark-sft-v1",
-        "creator": "spark_authored",
+        "creator": "template_paraphrase",
         "seed": 20260920,
         "files": files,
         "counts": {k: v["rows"] for k, v in files.items()},

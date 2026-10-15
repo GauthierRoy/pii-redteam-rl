@@ -374,6 +374,31 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
   in new files (6 remaining warnings pre-exist in untouched main files).
 - No scorer/prompt-code changes. No training.
 
+## spark-sft-v1 relabeled template_paraphrase; short_eval deprecated (2026-10-15, fix/spark-sft-v1-relabel)
+
+- **Audit verdict (post-merge of PR #7)**: the texts are NOT individually
+  LLM-written — they are outputs of the seeded template-bank + synonym-paraphrase
+  generator (`scripts/sft_v2_gen/`, texts seed 777001). Known artifacts: filler
+  padding to hit word counts ("Filed promptly. Agreed unanimously. Confirmed
+  Friday."-style fragments in ~71% of train rows), near-identical rows (same
+  template, only name/number varied), synonym artifacts ("speeds yet collapse").
+- **Relabel (D16)**: row `provenance` changed `spark_authored` ->
+  `template_paraphrase` across train/dev (+ deprecated short_eval); validator,
+  finalizer, generator, tests updated to enforce the new label. New sha256s in
+  `data/synthetic/spark_sft_v1/manifest.json` (train `f62df178…`, dev
+  `cb33d950…`). The `EXPERIMENTS.yaml` `spark-sft-v1` entry is left untouched
+  (append-only registry records the as-executed 2026-10-15 state; its sha256s
+  refer to the pre-relabel files).
+- **Usability**: spark-sft-v1 may be used ONLY as the M10 **template baseline**
+  arm — a baseline to measure the gap between template-paraphrase data and
+  LLM-authored/generated data. It is not Spark/LLM-authored-quality data.
+- **short_eval_v1 DEPRECATED** -> `data/deprecated/spark_sft_v1_short_eval_v1.jsonl`
+  (+ `data/deprecated/README.md`): contaminated — 298/300 rows share a
+  name/number-normalized 8-word shingle with train rows (same template bank,
+  e.g. `short_eval-0009` vs `train-0004/0007/0010`). Must never be used for
+  evaluation. The replacement (M07b.1) must use an independent method per D13.
+- PR #7 is NOT reverted; the merged history and original artifacts are preserved.
+
 ## Artifacts
 
 - **`EXPERIMENTS.yaml` (repo root)** — append-only registry of every executed run:
@@ -394,7 +419,9 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
 
 1. **M07b.1:** build `short_eval` — short-message eval set with held-out names
    plus a style-independent slice (~50 human-written or other-LLM messages);
-   manifest + sha; no training/prompt authoring from it.
+   manifest + sha; no training/prompt authoring from it. MUST be independent
+   of the spark-sft-v1 template bank (`data/deprecated/` file is contaminated,
+   D16).
 2. **M07b.2:** Stage-1 augmentation: generate plain short-message data with the
    base 2B over the frozen bank (validated, contract-passing only) and/or author
    the Spark SFT slice; fine-tune D0 -> **D1**; report D0 vs D1 on short_eval AND
