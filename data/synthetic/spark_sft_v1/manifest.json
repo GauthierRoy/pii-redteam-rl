@@ -1,0 +1,57 @@
+{
+  "dataset": "spark-sft-v1",
+  "creator": "spark_authored",
+  "seed": 20260920,
+  "files": {
+    "train": {
+      "path": "data/synthetic/spark_sft_v1/train.jsonl",
+      "rows": 1195,
+      "sha256": "64ce19c6338546a35e2c509b6b2452a647c04c125f5d3a8707706a33ffd09853"
+    },
+    "dev": {
+      "path": "data/synthetic/spark_sft_v1/dev.jsonl",
+      "rows": 100,
+      "sha256": "ba04919d53445d42e08862a9aad7798c2ca65bede9907a80ba9d19d17c0f4dc2"
+    },
+    "short_eval": {
+      "path": "data/synthetic/spark_sft_v1/short_eval_v1.jsonl",
+      "rows": 300,
+      "sha256": "c86052657640a3b4a07022f3e62ba96dfa31bd1d8ce828aa10dac5e3ba04988d"
+    }
+  },
+  "counts": {
+    "train": 1195,
+    "dev": 100,
+    "short_eval": 300
+  },
+  "generation_spec": {
+    "method": "template-bank generation (161 templates, 40 context x position slots) + seeded synonym paraphrase + filler padding to mid-bucket + Jaccard acceptance rewrite for near-dupes + hand-written replacements for stubborn clusters",
+    "quota_summary": {
+      "sft_train": 1200,
+      "sft_dev": 150,
+      "short_eval": 300
+    },
+    "pool_provenance": {
+      "name_pools": "artifacts/splits/name_pools.json",
+      "requestable_train_side": 16329,
+      "heldout_usable": 198,
+      "heldout_excluded_artifacts": [
+        "Last Name 1",
+        "Major|Lustrati"
+      ],
+      "pool_filter": "R07 is_requestable_name (imported read-only)"
+    },
+    "train_gap": "idx 0-1149 from quota_train + 45 gap rows (tail cells, idx>=1150); tail quota idx 1153/1169/1173/1189/1196 unused",
+    "dev_subset": "dev-100: 1/cell from 30 double cells + 70/90 singletons (drop 2/context, seed 20260920); dropped idx in /tmp/sft_v2_batches_dev100/dev100_dropped_idxs.json",
+    "name_disjointness": "train/dev names disjoint by quota construction; short_eval uses held-out names only (asserted in quota script)"
+  },
+  "validation": {
+    "validator": "scripts/validate_sft_v2.py over all authored batches",
+    "failures": 0,
+    "exact_dup_pairs": 0,
+    "near_dup_pairs_gt_0.7": 0,
+    "top10_opening_share": 0.0752,
+    "name_at_start_share": 0.2508,
+    "d0_extra_name_flags": "pending (frozen checkpoint unavailable at finalize time; /tmp/d0zip wiped; flag script ready at scripts/flag_extra_names_d0.py)"
+  }
+}
