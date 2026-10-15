@@ -64,6 +64,13 @@ class TestSchema(unittest.TestCase):
         r["provenance"] = "seeded_sampler"
         self.assertTrue(v2.validate_row_schema(r))
 
+    def test_writer_qualified_llm_provenance_accepted(self):
+        r = good_row()
+        r["provenance"] = "llm_authored_direct:glm-5.3"
+        self.assertEqual(v2.validate_row_schema(r), [])
+        r["provenance"] = "llm_authored_direct"
+        self.assertTrue(v2.validate_row_schema(r))
+
 
 class TestSpans(unittest.TestCase):
     def test_exact_once_word_boundary(self):

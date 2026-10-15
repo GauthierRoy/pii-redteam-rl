@@ -34,7 +34,7 @@ BATCH_GLOB = "data/synthetic/short_eval_v2_batches/batch_*.jsonl"
 OUT = "data/synthetic/short_eval_v2.jsonl"
 MANIFEST = "data/synthetic/short_eval_v2_manifest.json"
 HUMAN_SLOT = "data/synthetic/short_eval_human_v1.jsonl"
-PROVENANCE = "llm_authored_direct"
+PROVENANCE = "llm_authored_direct:glm-5.3"
 DATASET = "short-eval-v2"
 
 
@@ -124,7 +124,8 @@ def main() -> None:
     manifest = {
         "dataset": DATASET,
         "provenance": PROVENANCE,
-        "authoring": "each text written directly by an LLM (Mistral Vibe session, 2026-10-15); "
+        "authoring": "each text written directly by the LLM (GLM-5.3 via Mistral Vibe, "
+        "2026-10-15); "
         "no templates, paraphrase tools, synonym swaps, or filler padding; "
         "authored drafts preserved in data/synthetic/short_eval_v2_batches/",
         "names": "held-out names only (artifacts/splits/name_pools.json heldout_names, "

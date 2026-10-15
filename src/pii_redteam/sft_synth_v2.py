@@ -15,7 +15,7 @@ Row format (request schema v2)::
                  "name_position": "start|middle|end|signature",
                  "entities": [{"type": "PERSON", "value": "<exact name>"}]},
      "target": {"text": "...", "span": [start, end]},
-     "provenance": "template_paraphrase|llm_authored_direct|human_authored", "name_form": "first|full|surname"}
+     "provenance": "template_paraphrase|human_authored|llm_authored_direct:<writer>", "name_form": "first|full|surname"}
 
 ``name_form`` is a derived coverage attribute, not a model input: ``full``
 means the entity value itself is multi-token; ``first``/``surname`` describe
@@ -49,7 +49,9 @@ LENGTH_BUCKETS = ((20, 30), (31, 45), (46, 60))
 NAME_FORMS = ("first", "full", "surname")
 
 # Row provenance labels (dataset relabel D16 + short_eval_v2 STEP 2).
-PROVENANCES = ("template_paraphrase", "llm_authored_direct", "human_authored")
+# LLM-authored rows carry a writer-qualified label: "llm_authored_direct:<writer>".
+PROVENANCES = ("template_paraphrase", "human_authored")
+LLM_DIRECT_PREFIX = "llm_authored_direct:"
 
 SPLITS = ("sft_train", "sft_dev", "short_eval")
 
@@ -210,8 +212,14 @@ def validate_row_schema(row: dict) -> list[str]:
         ent = entities[0]
         if not isinstance(ent, dict) or ent.get("type") != "PERSON" or not ent.get("value"):
             errors.append("entity must be {type: PERSON, value: <non-empty name>}")
-    if row.get("provenance") not in PROVENANCES:
-        errors.append(f"provenance must be one of {PROVENANCES}, got {row.get('provenance')!r}")
+    provenance = row.get("provenance")
+    if provenance not in PROVENANCES and not (
+        isinstance(provenance, str) and provenance.startswith(LLM_DIRECT_PREFIX)
+    ):
+        errors.append(
+            f"provenance must be one of {PROVENANCES} or '{LLM_DIRECT_PREFIX}<writer>', "
+            f"got {provenance!r}"
+        )
     if row.get("name_form") not in NAME_FORMS:
         errors.append(f"unknown name_form {row.get('name_form')!r}")
     return errors

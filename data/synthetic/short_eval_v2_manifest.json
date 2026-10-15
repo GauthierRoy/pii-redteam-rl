@@ -1,13 +1,13 @@
 {
   "dataset": "short-eval-v2",
-  "provenance": "llm_authored_direct",
-  "authoring": "each text written directly by an LLM (Mistral Vibe session, 2026-10-15); no templates, paraphrase tools, synonym swaps, or filler padding; authored drafts preserved in data/synthetic/short_eval_v2_batches/",
+  "provenance": "llm_authored_direct:glm-5.3",
+  "authoring": "each text written directly by the LLM (GLM-5.3 via Mistral Vibe, 2026-10-15); no templates, paraphrase tools, synonym swaps, or filler padding; authored drafts preserved in data/synthetic/short_eval_v2_batches/",
   "names": "held-out names only (artifacts/splits/name_pools.json heldout_names, R07 is_requestable_name filter); 150 distinct names, each used exactly once; never training-side names; no final-eval content",
   "files": {
     "short_eval_v2": {
       "path": "data/synthetic/short_eval_v2.jsonl",
       "rows": 150,
-      "sha256": "d343e166002a7f0101d568840b2648af9738856fd78a586667379e8f73653821"
+      "sha256": "bd890d64ede13d76cb19a8850992f174564da31cd80e3c1402fa13d1f70968de"
     }
   },
   "counts": {

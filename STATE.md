@@ -419,7 +419,7 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
 
 - **150 rows, all texts written directly by the LLM, one by one** — no template
   bank, no paraphrase/synonym tools, no filler (provenance
-  `llm_authored_direct`). Authored drafts preserved in
+  `llm_authored_direct:glm-5.3`). Authored drafts preserved in
   `data/synthetic/short_eval_v2_batches/` (5 files x 30); finalized by
   `scripts/finalize_short_eval_v2.py` with code-computed spans.
 - **Names**: 150 distinct held-out names, one row each (never training-side,
@@ -439,10 +439,20 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
   LLM-judge extra-person + person-sense pass NOT run (needs Qwen3.5-0.8B
   weights; `scripts/person_check_v2.py` ready).
 - **Artifacts**: `data/synthetic/short_eval_v2.jsonl` (sha256
-  `d343e166002a7f0101d568840b2648af9738856fd78a586667379e8f73653821`) +
+  `bd890d64ede13d76cb19a8850992f174564da31cd80e3c1402fa13d1f70968de`) +
   `data/synthetic/short_eval_v2_manifest.json`. Human-written slice slot
-  reserved: `data/synthetic/short_eval_human_v1.jsonl` (~50 rows, owner
-  provides, provenance `human_authored`, same schema/checks).
+  reserved: `data/synthetic/short_eval_human_v1.jsonl` (~50 rows, DeepSeek,
+  PR #11; provenance `human_authored`, same schema/checks).
+- **Name overlap with short_eval_human_v1 (PR #11)**: after writing
+  independently (as required), a names-only comparison found 38 shared names.
+  25 single-name rows were revised to unused held-out names (reviewed
+  substitutions only; texts otherwise untouched). Remaining overlap: **13
+  multi-token names — forced**: the pool holds only 14 usable multi-token
+  held-out names and both eval files use them, so zero overlap is impossible
+  without changing name_form coverage.
+- **Provenance label note**: plan text says `llm_authored_direct:glm-5.2`;
+  this session's active model is **GLM-5.3** (config `active_model =
+  glm-5.3`), so the accurate label `llm_authored_direct:glm-5.3` is used.
 - **Validator quirk found (not changed)**: `_SIGNOFF_CUE`'s second
   alternative omits `signed`, so a "Signed,\nName" close is not detected as a
   signature; rows were authored with the accepted cue set (Regards/Best/
