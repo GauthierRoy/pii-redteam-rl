@@ -1,0 +1,42 @@
+# M07b prompt-variant comparison — thresholds committed BEFORE the run (spec §5).
+# Base Qwen3.5-2B, no adapter, non-thinking. The frozen v1 bank is untouched;
+# this run uses the committed v2 bank (new sha256).
+
+run_id_prefix: m07b
+model_id: Qwen/Qwen3.5-2B
+adapter: null
+seed: 20260920
+repo_dir: null                     # Colab: /content/pii-redteam-rl; local: repo root
+work_dir: artifacts/m07b           # raw samples + report (copied to results/ after the run)
+repo_commit: null                  # recorded by the notebook / set by PROBE_REPO_COMMIT
+
+bank:
+  path: banks/v2_prompting/spark_seed20260920_v2_n20.jsonl
+  sha256: 1f0b9960ac797c3fbbc5e26dc2658a11e76837ca47a79da9b0443d37a7708fb7
+
+variants: [P0, P1, P2]
+
+generation:
+  temperatures: [1.0, 0.7]         # 1.0 first (same ordering rule as M07a)
+  top_p: 0.95
+  n: 8
+  max_new_tokens: 192              # fits the 80-word v2 cap + JSON wrapper overhead
+  batch_prompts: 4
+
+# Optional frozen-D0 p_target/live-group stats. Every such number is reported
+# flagged "pending scorer verification" — the M07a scorer is under a separate
+# fix and must not be trusted until that lands. Disable to skip scoring.
+detector:
+  enabled: true
+  path: /tmp/d0zip/pii-redteam-rl/d0-20261004-142714/d0-best   # local CPU copy
+  sha256: 0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb
+  max_length: 512
+
+rewards:
+  logit_clip: 10.0
+
+thresholds:                        # spec §5 pass criteria (pre-committed)
+  validity_min: 0.90               # v2-validity rate per variant x temperature
+  name_at_start_max: 0.40          # share of valid outputs opening with the name
+  top10_openings_max: 0.30         # share covered by top-10 first-5-word patterns
+  median_unique_valid_min: 6       # median unique valid texts per 8-sample group

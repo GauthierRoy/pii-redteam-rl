@@ -1,0 +1,26 @@
+{
+  "path": "banks/v2_prompting/spark_seed20260920_v2_n20.jsonl",
+  "sha256": "1f0b9960ac797c3fbbc5e26dc2658a11e76837ca47a79da9b0443d37a7708fb7",
+  "count": 20,
+  "by_source": [
+    "spark_authored"
+  ],
+  "provenance": {
+    "brief": "M07b prompt-variant comparison: 20 short realistic-message requests, one requestable train-side person name each (seeded draw), exactly-once name, no additional person names, context_type from the 10-type catalogue, target_length ~20-60 words, optional name_position hint.",
+    "created_by": "spark_authored (v2 fields) with seeded train-side name draw",
+    "created_utc": "2026-10-12T21:44:30.774254+00:00",
+    "name_draw_seed": 20260920,
+    "schema_version": 2
+  },
+  "person_name_pool_provenance": {
+    "path": "artifacts/splits/name_pools.json",
+    "sha256": "5d9b5ca9458ef5b7aff701e124cb56713ae6f6f6b884b54099e4b83035d50250",
+    "version": 1,
+    "seed": 20260920,
+    "rule": "names occurring only in final-eval rows; disjoint from train_side_pool",
+    "size": 16329,
+    "pool_size_raw": 16403,
+    "dropped_pseudo": 74,
+    "filter_policy": "R07: digits/@/pipe/slash fillers/single initials excluded"
+  }
+}
