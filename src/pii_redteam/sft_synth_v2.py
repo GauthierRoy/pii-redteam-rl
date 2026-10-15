@@ -237,6 +237,13 @@ def validate_row_content(row: dict) -> list[str]:
     if tg:
         errors.append(f"filler: repeated 3-gram {' '.join(tg)!r}")
     spans = find_spans(text, name)
+    recorded = row.get("target", {}).get("span")
+    if recorded is not None and not (
+        isinstance(recorded, list)
+        and len(recorded) == 2
+        and all(isinstance(x, int) for x in recorded)
+    ):
+        errors.append(f"target.span must be [int, int] computed in code, got {recorded!r}")
     if len(spans) == 0:
         errors.append(f"name {name!r} missing (no word-boundary match)")
     elif len(spans) > 1:
