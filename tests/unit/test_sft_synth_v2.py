@@ -176,5 +176,80 @@ class TestDedupe(unittest.TestCase):
         self.assertEqual(dup["exact"], [(0, 2)])
 
 
+class TestFillerHygiene(unittest.TestCase):
+    def test_repeated_sentence(self):
+        text = "One fine morning. The printer jammed badly. One fine morning."
+        self.assertIsNotNone(v2.repeated_sentence(text))
+        clean = "One fine morning. The printer jammed badly. IT fixed it fast."
+        self.assertIsNone(v2.repeated_sentence(clean))
+
+    def test_short_sentence_excess(self):
+        filler = "Name filed the report carefully. Noted today. Agreed. Filed. Done."
+        self.assertTrue(v2.short_sentence_excess(filler))
+        clean = "Name filed the report carefully. The team agreed. Systems were updated."
+        self.assertFalse(v2.short_sentence_excess(clean))
+
+    def test_repeated_trigram(self):
+        text = "she sent the file and she sent the file again to the office"
+        self.assertIsNotNone(v2.repeated_trigram(text))
+        clean = "She sent the file, then mailed the parcel, and finally locked the office."
+        self.assertIsNone(v2.repeated_trigram(clean))
+
+    def test_hygiene_in_validate_row(self):
+        r = good_row(
+            text=(
+                "Amélie Rousseau opened ticket 4182 about a billing error on her March "
+                "invoice. She was charged twice for the same premium plan and asked "
+                "for a refund of the duplicate payment before Friday. Noted today. "
+                "Agreed. Filed."
+            )
+        )
+        errors = v2.validate_row_content(r)
+        self.assertTrue(any("filler:" in e for e in errors))
+
+    def test_signature_rows_not_flagged_as_filler(self):
+        r = good_row(
+            name_position="signature",
+            text=(
+                "A ticket 4182 was opened about a billing error on the March "
+                "invoice. The customer was charged twice for the same premium plan "
+                "and asked for a refund of the duplicate payment before Friday.\n"
+                "Thanks,\nAmélie Rousseau"
+            ),
+        )
+        self.assertFalse(any("filler:" in e for e in v2.validate_row(r)))
+
+
+class TestTemplateReuse(unittest.TestCase):
+    @staticmethod
+    def _row(i, split, text):
+        return {"id": f"r-{split}-{i}", "split": split, "target": {"text": text}}
+
+    def test_within_split_reuse(self):
+        shared = "logged ticket 4182 about a broadband dropout every evening after six"
+        rows = [
+            self._row(0, "sft_train", f"Ana {shared} and the router was replaced."),
+            self._row(1, "sft_train", f"Bob {shared} and the router was mended."),
+            self._row(2, "sft_train", "Something entirely different about gardens."),
+        ]
+        reuse = v2.find_template_reuse(rows)
+        self.assertEqual(reuse["pairs"], [(0, 1)])
+        self.assertEqual(reuse["rows_involved"], [0, 1])
+
+    def test_cross_split_overlap_zero_required(self):
+        shared = "logged ticket 4182 about a broadband dropout every evening after six"
+        rows = [
+            self._row(0, "sft_train", f"Ana {shared} and the router was replaced."),
+            self._row(1, "short_eval", f"Zoe {shared} and the router was mended."),
+            self._row(2, "sft_dev", "Something entirely different about gardens."),
+        ]
+        overlap = v2.cross_split_template_overlap(rows)
+        self.assertEqual(len(overlap), 1)
+        self.assertEqual(overlap[0][0], "r-sft_train-0")
+        self.assertEqual(overlap[0][1], "r-short_eval-1")
+        rows[1]["target"]["text"] = "Zoe wrote a wholly distinct note about the meeting."
+        self.assertEqual(v2.cross_split_template_overlap(rows), [])
+
+
 if __name__ == "__main__":
     unittest.main()

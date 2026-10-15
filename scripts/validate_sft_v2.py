@@ -141,6 +141,7 @@ def main() -> None:
             "pii_containment": not any("PII token" in e for e in row_errors),
             "length": not any("word count" in e for e in row_errors),
             "position": not any("name_position" in e and "unknown" not in e for e in row_errors),
+            "filler": not any("filler:" in e for e in row_errors),
         }
         for name, ok in checks.items():
             per_check[name] += 1
@@ -151,6 +152,20 @@ def main() -> None:
     dup = v2.find_duplicates(built)
     exact_ids = {built[j]["id"] for _, j in dup["exact"]}
     near_ids = {built[j]["id"] for _, j, _ in dup["near"]}
+
+    # template reuse: within-split rates + cross-split overlap with eval (hard fail)
+    reuse = v2.find_template_reuse(built)
+    involved_ids = {built[i]["id"] for i in reuse["rows_involved"]}
+    by_split: Counter = Counter(r["split"] for r in built)
+    reuse_by_split: Counter = Counter(r["split"] for r in built if r["id"] in involved_ids)
+    print("--- template reuse (>= 8 consecutive shared words) ---")
+    for split in sorted(by_split):
+        n_inv = reuse_by_split.get(split, 0)
+        print(f"  {split}: {n_inv}/{by_split[split]} rows involved in a reuse pair")
+    overlap = v2.cross_split_template_overlap(built)
+    print(f"cross-split overlap with eval rows (must be ZERO): {len(overlap)} row pairs")
+    for a, b, c in overlap[:10]:
+        print(f"  overlap {c} shingles: {a} <-> {b}")
 
     openings = Counter(v2.opening(r["target"]["text"]) for r in built)
     top10_share = sum(c for _, c in openings.most_common(10)) / len(built) if built else 0.0
@@ -206,12 +221,18 @@ def main() -> None:
         "name_at_start_share": round(name_at_start, 4),
         "d0_flags": {"flagged": flagged, "total": len(built)} if flags else "pending",
         "duplicate_ids": dup_ids,
+        "template_reuse_pairs": len(reuse["pairs"]),
+        "template_reuse_rows_by_split": {
+            s: {"involved": reuse_by_split.get(s, 0), "total": by_split[s]}
+            for s in sorted(by_split)
+        },
+        "cross_split_eval_overlap": len(overlap),
         "review_sample_ids": [r["id"] for r in sample],
     }
     with open(args.report, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
     print(f"report -> {args.report}")
-    return_code = 0 if not failures and not dup["exact"] and not dup_ids else 1
+    return_code = 0 if not failures and not dup["exact"] and not dup_ids and not overlap else 1
     sys.exit(return_code)
 
 
