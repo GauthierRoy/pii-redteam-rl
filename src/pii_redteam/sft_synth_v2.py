@@ -215,7 +215,11 @@ def validate_row_schema(row: dict) -> list[str]:
 
 
 def validate_row_content(row: dict) -> list[str]:
-    """Hard content-contract errors: exact-once match, spans, length, position, hygiene."""
+    """Hard content-contract errors: exact-once match, spans, length, position, hygiene.
+
+    Hygiene (post-audit, 2026-10-15): repeated sentences, >= 3 sentences under
+    4 words (filler padding), and any 3-gram repeated within the row.
+    """
     errors: list[str] = []
     try:
         name = row["request"]["entities"][0]["value"]
@@ -224,6 +228,14 @@ def validate_row_content(row: dict) -> list[str]:
         return ["row missing request.entities[0].value or target.text"]
     if not isinstance(text, str) or not text.strip():
         return ["target.text must be a non-empty string"]
+    rep = repeated_sentence(text)
+    if rep:
+        errors.append(f"filler: repeated sentence {rep!r}")
+    if short_sentence_excess(text):
+        errors.append("filler: >= 3 sentences under 4 words")
+    tg = repeated_trigram(text)
+    if tg:
+        errors.append(f"filler: repeated 3-gram {' '.join(tg)!r}")
     spans = find_spans(text, name)
     if len(spans) == 0:
         errors.append(f"name {name!r} missing (no word-boundary match)")
@@ -306,6 +318,115 @@ def find_duplicates(rows: list[dict], threshold: float = 0.7) -> dict:
 def opening(text: str, n_words: int = 5) -> str:
     """Opening key (first n words, lowercased) for template-collapse monitoring."""
     return " ".join(text.split()[:n_words]).lower()
+
+
+# ---- post-audit hygiene checks (2026-10-15, spark-sft-v1 STEP 1) ----
+
+# Fail a row when it contains this many or more sentences of < 4 words.
+FILLER_SHORT_SENTENCE_LIMIT = 3
+# Template reuse: runs of >= this many consecutive normalized shared words.
+TEMPLATE_REUSE_WORDS = 8
+
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+
+def _sentences(text: str) -> list[str]:
+    return [s.strip() for s in _SENTENCE_SPLIT_RE.split(text) if s.strip()]
+
+
+def _sentence_key(sentence: str) -> str:
+    """Normalized sentence key: lowercase, punctuation stripped."""
+    return " ".join(re.findall(r"[a-z0-9']+", sentence.lower()))
+
+
+def repeated_sentence(text: str) -> str | None:
+    """Return the first sentence that appears more than once in the row, else None."""
+    seen: set[str] = set()
+    for s in _sentences(text):
+        key = _sentence_key(s)
+        if not key:
+            continue
+        if key in seen:
+            return s
+        seen.add(key)
+    return None
+
+
+def short_sentence_excess(text: str, limit: int = FILLER_SHORT_SENTENCE_LIMIT) -> bool:
+    """True when the row has >= limit sentences of fewer than 4 words."""
+    n = sum(1 for s in _sentences(text) if 0 < len(s.split()) < 4)
+    return n >= limit
+
+
+def repeated_trigram(text: str) -> tuple[str, str, str] | None:
+    """Return a word 3-gram that occurs more than once within the row, else None."""
+    words = [w for w in re.findall(r"[A-Za-z0-9']+", text.lower()) if w]
+    seen: set[tuple[str, str, str]] = set()
+    for i in range(len(words) - 2):
+        g = (words[i], words[i + 1], words[i + 2])
+        if g in seen:
+            return g
+        seen.add(g)
+    return None
+
+
+def _norm_words(text: str) -> list[str]:
+    return [w for w in re.findall(r"[a-z0-9']+", text.lower()) if w]
+
+
+def _shingles(text: str, n: int) -> set[tuple[str, ...]]:
+    words = _norm_words(text)
+    return {tuple(words[i : i + n]) for i in range(len(words) - n + 1)}
+
+
+def find_template_reuse(rows: list[dict], n_words: int = TEMPLATE_REUSE_WORDS) -> dict[str, object]:
+    """Template-reuse detection across rows: >= n_words consecutive shared words.
+
+    Returns ``{"pairs": [(i, j)], "rows_involved": {i, ...}}`` over input order.
+    Within-split rates should be computed by the caller (this is split-agnostic).
+    """
+    shingles: dict[tuple[str, ...], set[int]] = {}
+    for i, r in enumerate(rows):
+        for s in _shingles(r["target"]["text"], n_words):
+            shingles.setdefault(s, set()).add(i)
+    pairs: set[tuple[int, int]] = set()
+    for owners in shingles.values():
+        if len(owners) > 1:
+            o = sorted(owners)
+            for a in range(len(o)):
+                for b in range(a + 1, len(o)):
+                    pairs.add((o[a], o[b]))
+    return {
+        "pairs": sorted(pairs),
+        "rows_involved": sorted({x for p in pairs for x in p}),
+    }
+
+
+def cross_split_template_overlap(
+    rows: list[dict], eval_splits: tuple[str, ...] = ("short_eval",)
+) -> list[tuple[str, str, int]]:
+    """Template overlap between non-eval rows and eval-split rows (hard-fail check).
+
+    Returns ``[(non_eval_id, eval_id, n_shared_shingles)]`` for every row pair
+    sharing at least one 8-word run. Must be empty for any usable dataset.
+    """
+    n = TEMPLATE_REUSE_WORDS
+    eval_shingles: dict[tuple[str, ...], set[str]] = {}
+    for r in rows:
+        if r["split"] in eval_splits:
+            for s in _shingles(r["target"]["text"], n):
+                eval_shingles.setdefault(s, set()).add(r["id"])
+    overlaps: list[tuple[str, str, int]] = []
+    seen_pairs: dict[tuple[str, str], int] = {}
+    for r in rows:
+        if r["split"] in eval_splits:
+            continue
+        for s in _shingles(r["target"]["text"], n):
+            for eval_id in eval_shingles.get(s, ()):
+                key = (r["id"], eval_id)
+                seen_pairs[key] = seen_pairs.get(key, 0) + 1
+    overlaps = [(a, b, c) for (a, b), c in sorted(seen_pairs.items())]
+    return overlaps
 
 
 def coverage_counts(rows: list[dict]) -> dict:

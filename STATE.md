@@ -398,6 +398,22 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
   e.g. `short_eval-0009` vs `train-0004/0007/0010`). Must never be used for
   evaluation. The replacement (M07b.1) must use an independent method per D13.
 - PR #7 is NOT reverted; the merged history and original artifacts are preserved.
+- **Validator re-run with the new content checks** (`feat/sft-v2-content-checks`,
+  2026-10-15, all 1595 spark-sft-v1 rows incl. the deprecated short_eval):
+  - Original 7 checks: 1595/1595 pass (schema, exact_once, spans, refusal_meta,
+    pii_containment, length, position). 0 exact dupes, 0 near-dupes (>0.7).
+  - New **filler check** (repeated sentence / >= 3 sentences under 4 words /
+    repeated 3-gram): **803/1595 rows FAIL** (train 607/1195, dev 42/100,
+    short_eval 154/300).
+  - **Template reuse** (>= 8 consecutive shared words): train 1179/1195,
+    dev 98/100, short_eval 298/300 rows share a run with another row.
+  - **Cross-split overlap with eval rows** (hard-fail rule): 4698 train/dev x
+    short_eval row pairs share an 8-word run — must be ZERO; short_eval_v1 is
+    therefore unusable, consistent with its deprecation.
+  - **spaCy extra-person pass** (`en_core_web_sm` 3.8.0, CPU, ~1 min): extra
+    PERSON entities flagged in train 78/1195, dev 3/100, short_eval 17/300
+    (flag-only; LLM-judge extra-person + person-sense pass NOT run — needs
+    Qwen3.5-0.8B weights; script ready at `scripts/person_check_v2.py`).
 
 ## Artifacts
 
