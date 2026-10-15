@@ -1,0 +1,62 @@
+{
+  "dataset": "short-eval-v2",
+  "provenance": "llm_authored_direct",
+  "authoring": "each text written directly by an LLM (Mistral Vibe session, 2026-10-15); no templates, paraphrase tools, synonym swaps, or filler padding; authored drafts preserved in data/synthetic/short_eval_v2_batches/",
+  "names": "held-out names only (artifacts/splits/name_pools.json heldout_names, R07 is_requestable_name filter); 150 distinct names, each used exactly once; never training-side names; no final-eval content",
+  "files": {
+    "short_eval_v2": {
+      "path": "data/synthetic/short_eval_v2.jsonl",
+      "rows": 150,
+      "sha256": "d343e166002a7f0101d568840b2648af9738856fd78a586667379e8f73653821"
+    }
+  },
+  "counts": {
+    "rows": 150
+  },
+  "coverage": {
+    "per_context_type": {
+      "appointment reminder": 15,
+      "chat message": 15,
+      "email with signature": 15,
+      "form/record line": 15,
+      "forwarded email thread": 15,
+      "informal text with typos": 15,
+      "list/table row": 15,
+      "meeting notes": 15,
+      "support ticket": 15,
+      "third-person report": 15
+    },
+    "per_name_position": {
+      "end": 40,
+      "middle": 40,
+      "signature": 30,
+      "start": 40
+    },
+    "per_length_bucket": {
+      "20-30": 50,
+      "31-45": 50,
+      "46-60": 50
+    },
+    "per_name_form": {
+      "first": 68,
+      "full": 14,
+      "surname": 68
+    }
+  },
+  "validation": {
+    "validator": "pii_redteam.sft_synth_v2.validate_row (all checks incl. filler)",
+    "failures": 0,
+    "exact_dup_pairs": 0,
+    "near_dup_pairs_gt_0.7": 0,
+    "within_set_template_reuse_pairs": 0,
+    "cross_dataset_8gram_overlap_with_spark_sft_v1": 0,
+    "top10_opening_share": 0.0667,
+    "name_at_start_share": 0.2667,
+    "independent_extra_person_check": "spaCy pass run flag-only (see STATE.md); LLM-judge pass pending weights (scripts/person_check_v2.py)"
+  },
+  "human_slice_slot": {
+    "path": "data/synthetic/short_eval_human_v1.jsonl",
+    "provenance": "human_authored",
+    "rows": "~50 (owner-provided; same schema; validated by the same checks)"
+  }
+}
