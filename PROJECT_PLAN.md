@@ -177,7 +177,9 @@ Test ordinary instruction-following on a small request bank before expensive tra
 | M05 | Entity-to-text SFT generator | M02, evaluation boundaries from M04 |
 | M06 | Non-RL baselines | M03–M05; validated serving precision or fallback |
 | M07 | Tested reward | M03–M06 |
-| M08 | Bounded RL pilot | M07 |
+| M07a | Base-sampling probe + scorer sanity (DONE 2026-10-11: REAL SHIFT verdict) | M07 |
+| M07b | D1: domain-gap detector via plain short-message augmentation; short_eval; re-probe vs D1; freeze D1 as reward model | M07a |
+| M08 | Bounded RL pilot (Stage 2: reward = frozen D1; comparison detectors D2) | M07b |
 | M09 | Matched augmentation datasets | M06, M08 |
 | M10 | Controlled detector-retraining comparison | M09 |
 | M11 | Name-associated disparity analysis | M04, M10 |
@@ -256,9 +258,39 @@ Evaluate D0 only on generated message text. The attacked detector is not the sol
 
 **Acceptance gate:** Known invalid cases cannot earn higher rewards by evading validation. Reward ranking corresponds plausibly to genuine errors on an audited development sample.
 
+### M07b — D1: close the short-message domain gap (Stage 1, no RL)
+
+Owner decision 2026-10-11 (D13), after the M07a scorer-sanity verdict (REAL SHIFT:
+probe == training eval pipeline everywhere; D0 misses ~53% of names in short
+conversational messages vs 2.4% on AI4Privacy dev — too weak to be a meaningful RL
+target; the probe miss-rate band failed on the high side). No silent threshold
+edits: the structure below is the recorded response.
+
+**M07b.1:** Build `short_eval`: a short-message evaluation set with held-out names,
+plus a **style-independent slice** (~50 human-written or other-LLM messages) so D1
+gains are not just generator-style fitting. No training, prompt authoring, or
+selection from it.
+**M07b.2:** Stage-1 augmentation (no RL): **D1 = D0** fine-tuned with plain
+short-message augmentation — Spark SFT data and/or base-2B generations accepted by
+the shared validator (same request bank / matched distribution).
+**M07b.3:** Report **D0 vs D1** on `short_eval` AND on the AI4Privacy final-eval
+partition (**no-regression check**). Freeze D1 (checkpoint + manifest + sha).
+**M07b.4:** Re-run the M07a base-sampling probe against **D1** with the same
+go/no-go table. Only a passing probe opens M08.
+
+**Deliverables:** `short_eval` manifest + hash, D1 checkpoint + manifest, D0-vs-D1
+report (short_eval gains + final-eval no-regression), re-probe report.
+
+**Acceptance gate:** D1 materially improves short_eval recall without regressing
+final-eval precision/recall; the probe go/no-go passes against D1 (miss rate inside
+the pre-declared band); D1 frozen before any RL. A D1 that fails the probe is a
+recorded negative result, not a threshold edit.
+
 ### M08 — Run bounded RL
 
-**M08.1:** Choose the simplest tested trainer compatible with the actual Qwen/adapter stack. Critic-free policy gradients or GRPO are candidates, not mandatory implementations. **M08.2:** Test completion masks, prompt/group IDs, behavior/reference log probabilities, frozen reference/detector parameters, and actual trainable-parameter updates. Run a tiny controlled reward-learning test. **M08.3:** Execute a short smoke run then a capped pilot, tracking validity, reward, true misses, diversity, KL, memory, time, and saves. **M08.4:** Compare against SFT and generate-and-filter on development requests and decide whether further spend is justified.
+Stage 2 of D13: the RL reward model is **frozen D1**; the detectors compared downstream are **D2**.
+
+**M08.1:** Choose the simplest tested trainer compatible with the actual Qwen/adapter stack. Critic-free policy gradients or GRPO are candidates, not mandatory implementations. **M08.2:** Test completion masks, prompt/group IDs, behavior/reference log probabilities, frozen reference/detector parameters, and actual trainable-parameter updates. Run a tiny controlled reward-learning test. **M08.3:** Execute a short smoke run then a capped pilot, tracking validity, reward, true misses, diversity, KL, memory, time, and saves. **M08.4:** Compare against base-2B P1 generation (and SFT v2 if run) and generate-and-filter on development requests and decide whether further spend is justified.
 
 Keep the same task schema from SFT into RL. Freeze request banks for interpretable comparisons. Test zero-variance/all-invalid groups if using group-relative advantages. Keep the existing validated rollout path until any quantized/speculative behavior-policy mismatch and required corrections have been checked.
 
@@ -278,7 +310,7 @@ Unknown additional person mentions cannot automatically be assigned negative lab
 
 ### M10 — Compare retrained detectors
 
-**M10.1:** Freeze common initialization, original-data replay, augmentation mix, optimizer schedule, and development checkpoint selection. **M10.2:** Include unchanged D0, original-data-only continued training, templates, ordinary SFT generation, generate-and-filter, and RL augmentation. **M10.3:** Run development pilots then fixed final comparisons, with multiple seeds if affordable. **M10.4:** Report matched-accepted-data results separately from fixed-total-budget results; include SFT, rejected generations, filtering, RL, and detector retraining under a declared accounting boundary.
+**M10.1:** Freeze common initialization, original-data replay, augmentation mix, optimizer schedule, and development checkpoint selection. **M10.2:** Include unchanged D0, frozen D1, original-data-only continued training, plain generation, generate-and-filter, Spark data, and RL augmentation (the four method arms train D2 from D1's recipe; D13). **M10.3:** Run development pilots then fixed final comparisons, with multiple seeds if affordable. **M10.4:** Report matched-accepted-data results separately from fixed-total-budget results; include SFT, rejected generations, filtering, RL, and detector retraining under a declared accounting boundary.
 
 The original-data continued-training control distinguishes augmentation value from extra optimizer steps. Do not give RL a stronger Spark request bank than the baseline. Freeze method settings before using the final evaluation.
 

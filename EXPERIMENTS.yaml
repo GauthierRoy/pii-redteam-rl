@@ -165,6 +165,59 @@ runs:
       d0_extra_person_flags: { zeroshot: 2, post_sft: 4 }
     outcome: "DECISIVE NEGATIVE RESULT: SFT degrades contract at both sizes tested; base 2B zero-shot exceeds requirements (100% JSON / 97.5% once). RECOMMENDATION: adopt base Qwen3.5-2B as generator (M06 baseline + RL starting state); pending base-diversity check."
 
+  - run_id: m07b-20261012-224819
+    kind: prompt-variant-comparison
+    milestone: M07b
+    executed: 2026-10-12
+    where: laptop-CPU (16 cores, fp32; report field was cpu-cpu)
+    repo_commit: 7193374
+    environment:
+      device: cpu
+      dtype: torch.float32
+      torch: 2.14.1+cpu
+      transformers: 5.18.0
+      python: 3.12.3
+    artifacts: "results/m07b_prompt_v2/m07b-20261012-224819/ (samples_raw.jsonl, prompt_compare_report.json)"
+    checks: { pass: 2, fail: 4 }   # pass-by-cell: P1|t1.0 and P1|t0.7 PASS; all P0/P2 cells FAIL
+    metrics:
+      generations: 960
+      gen_seconds: 3526.1
+      request_bank: "banks/v2_prompting/spark_seed20260920_v2_n20.jsonl sha 1f0b9960...a7708fb7 (v2; frozen v1 bank untouched)"
+      P0|t1.0: { validity_rate: 0.3063, name_at_start_share: 0.4898, top10_opening_share: 0.2041, unique_per_group_median: 3, failure_breakdown: { invalid:name_missing: 8, invalid:name_only: 17, invalid:no_content: 3, invalid:too_short: 83 } }
+      P0|t0.7: { validity_rate: 0.275, name_at_start_share: 0.6364, top10_opening_share: 0.2955, unique_per_group_median: 2, failure_breakdown: { invalid:name_missing: 6, invalid:name_only: 16, invalid:no_content: 4, invalid:too_short: 90 } }
+      P1|t1.0: { validity_rate: 0.9, name_at_start_share: 0.2569, top10_opening_share: 0.0833, unique_per_group_median: 7, failure_breakdown: { invalid:json: 4, invalid:name_dup: 3, invalid:name_missing: 6, invalid:refusal: 3 } }
+      P1|t0.7: { validity_rate: 0.9375, name_at_start_share: 0.3667, top10_opening_share: 0.1733, unique_per_group_median: 8, failure_breakdown: { invalid:name_dup: 5, invalid:name_missing: 4, invalid:refusal: 1 } }
+      P2|t1.0: { validity_rate: 0.8313, name_at_start_share: 0.391, top10_opening_share: 0.0827, unique_per_group_median: 7, failure_breakdown: { invalid:json: 1, invalid:name_dup: 2, invalid:name_missing: 23, invalid:name_only: 1 } }
+      P2|t0.7: { validity_rate: 0.925, name_at_start_share: 0.4189, top10_opening_share: 0.1216, unique_per_group_median: 8, failure_breakdown: { invalid:name_dup: 1, invalid:name_missing: 9, invalid:refusal: 2 } }
+      d0_stats: "PENDING SCORER VERIFICATION (local reference-pipeline replica): complete_miss 0.24-0.39; live_group_share_r_prob P0 0.37-0.47 vs P1/P2 0.85-0.95; dead groups 0"
+    outcome: "variant cell P1|t0.7 passes all pre-committed criteria - candidate prompt for M06/M08. Prompting alone is enough (P1 passes at BOTH temps); P0 baseline confirms template collapse; P2 few-shot trades name fidelity for style (23 name_missing @ t1.0). SFT-v2 trigger does NOT fire."
+
+  - run_id: m07b-rescore-20261013
+    kind: prompt-variant-comparison-rescore
+    milestone: M07b follow-up (owner decisions D14/D15 + M07b.2 gates)
+    executed: 2026-10-13
+    where: laptop-CPU (16 cores)
+    repo_commit: "27a908b (gates) / see PR #6 head"
+    environment:
+      device: cpu
+      torch: 2.14.1+cpu
+      transformers: 5.18.0
+      spacy: "en_core_web_sm 3.8.0"
+      llm_judge: Qwen/Qwen3.5-0.8B (bf16 CPU, greedy, non-thinking)
+    artifacts: "results/m07b_prompt_v2/m07b-20261012-224819/ (samples_rescored.jsonl, rescore_report.json, samples_person_checked.jsonl, person_check_report.json, audit_sample_50.jsonl, audit_manual_verdicts.jsonl)"
+    checks:
+      pass: 4
+      fail: 0
+      official_scorer_vs_asrun_replica: "max diff 8.05e-07 over 667 samples - pending flag dropped (PR #5 verified the scorer)"
+      d15_relabel: "6 refusal false positives -> valid, 1 greeting -> invalid; P1 passes both temps with wider margins (0.9187 / 0.9437)"
+      position_compliance: "start hints followed (0.80-1.00); middle 0.07-0.48; end 0.00-0.14; signature 0.00-0.13"
+      manual_audit_50: "gate agreement 46/50 (92%), 0 false acceptances, 4 over-rejections; person-sense judge never fired (unvalidated, kept as guard)"
+    metrics:
+      validity_d15: { P0_t1.0: 0.3000, P0_t0.7: 0.2750, P1_t1.0: 0.9187, P1_t0.7: 0.9437, P2_t1.0: 0.8313, P2_t0.7: 0.9375 }
+      d1_gate_accepted: { overall: "578/673 (0.859, conservative) / 628/673 (0.933, lenient)", P1_t0.7: "133/151 (0.881)" }
+      extra_person_rates: { spacy_overall: 0.062, llm_yes_overall: 0.006, llm_unclear: 87 }
+      person_sense_rejections: 0
+    outcome: "P1 adopted as generation prompt (D14; t=0.7 for M06/D1 data, RL temp in M08). D15 refusal scope landed. Official-scorer numbers confirmed the as-run report; D0's complete-miss (0.24-0.39) is real (D13) and the D1 gates are D0-independent. Conservative unclear-reject policy catches leaked few-shot names (audit) at the cost of ~8 points of yield."
   - run_id: spark-sft-v1
     kind: dataset-synthetic
     milestone: M05

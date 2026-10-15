@@ -121,6 +121,35 @@ run the base-2B diversity check (sampled, temp 0.8) before freezing, since gener
 zero-shot outputs could be less varied. If diversity is acceptable, M07 proceeds
 directly: frozen D0 as reward scorer, RL from base 2B.
 
+## D13 settled: two-stage reward-model structure (owner decision, 2026-10-11)
+
+M07a verdict accepted (REAL SHIFT: probe == eval pipeline everywhere; D0 misses
+~53% of short-conversational names vs 2.4% on dev). Recorded as D13 in
+docs/DECISIONS.md and a new **M07b** milestone in PROJECT_PLAN.md — no silent
+threshold edits:
+
+- **Stage 1 (M07b, no RL):** `short_eval` (held-out names + style-independent
+  slice of ~50 human-written/other-LLM messages); D1 = D0 + plain short-message
+  augmentation (Spark SFT data and/or base-2B generations); report D0 vs D1 on
+  short_eval AND final-eval (no-regression check); re-run the M07a probe against
+  D1 (same go/no-go table); freeze D1.
+- **Stage 2 (M08–M10):** frozen D1 is the RL reward model; the four arms
+  (plain generation / generate-and-filter / Spark data / RL) train D2.
+
+Next actions below updated to this structure.
+
+## M07a scorer sanity verdict recorded (2026-10-11, PR #5)
+
+Verdict **REAL SHIFT, not a scorer bug** (docs/PROBE_SCORER_SANITY.md): probe scorer
+== D0-training eval pipeline on 124/124 dev gold spans and 32/32 pilot texts;
+controlled dumps show D0 itself assigns p(B-PERSON) 0.02–0.08 to short-message
+names; specials/id2label/alignment/single-token checks all clean. Regression guard:
+`tests/integration/test_probe_scorer_regression.py` (+ fixture; 5 fixed dev rows
+must exact-hit; the "Hey Lucas…" tripwire is pinned to frozen D0's sha). The 1–30%
+miss-rate band is KEPT: D0's pilot miss rate (~53%) fails it on the high side —
+D0 is too weak on short messages to be the RL target, so RL moves to frozen D1
+per the D13 two-stage structure above.
+
 ## Owner decision (2026-10-10): skip 0.8B re-proof; go straight to 2B, overnight-capable
 
 The notebook (`colab/M05_generator_sft.ipynb`, now "M05b") is switched to
@@ -361,17 +390,17 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
 
 - CPU only. No GPU, no downloads, no paid services. Spend: €0.
 
-## Next three actions
+## Next three actions (post-D13)
 
-1. Run `colab/M05_generator_sft.ipynb` on Colab (T4, ~1 h): bank lock, zero-shot
-   contract check, LoRA SFT (full-conversation template, end-of-turn verified,
-   ≤2k pairs, 512-token cap), post-SFT re-check, sampled diversity (temp 0.8, n=4),
-   and frozen-D0 extra-PERSON flagging (flag only, not reward). This is the 0.8B
-   pipeline proof, not a method comparison.
-2. M06 baseline: same pipeline on Qwen3.5-2B (same model as the RL arm, per D05) —
-   ordinary generation over the frozen bank with the SFT'd 2B generator.
-3. M07: wire frozen D0 (sha `0314ebe3…c43cb`) into the reward path; difficulty
-   feedback for RL.
+1. **M07b.1:** build `short_eval` — short-message eval set with held-out names
+   plus a style-independent slice (~50 human-written or other-LLM messages);
+   manifest + sha; no training/prompt authoring from it.
+2. **M07b.2:** Stage-1 augmentation: generate plain short-message data with the
+   base 2B over the frozen bank (validated, contract-passing only) and/or author
+   the Spark SFT slice; fine-tune D0 -> **D1**; report D0 vs D1 on short_eval AND
+   final-eval (no-regression check); freeze D1.
+3. **M07b.4:** re-run the M07a probe against frozen D1 (same go/no-go table);
+   a passing probe opens M08 (RL with D1 as reward model, arms train D2).
 
 ## Blockers / open decisions
 

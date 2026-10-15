@@ -12,6 +12,45 @@ import random
 
 REQUEST_SOURCES = ("dataset_derived", "spark_authored", "seeded_sampler")
 
+# Schema v2 (M07b prompting experiment). v1 records (no "schema_version") keep
+# their frozen definition; the v1 bank is never re-validated as v2.
+SCHEMA_VERSIONS = (1, 2)
+
+# Catalogue of realistic short-message contexts (M07b spec, ~10 types).
+CONTEXT_TYPES = (
+    "support_ticket",
+    "email_with_signature",
+    "forwarded_email_thread",
+    "meeting_notes",
+    "chat_message",
+    "appointment_reminder",
+    "form_record_line",
+    "list_or_table_row",
+    "informal_text_with_typos",
+    "third_person_report",
+)
+CONTEXT_TYPE_LABELS = {
+    "support_ticket": "a customer support ticket",
+    "email_with_signature": "a short email that ends with a signature",
+    "forwarded_email_thread": "a short forwarded email thread",
+    "meeting_notes": "meeting notes",
+    "chat_message": "a casual chat message",
+    "appointment_reminder": "an appointment reminder",
+    "form_record_line": "a form or record line",
+    "list_or_table_row": "a list or table row entry",
+    "informal_text_with_typos": "informal text with typos",
+    "third_person_report": "a third-person report",
+}
+
+# Optional hint for where the requested name should sit in the output.
+NAME_POSITIONS = ("start", "middle", "end", "signature")
+NAME_POSITION_LABELS = {
+    "start": "near the start",
+    "middle": "in the middle",
+    "end": "near the end",
+    "signature": "in the signature",
+}
+
 # R07: pool values that are dataset artifacts, not requestable person names.
 _PSEUDO_EXACT = {"n/a", "na", "-", "--", "null", "none", "?"}
 
@@ -59,6 +98,23 @@ def load_person_name_pool(path: str) -> tuple[frozenset[str], dict]:
     return allowed, provenance
 
 
+def _validate_task_v2(task: dict, errors: list[str]) -> None:
+    """v2 task fields: context_type, target_length, optional name_position."""
+    context_type = task.get("context_type")
+    if context_type not in CONTEXT_TYPES:
+        errors.append(f"task.context_type must be one of {CONTEXT_TYPES}, got {context_type!r}")
+    length = task.get("target_length")
+    if not isinstance(length, dict):
+        errors.append("task.target_length must be a mapping with 'min_words' and 'max_words'")
+    else:
+        lo, hi = length.get("min_words"), length.get("max_words")
+        if not isinstance(lo, int) or not isinstance(hi, int) or not 0 < lo <= hi:
+            errors.append(f"task.target_length needs int min_words <= max_words, got {lo!r}/{hi!r}")
+    name_position = task.get("name_position")
+    if name_position is not None and name_position not in NAME_POSITIONS:
+        errors.append(f"task.name_position must be one of {NAME_POSITIONS}, got {name_position!r}")
+
+
 def validate_request(record: dict, person_name_pool: frozenset[str] | None = None) -> list[str]:
     """Return schema errors; empty means the request is importable.
 
@@ -71,6 +127,9 @@ def validate_request(record: dict, person_name_pool: frozenset[str] | None = Non
     source = record.get("request_source")
     if source not in REQUEST_SOURCES:
         errors.append(f"request_source must be one of {REQUEST_SOURCES}, got {source!r}")
+    version = record.get("schema_version", 1)
+    if version not in SCHEMA_VERSIONS:
+        errors.append(f"schema_version must be one of {SCHEMA_VERSIONS}, got {version!r}")
     task = record.get("task")
     if not isinstance(task, dict):
         return errors + ["request needs a mapping 'task'"]
@@ -90,6 +149,8 @@ def validate_request(record: dict, person_name_pool: frozenset[str] | None = Non
     constraints = task.get("constraints", {})
     if not isinstance(constraints, dict):
         errors.append("task.constraints must be a mapping when present")
+    if version == 2:
+        _validate_task_v2(task, errors)
     prompt = record.get("prompt")
     if prompt is not None:
         if not isinstance(prompt, str) or not prompt:
@@ -174,11 +235,14 @@ def seeded_sampler(
     language: str = "en",
     prefix: str = "seed",
     allowed_names: frozenset[str] | None = None,
+    task_extras: list[dict] | None = None,
 ) -> list[dict]:
     """Minimal programmatic path (Option B): same schema, recorded seed.
 
     When ``allowed_names`` is given, every name must come from the train-side
     pool (R06); anything else raises instead of being silently dropped.
+    ``task_extras`` (v2) merges per-request task fields (context_type,
+    target_length, name_position) positionally; its length must match ``names``.
     """
     if allowed_names is not None:
         rejected = sorted({n for n in names if n not in allowed_names})
@@ -186,6 +250,8 @@ def seeded_sampler(
             raise ValueError(
                 f"names outside the train-side pool are forbidden in requests: {rejected[:5]}"
             )
+    if task_extras is not None and len(task_extras) != len(names):
+        raise ValueError("task_extras must have one entry per name")
     rng = random.Random(seed)
     pool = list(names)
     rng.shuffle(pool)
@@ -201,11 +267,14 @@ def seeded_sampler(
         }
         if contexts:
             task["context"] = contexts[i % len(contexts)]
-        requests.append(
-            {
-                "request_id": f"{prefix}-{seed}-{i:04d}",
-                "request_source": "seeded_sampler",
-                "task": task,
-            }
-        )
+        if task_extras is not None:
+            task.update(task_extras[i])
+        request: dict = {
+            "request_id": f"{prefix}-{seed}-{i:04d}",
+            "request_source": "seeded_sampler",
+            "task": task,
+        }
+        if task_extras is not None:
+            request["schema_version"] = 2
+        requests.append(request)
     return requests

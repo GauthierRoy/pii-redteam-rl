@@ -1,0 +1,390 @@
+{
+  "kind": "m07b-rescore",
+  "source_samples": "results/m07b_prompt_v2/m07b-20261012-224819/samples_raw.jsonl",
+  "detector": {
+    "path": "/tmp/d0zip/pii-redteam-rl/d0-20261004-142714/d0-best",
+    "sha256": "0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb"
+  },
+  "rule_version": "D15 (refusal: answer-start or no-content only; greeting lexicon incl. 'having')",
+  "n": 960,
+  "replica_vs_official": {
+    "common_samples": 667,
+    "max_abs_p_target_diff": 8.046627044677734e-07,
+    "mean_abs_p_target_diff": 1e-08
+  },
+  "per_cell": {
+    "P0|t0.7": {
+      "n": 160,
+      "valid_asrun": 44,
+      "valid_d15": 44,
+      "validity_asrun": 0.275,
+      "validity_d15": 0.275,
+      "name_at_start_share_d15": 0.6364,
+      "d15_flips": [],
+      "name_position_d15": {
+        "middle": 0.0682,
+        "start": 0.9318
+      },
+      "official_scorer": {
+        "scored": 44,
+        "p_target_mean": {
+          "p1": 0.002261158311739564,
+          "p5": 0.054127627052366734,
+          "p25": 0.3275294788181782,
+          "p50": 0.6110689640045166
+        },
+        "outcome_rates": {
+          "exact_hit": 0.3409,
+          "partial_overlap": 0.3864,
+          "boundary_error": 0.0,
+          "complete_miss": 0.2727
+        },
+        "live_group_share_r_prob": 0.3684,
+        "live_group_share_r_logit": 0.5789,
+        "dead_group_share": 0.0,
+        "note": "official probe scorer (probe._score_with_d0), scorer verified by PR #5"
+      }
+    },
+    "P0|t1.0": {
+      "n": 160,
+      "valid_asrun": 49,
+      "valid_d15": 48,
+      "validity_asrun": 0.3063,
+      "validity_d15": 0.3,
+      "name_at_start_share_d15": 0.5,
+      "d15_flips": [
+        {
+          "request_id": "spark-v2-0019",
+          "sample_idx": 2,
+          "asrun": "valid",
+          "d15": "invalid:no_content"
+        }
+      ],
+      "name_position_d15": {
+        "end": 0.0208,
+        "middle": 0.1458,
+        "start": 0.8333
+      },
+      "official_scorer": {
+        "scored": 48,
+        "p_target_mean": {
+          "p1": 0.013920384459197521,
+          "p5": 0.017856834456324577,
+          "p25": 0.24809208512306213,
+          "p50": 0.5188770294189453
+        },
+        "outcome_rates": {
+          "exact_hit": 0.375,
+          "partial_overlap": 0.25,
+          "boundary_error": 0.0,
+          "complete_miss": 0.375
+        },
+        "live_group_share_r_prob": 0.4737,
+        "live_group_share_r_logit": 0.6842,
+        "dead_group_share": 0.0,
+        "note": "official probe scorer (probe._score_with_d0), scorer verified by PR #5"
+      }
+    },
+    "P1|t0.7": {
+      "n": 160,
+      "valid_asrun": 150,
+      "valid_d15": 151,
+      "validity_asrun": 0.9375,
+      "validity_d15": 0.9437,
+      "name_at_start_share_d15": 0.3642,
+      "d15_flips": [
+        {
+          "request_id": "spark-v2-0018",
+          "sample_idx": 7,
+          "asrun": "invalid:refusal",
+          "d15": "valid"
+        }
+      ],
+      "name_position_d15": {
+        "end": 0.0132,
+        "middle": 0.1523,
+        "start": 0.8344
+      },
+      "official_scorer": {
+        "scored": 151,
+        "p_target_mean": {
+          "p1": 0.00664226058870554,
+          "p5": 0.023667074119051296,
+          "p25": 0.32610051706433296,
+          "p50": 0.6519220098853111
+        },
+        "outcome_rates": {
+          "exact_hit": 0.4636,
+          "partial_overlap": 0.2649,
+          "boundary_error": 0.0,
+          "complete_miss": 0.2715
+        },
+        "live_group_share_r_prob": 0.85,
+        "live_group_share_r_logit": 1.0,
+        "dead_group_share": 0.0,
+        "note": "official probe scorer (probe._score_with_d0), scorer verified by PR #5"
+      }
+    },
+    "P1|t1.0": {
+      "n": 160,
+      "valid_asrun": 144,
+      "valid_d15": 147,
+      "validity_asrun": 0.9,
+      "validity_d15": 0.9187,
+      "name_at_start_share_d15": 0.2517,
+      "d15_flips": [
+        {
+          "request_id": "spark-v2-0000",
+          "sample_idx": 7,
+          "asrun": "invalid:refusal",
+          "d15": "valid"
+        },
+        {
+          "request_id": "spark-v2-0004",
+          "sample_idx": 6,
+          "asrun": "invalid:refusal",
+          "d15": "valid"
+        },
+        {
+          "request_id": "spark-v2-0014",
+          "sample_idx": 6,
+          "asrun": "invalid:refusal",
+          "d15": "valid"
+        }
+      ],
+      "name_position_d15": {
+        "end": 0.0544,
+        "middle": 0.2313,
+        "start": 0.7143
+      },
+      "official_scorer": {
+        "scored": 147,
+        "p_target_mean": {
+          "p1": 0.0055160378105938435,
+          "p5": 0.018446961417794228,
+          "p25": 0.2772130121787389,
+          "p50": 0.6210671663284302
+        },
+        "outcome_rates": {
+          "exact_hit": 0.4626,
+          "partial_overlap": 0.2517,
+          "boundary_error": 0.0,
+          "complete_miss": 0.2857
+        },
+        "live_group_share_r_prob": 0.9,
+        "live_group_share_r_logit": 1.0,
+        "dead_group_share": 0.0,
+        "note": "official probe scorer (probe._score_with_d0), scorer verified by PR #5"
+      }
+    },
+    "P2|t0.7": {
+      "n": 160,
+      "valid_asrun": 148,
+      "valid_d15": 150,
+      "validity_asrun": 0.925,
+      "validity_d15": 0.9375,
+      "name_at_start_share_d15": 0.42,
+      "d15_flips": [
+        {
+          "request_id": "spark-v2-0000",
+          "sample_idx": 6,
+          "asrun": "invalid:refusal",
+          "d15": "valid"
+        },
+        {
+          "request_id": "spark-v2-0017",
+          "sample_idx": 0,
+          "asrun": "invalid:refusal",
+          "d15": "valid"
+        }
+      ],
+      "name_position_d15": {
+        "end": 0.0133,
+        "middle": 0.16,
+        "start": 0.8267
+      },
+      "official_scorer": {
+        "scored": 150,
+        "p_target_mean": {
+          "p1": 0.0024145334027707577,
+          "p5": 0.013076952658593655,
+          "p25": 0.302645872036616,
+          "p50": 0.6225082278251648
+        },
+        "outcome_rates": {
+          "exact_hit": 0.4133,
+          "partial_overlap": 0.2933,
+          "boundary_error": 0.0,
+          "complete_miss": 0.2933
+        },
+        "live_group_share_r_prob": 0.95,
+        "live_group_share_r_logit": 1.0,
+        "dead_group_share": 0.0,
+        "note": "official probe scorer (probe._score_with_d0), scorer verified by PR #5"
+      }
+    },
+    "P2|t1.0": {
+      "n": 160,
+      "valid_asrun": 133,
+      "valid_d15": 133,
+      "validity_asrun": 0.8313,
+      "validity_d15": 0.8313,
+      "name_at_start_share_d15": 0.391,
+      "d15_flips": [],
+      "name_position_d15": {
+        "end": 0.0376,
+        "middle": 0.1654,
+        "start": 0.797
+      },
+      "official_scorer": {
+        "scored": 133,
+        "p_target_mean": {
+          "p1": 0.0069783092476427555,
+          "p5": 0.02122839167714119,
+          "p25": 0.3590887486934662,
+          "p50": 0.6396612326304117
+        },
+        "outcome_rates": {
+          "exact_hit": 0.4436,
+          "partial_overlap": 0.3158,
+          "boundary_error": 0.0,
+          "complete_miss": 0.2406
+        },
+        "live_group_share_r_prob": 0.95,
+        "live_group_share_r_logit": 1.0,
+        "dead_group_share": 0.0,
+        "note": "official probe scorer (probe._score_with_d0), scorer verified by PR #5"
+      }
+    }
+  },
+  "position_compliance_by_hint": {
+    "end": {
+      "P0|t0.7": {
+        "compliant": 0,
+        "n": 10,
+        "rate": 0.0
+      },
+      "P0|t1.0": {
+        "compliant": 0,
+        "n": 12,
+        "rate": 0.0
+      },
+      "P1|t0.7": {
+        "compliant": 2,
+        "n": 29,
+        "rate": 0.069
+      },
+      "P1|t1.0": {
+        "compliant": 4,
+        "n": 28,
+        "rate": 0.1429
+      },
+      "P2|t0.7": {
+        "compliant": 1,
+        "n": 27,
+        "rate": 0.037
+      },
+      "P2|t1.0": {
+        "compliant": 2,
+        "n": 23,
+        "rate": 0.087
+      }
+    },
+    "middle": {
+      "P0|t0.7": {
+        "compliant": 1,
+        "n": 15,
+        "rate": 0.0667
+      },
+      "P0|t1.0": {
+        "compliant": 3,
+        "n": 17,
+        "rate": 0.1765
+      },
+      "P1|t0.7": {
+        "compliant": 15,
+        "n": 48,
+        "rate": 0.3125
+      },
+      "P1|t1.0": {
+        "compliant": 21,
+        "n": 44,
+        "rate": 0.4773
+      },
+      "P2|t0.7": {
+        "compliant": 5,
+        "n": 46,
+        "rate": 0.1087
+      },
+      "P2|t1.0": {
+        "compliant": 8,
+        "n": 42,
+        "rate": 0.1905
+      }
+    },
+    "signature": {
+      "P0|t0.7": {
+        "compliant": 0,
+        "n": 4,
+        "rate": 0.0
+      },
+      "P0|t1.0": {
+        "compliant": 0,
+        "n": 2,
+        "rate": 0.0
+      },
+      "P1|t0.7": {
+        "compliant": 0,
+        "n": 13,
+        "rate": 0.0
+      },
+      "P1|t1.0": {
+        "compliant": 2,
+        "n": 15,
+        "rate": 0.1333
+      },
+      "P2|t0.7": {
+        "compliant": 1,
+        "n": 15,
+        "rate": 0.0667
+      },
+      "P2|t1.0": {
+        "compliant": 1,
+        "n": 14,
+        "rate": 0.0714
+      }
+    },
+    "start": {
+      "P0|t0.7": {
+        "compliant": 3,
+        "n": 3,
+        "rate": 1.0
+      },
+      "P0|t1.0": {
+        "compliant": 5,
+        "n": 6,
+        "rate": 0.8333
+      },
+      "P1|t0.7": {
+        "compliant": 16,
+        "n": 16,
+        "rate": 1.0
+      },
+      "P1|t1.0": {
+        "compliant": 15,
+        "n": 16,
+        "rate": 0.9375
+      },
+      "P2|t0.7": {
+        "compliant": 12,
+        "n": 15,
+        "rate": 0.8
+      },
+      "P2|t1.0": {
+        "compliant": 12,
+        "n": 13,
+        "rate": 0.9231
+      }
+    }
+  }
+}

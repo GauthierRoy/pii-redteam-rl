@@ -1,0 +1,99 @@
+{
+  "kind": "m07b-person-check",
+  "samples": "results/m07b_prompt_v2/m07b-20261012-224819/samples_rescored.jsonl",
+  "n_valid_checked": 673,
+  "checkers": {
+    "extra_person": "spaCy en_core_web_sm NER OR Qwen3.5-2B LLM judge (independent of D0)",
+    "person_sense": "Qwen3.5-2B LLM judge"
+  },
+  "per_cell": {
+    "P0|t0.7": {
+      "n_valid": 44,
+      "spacy_extra_rate": 0.0,
+      "llm_extra_yes_rate": 0.0,
+      "llm_extra_unclear": 0,
+      "llm_sense_no_rate": 0.0,
+      "llm_sense_unclear": 0,
+      "reject_extra_person_rate": 0.0,
+      "reject_extra_person_lenient_rate": 0.0,
+      "reject_person_sense_rate": 0.0,
+      "accepted_for_d1_rate": 1.0,
+      "accepted_for_d1_n": 44
+    },
+    "P0|t1.0": {
+      "n_valid": 48,
+      "spacy_extra_rate": 0.0,
+      "llm_extra_yes_rate": 0.0208,
+      "llm_extra_unclear": 0,
+      "llm_sense_no_rate": 0.0,
+      "llm_sense_unclear": 0,
+      "reject_extra_person_rate": 0.0208,
+      "reject_extra_person_lenient_rate": 0.0208,
+      "reject_person_sense_rate": 0.0,
+      "accepted_for_d1_rate": 0.9792,
+      "accepted_for_d1_n": 47
+    },
+    "P1|t0.7": {
+      "n_valid": 151,
+      "spacy_extra_rate": 0.0927,
+      "llm_extra_yes_rate": 0.0,
+      "llm_extra_unclear": 17,
+      "llm_sense_no_rate": 0.0,
+      "llm_sense_unclear": 0,
+      "reject_extra_person_rate": 0.1192,
+      "reject_extra_person_lenient_rate": 0.0927,
+      "reject_person_sense_rate": 0.0,
+      "accepted_for_d1_rate": 0.8808,
+      "accepted_for_d1_n": 133
+    },
+    "P1|t1.0": {
+      "n_valid": 147,
+      "spacy_extra_rate": 0.0952,
+      "llm_extra_yes_rate": 0.0,
+      "llm_extra_unclear": 14,
+      "llm_sense_no_rate": 0.0,
+      "llm_sense_unclear": 0,
+      "reject_extra_person_rate": 0.102,
+      "reject_extra_person_lenient_rate": 0.0952,
+      "reject_person_sense_rate": 0.0,
+      "accepted_for_d1_rate": 0.898,
+      "accepted_for_d1_n": 132
+    },
+    "P2|t0.7": {
+      "n_valid": 150,
+      "spacy_extra_rate": 0.0333,
+      "llm_extra_yes_rate": 0.0067,
+      "llm_extra_unclear": 22,
+      "llm_sense_no_rate": 0.0,
+      "llm_sense_unclear": 0,
+      "reject_extra_person_rate": 0.1533,
+      "reject_extra_person_lenient_rate": 0.0333,
+      "reject_person_sense_rate": 0.0,
+      "accepted_for_d1_rate": 0.8467,
+      "accepted_for_d1_n": 127
+    },
+    "P2|t1.0": {
+      "n_valid": 133,
+      "spacy_extra_rate": 0.0526,
+      "llm_extra_yes_rate": 0.015,
+      "llm_extra_unclear": 34,
+      "llm_sense_no_rate": 0.0,
+      "llm_sense_unclear": 0,
+      "reject_extra_person_rate": 0.2857,
+      "reject_extra_person_lenient_rate": 0.0677,
+      "reject_person_sense_rate": 0.0,
+      "accepted_for_d1_rate": 0.7143,
+      "accepted_for_d1_n": 95
+    }
+  },
+  "overall": {
+    "reject_extra_person_rate": 0.1412,
+    "reject_extra_person_lenient_rate": 0.0639,
+    "reject_person_sense_rate": 0.0,
+    "accepted_for_d1_rate": 0.8588,
+    "accepted_for_d1_n": 578
+  },
+  "policy": "conservative: unclear LLM judge answers reject the row; spaCy PERSON entities filtered for digits/role-titles (audit fixes)",
+  "judge": "Qwen/Qwen3.5-0.8B (bf16 CPU, greedy, non-thinking, 2-token answers)",
+  "recomputed_utc": "2026-10-13"
+}
