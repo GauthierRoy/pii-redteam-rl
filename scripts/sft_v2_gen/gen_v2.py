@@ -329,7 +329,7 @@ def check(q, text):
             "entities": [{"type": "PERSON", "value": name}],
         },
         "target": {"text": text, "span": [span[0], span[1]] if span else None},
-        "provenance": "spark_authored",
+        "provenance": "template_paraphrase",
         "name_form": q["name_form"],
     }
     return v2.validate_row(row)

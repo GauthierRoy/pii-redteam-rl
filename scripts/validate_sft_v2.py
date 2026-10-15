@@ -50,7 +50,7 @@ def build_row(authored: dict) -> dict:
             "entities": [{"type": "PERSON", "value": name}],
         },
         "target": {"text": text, "span": [span[0], span[1]] if span else None},
-        "provenance": "spark_authored",
+        "provenance": "template_paraphrase",
         "name_form": authored["name_form"],
     }
 

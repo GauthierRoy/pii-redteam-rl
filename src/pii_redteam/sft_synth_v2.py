@@ -1,4 +1,4 @@
-"""Synthetic SFT dataset v2 toolkit (spark_authored).
+"""Synthetic SFT dataset v2 toolkit (template_paraphrase).
 
 Additive module for the ``feat/spark-sft-data`` branch. Frozen code — the
 scorer (``detector.py``, ``rewards.py``) and the prompt-variant code
@@ -15,7 +15,7 @@ Row format (request schema v2)::
                  "name_position": "start|middle|end|signature",
                  "entities": [{"type": "PERSON", "value": "<exact name>"}]},
      "target": {"text": "...", "span": [start, end]},
-     "provenance": "spark_authored", "name_form": "first|full|surname"}
+     "provenance": "template_paraphrase", "name_form": "first|full|surname"}
 
 ``name_form`` is a derived coverage attribute, not a model input: ``full``
 means the entity value itself is multi-token; ``first``/``surname`` describe
@@ -207,8 +207,8 @@ def validate_row_schema(row: dict) -> list[str]:
         ent = entities[0]
         if not isinstance(ent, dict) or ent.get("type") != "PERSON" or not ent.get("value"):
             errors.append("entity must be {type: PERSON, value: <non-empty name>}")
-    if row.get("provenance") != "spark_authored":
-        errors.append(f"provenance must be 'spark_authored', got {row.get('provenance')!r}")
+    if row.get("provenance") != "template_paraphrase":
+        errors.append(f"provenance must be 'template_paraphrase', got {row.get('provenance')!r}")
     if row.get("name_form") not in NAME_FORMS:
         errors.append(f"unknown name_form {row.get('name_form')!r}")
     return errors
