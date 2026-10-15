@@ -176,6 +176,23 @@ class TestDedupe(unittest.TestCase):
         self.assertEqual(dup["exact"], [(0, 2)])
 
 
+class TestPlaceholderSpan(unittest.TestCase):
+    def test_placeholder_span_rejected(self):
+        r = good_row()
+        r["target"]["span"] = "PENDING-0004"
+        errors = v2.validate_row_content(r)
+        self.assertTrue(any("target.span must be" in e for e in errors))
+
+    def test_non_integer_span_rejected(self):
+        r = good_row()
+        r["target"]["span"] = ["PENDING", "0004"]
+        errors = v2.validate_row_content(r)
+        self.assertTrue(any("target.span must be" in e for e in errors))
+
+    def test_computed_int_span_accepted(self):
+        self.assertEqual(v2.validate_row(good_row()), [])
+
+
 class TestFillerHygiene(unittest.TestCase):
     def test_repeated_sentence(self):
         text = "One fine morning. The printer jammed badly. One fine morning."
