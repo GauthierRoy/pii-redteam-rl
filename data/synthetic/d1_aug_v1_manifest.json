@@ -1,0 +1,62 @@
+{
+  "dataset": "d1-aug-v1",
+  "provenance": "llm_authored_direct:deepseek-v1-flash",
+  "authoring": "each text written directly by the LLM (DeepSeek V1 Flash via opencode, 2026-10-15/16); no templates, paraphrase tools, synonym swaps, or filler padding; authored drafts preserved in data/synthetic/d1_aug_v1_batches/ (40 files x 50); batch assignments (context/position/length/name) pre-generated deterministically (seed 20261015) and each text authored around the assigned entity",
+  "names": "training-side names only (artifacts/splits/name_pools.json train_side_pool); 1512 distinct names across 2000 rows; zero overlap with held-out (final-eval-only) names; not evaluation data",
+  "role": "M07b.2 stage-1 augmentation data: plain short-message SFT rows used to fine-tune D0 -> D1 (same task schema / request distribution as short_eval); not to be used as evaluation data",
+  "files": {
+    "d1_aug_v1": {
+      "path": "data/synthetic/d1_aug_v1.jsonl",
+      "rows": 2000,
+      "sha256": "c16e037dd978c5305e510474653ac573a6dde9e560a945da6428c8f31609eb3d"
+    }
+  },
+  "counts": {
+    "rows": 2000
+  },
+  "coverage": {
+    "per_context_type": {
+      "appointment reminder": 200,
+      "chat message": 200,
+      "email with signature": 200,
+      "form/record line": 200,
+      "forwarded email thread": 200,
+      "informal text with typos": 200,
+      "list/table row": 200,
+      "meeting notes": 200,
+      "support ticket": 200,
+      "third-person report": 200
+    },
+    "per_name_position": {
+      "end": 500,
+      "middle": 500,
+      "signature": 500,
+      "start": 500
+    },
+    "per_length_bucket": {
+      "20-30": 680,
+      "31-45": 680,
+      "46-60": 640
+    },
+    "per_name_form": {
+      "first": 480,
+      "full": 960,
+      "surname": 560
+    }
+  },
+  "validation": {
+    "validator": "pii_redteam.sft_synth_v2.validate_row (all checks incl. filler)",
+    "failures": 0,
+    "exact_dup_pairs": 0,
+    "near_dup_pairs_gt_0.7": 0,
+    "within_set_template_reuse_pairs": 0,
+    "cross_dataset_8gram_overlap": {
+      "short_eval_v2": 0,
+      "short_eval_human_v1": 0,
+      "deprecated_short_eval_v1": 0,
+      "spark_sft_v1_train_dev": 0
+    },
+    "top10_opening_share": 0.028,
+    "name_at_start_share": 0.25
+  }
+}
