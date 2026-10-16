@@ -459,6 +459,35 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
   Thanks/Cheers/--). Proposed fix recorded for a future decision; no
   pre-committed threshold changed.
 
+## d1_aug_v1 authored (2026-10-15/16, data/d1-aug-deepseek-v1, M07b.2)
+
+- **2000 rows, all texts written directly by the LLM, one by one** (provenance
+  `llm_authored_direct:deepseek-v1-flash`) — stage-1 augmentation training data
+  for D1, split `sft_train`; no templates, paraphrase/synonym tools, or filler.
+  Authored drafts preserved in `data/synthetic/d1_aug_v1_batches/` (40 files x
+  50); finalized by `scripts/finalize_d1_aug_v1.py` with code-computed spans.
+- **Authoring plan**: batch assignments (context/position/length bucket/name)
+  pre-generated deterministically (seed 20261015); each text authored around
+  the assigned entity, then validated per batch before acceptance.
+- **Names**: training-side pool only (`artifacts/splits/name_pools.json`
+  `train_side_pool`); 1512 distinct names across 2000 rows; **zero overlap with
+  held-out (final-eval-only) names**. Not evaluation data.
+- **Coverage**: 200 rows per context type (all 10); positions start/middle/end/
+  signature 500 each; length buckets 680 (20-30) / 680 (31-45) / 640 (46-60);
+  name_form first 480 / surname 560 / full 960.
+- **Validation** (hard asserts in the finalizer, all passed):
+  `validate_row` 2000/2000 (schema, exact-once, spans, position, length, hygiene
+  incl. filler checks); 0 exact dupes; 0 near-dupes (>0.7); **0 within-set
+  template-reuse pairs (>= 8-word run)**; **0 8-word overlap with
+  `short_eval_v2`, `short_eval_human_v1` (PR #11 draft), the deprecated
+  short_eval_v1, and `spark_sft_v1` train/dev**. top-10 opening share 0.0280;
+  name-at-start 0.2500.
+- **Artifacts**: `data/synthetic/d1_aug_v1.jsonl` (sha256
+  `c16e037dd978c5305e510474653ac573a6dde9e560a945da6428c8f31609eb3d`) +
+  `data/synthetic/d1_aug_v1_manifest.json`. PR on `data/d1-aug-deepseek-v1`,
+  **stacked on `feat/short-eval-v2`** (the `llm_authored_direct:<writer>`
+  provenance validator support lands there).
+
 ## Artifacts
 
 - **`EXPERIMENTS.yaml` (repo root)** — append-only registry of every executed run:
@@ -484,7 +513,9 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
 2. **M07b.2:** Stage-1 augmentation: generate plain short-message data with the
    base 2B over the frozen bank (validated, contract-passing only) and/or author
    the Spark SFT slice; fine-tune D0 -> **D1**; report D0 vs D1 on short_eval AND
-   final-eval (no-regression check); freeze D1.
+   final-eval (no-regression check); freeze D1. **`d1_aug_v1` DONE** (2000-row
+   LLM-authored-direct augmentation set, `data/d1-aug-deepseek-v1`, PR; all
+   content checks + zero eval/spark 8-gram overlap).
 3. **M07b.4:** re-run the M07a probe against frozen D1 (same go/no-go table);
    a passing probe opens M08 (RL with D1 as reward model, arms train D2).
 
