@@ -1,0 +1,156 @@
+"""Pure (torch-free) logic for M07b D1 training: data, selection, metrics, gates.
+
+The checkpoint is selected on dev_calibration + a name-disjoint hold-out of
+d1_aug_v1. short_eval and final-eval are only scored after selection (M07b.1).
+"""
+
+from __future__ import annotations
+
+import json
+import random
+
+from pii_redteam.probe_metrics import outcome_for_sample
+
+OUTCOMES = ("exact_hit", "partial_overlap", "boundary_error", "complete_miss")
+
+
+def load_synthetic_rows(path: str) -> list[dict]:
+    """Authored rows -> detector rows. Raises if a stored span is not the entity value."""
+    rows = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            rec = json.loads(line)
+            entities = rec["request"]["entities"]
+            if len(entities) != 1:
+                raise ValueError(f"{rec['id']}: expected one entity, got {len(entities)}")
+            value = entities[0]["value"]
+            text = rec["target"]["text"]
+            start, end = rec["target"]["span"]
+            if text[start:end] != value:
+                raise ValueError(f"{rec['id']}: span {start}:{end} is not {value!r}")
+            rows.append(
+                {
+                    "example_id": rec["id"],
+                    "text": text,
+                    "spans": [{"label": "PERSON", "start": start, "end": end}],
+                    "name": value,
+                }
+            )
+    return rows
+
+
+def split_by_name(rows: list[dict], dev_fraction: float, seed: int) -> tuple[list, list]:
+    """Seeded train/dev split with no exact name (case-folded) in both parts."""
+    by_name: dict[str, list[dict]] = {}
+    for row in rows:
+        by_name.setdefault(row["name"].casefold(), []).append(row)
+    names = sorted(by_name)
+    random.Random(seed).shuffle(names)
+    target = round(len(rows) * dev_fraction)
+    dev_names: set[str] = set()
+    dev_count = 0
+    for name in names:
+        if dev_count >= target:
+            break
+        dev_names.add(name)
+        dev_count += len(by_name[name])
+    train = [r for r in rows if r["name"].casefold() not in dev_names]
+    dev = [r for r in rows if r["name"].casefold() in dev_names]
+    return train, dev
+
+
+def span_metrics(rows: list[dict], preds: list[list[tuple[int, int]]]) -> dict:
+    """Exact-span P/R/F1, per-target outcomes, and predictions touching no gold span.
+
+    Outcome names and rules match the probe (`outcome_for_sample`), so complete_miss
+    here is the same quantity as the M07a go/no-go miss rate.
+    """
+    if len(rows) != len(preds):
+        raise ValueError(f"{len(rows)} rows but {len(preds)} predictions")
+    tp = fp = fn = neg_rows = neg_fp = extra_spans = rows_with_extra = 0
+    outcomes = dict.fromkeys(OUTCOMES, 0)
+    per_row: dict[str, str] = {}
+    for row, pred in zip(rows, preds, strict=True):
+        gold = [(sp["start"], sp["end"]) for sp in row["spans"]]
+        pred_set, gold_set = set(pred), set(gold)
+        tp += len(pred_set & gold_set)
+        fp += len(pred_set - gold_set)
+        fn += len(gold_set - pred_set)
+        if not gold:
+            neg_rows += 1
+            neg_fp += len(pred_set)
+        extra = [p for p in pred_set if not any(p[0] < g[1] and p[1] > g[0] for g in gold_set)]
+        extra_spans += len(extra)
+        rows_with_extra += bool(extra)
+        for span in gold:
+            outcome = outcome_for_sample(span, list(pred_set))
+            outcomes[outcome] += 1
+            per_row[row["example_id"]] = outcome
+    precision = tp / (tp + fp) if tp + fp else 0.0
+    recall = tp / (tp + fn) if tp + fn else 0.0
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    n_targets = sum(outcomes.values())
+    return {
+        "rows": len(rows),
+        "span_precision": round(precision, 4),
+        "span_recall": round(recall, 4),
+        "span_f1": round(f1, 4),
+        "tp": tp,
+        "fp": fp,
+        "fn": fn,
+        "outcomes": outcomes,
+        "complete_miss_rate": round(outcomes["complete_miss"] / n_targets, 4)
+        if n_targets
+        else None,
+        "neg_rows": neg_rows,
+        "neg_false_positives": neg_fp,
+        "extra_pred_spans": extra_spans,
+        "rows_with_extra_pred": rows_with_extra,
+        "per_row_outcome": per_row,
+    }
+
+
+def strip_per_row(metrics: dict) -> dict:
+    return {k: v for k, v in metrics.items() if k != "per_row_outcome"}
+
+
+def is_better_candidate(
+    dev_f1: float,
+    aug_dev_f1: float,
+    best_aug_dev_f1: float | None,
+    d0_dev_f1: float,
+    max_drop: float,
+) -> bool:
+    """Eligible only within max_drop of D0's dev F1; then the highest aug-dev F1 wins.
+
+    Ties keep the earlier epoch.
+    """
+    if dev_f1 < d0_dev_f1 - max_drop:
+        return False
+    return best_aug_dev_f1 is None or aug_dev_f1 > best_aug_dev_f1
+
+
+def paired_changes(d0_metrics: dict, d1_metrics: dict) -> dict:
+    """Same rows under both detectors: exact hits gained and lost by D1."""
+    d0, d1 = d0_metrics["per_row_outcome"], d1_metrics["per_row_outcome"]
+    if d0.keys() != d1.keys():
+        raise ValueError("paired comparison needs the same rows for both detectors")
+    gained = sorted(k for k in d0 if d0[k] != "exact_hit" and d1[k] == "exact_hit")
+    lost = sorted(k for k in d0 if d0[k] == "exact_hit" and d1[k] != "exact_hit")
+    return {"gained_exact": len(gained), "lost_exact": len(lost), "lost_exact_ids": lost}
+
+
+def short_eval_gate(d0_metrics: dict, d1_metrics: dict, min_gain: float) -> dict:
+    gain = round(d1_metrics["span_recall"] - d0_metrics["span_recall"], 4)
+    return {"recall_gain": gain, "min_gain": min_gain, "ok": gain >= min_gain}
+
+
+def no_regression_gate(d0_metrics: dict, d1_metrics: dict, max_drop: float) -> dict:
+    precision_drop = round(d0_metrics["span_precision"] - d1_metrics["span_precision"], 4)
+    recall_drop = round(d0_metrics["span_recall"] - d1_metrics["span_recall"], 4)
+    return {
+        "precision_drop": precision_drop,
+        "recall_drop": recall_drop,
+        "max_drop": max_drop,
+        "ok": precision_drop <= max_drop and recall_drop <= max_drop,
+    }

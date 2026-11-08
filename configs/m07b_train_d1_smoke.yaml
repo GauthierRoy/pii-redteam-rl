@@ -1,0 +1,49 @@
+# LOCAL CPU smoke for train-d1 and d1-final-eval: plumbing only.
+# Starts from ModernBERT with a fresh head because frozen D0 lives on Drive, so
+# its metrics mean nothing. Paths are overridden by the caller where needed.
+
+run_id_prefix: d1-smoke
+seed: 20260920
+repo_dir: null
+cache_dir: /tmp/pii-redteam-cache
+work_dir: /tmp/d1_smoke_out
+rebuild_locks: true
+
+locks:
+  final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
+
+detector:
+  path: answerdotai/ModernBERT-base
+  sha256: null
+  expected_dev_f1: null
+  max_length: 512
+
+limits: { aug_train: 16, aug_dev: 8, replay_pool: 32, dev: 8, short_eval: 8, final_eval: 8 }
+
+data:
+  augmentation:
+    data/synthetic/d1_aug_v1.jsonl: c16e037dd978c5305e510474653ac573a6dde9e560a945da6428c8f31609eb3d
+  aug_exclude_ids: [d1-aug-v1-01395]
+  aug_dev_fraction: 0.10
+  expected_rows: null
+  short_eval:
+    short_eval_v2:
+      data/synthetic/short_eval_v2.jsonl: bd890d64ede13d76cb19a8850992f174564da31cd80e3c1402fa13d1f70968de
+    short_eval_deepseek_v1:
+      data/synthetic/short_eval_deepseek_v1.jsonl: bfe130721e2e6d10a11831ac2d4e27fc9cc95cb8e284e9fff6d37cef2a7785ef
+      data/synthetic/short_eval_human_v1.jsonl: 7ada7f1c6f829f3abbf5cf89c87723bd38a3e00f4cc7bfa73dcc2d7f9b6ceecf
+
+training:
+  epochs: 2
+  batch_size: 4
+  eval_batch_size: 8
+  lr: 2.0e-5
+  replay_per_aug_row: 1
+
+selection:
+  dev_f1_max_drop: 1.0           # a fresh head must still yield a candidate
+
+gates:
+  primary_short_eval_slice: short_eval_v2
+  short_eval_recall_gain_min: 0.10
+  final_eval_max_drop: 0.01
