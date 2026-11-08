@@ -56,11 +56,11 @@ def main() -> None:
     ids = [a["idx"] for a in auth]
     assert ids == list(range(150)), "idx must be 0..149 exactly once"
 
-    rows = []
+    rows: list[dict] = []
     for a in auth:
         span = v2.compute_span(a["text"], a["name"])
         assert span is not None, f"no exact-once span for idx {a['idx']}"
-        row = {
+        row: dict = {
             "id": f"{DATASET}-{a['idx']:04d}",
             "split": "short_eval",
             "request": {

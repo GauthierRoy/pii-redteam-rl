@@ -397,7 +397,7 @@ def _shingles(text: str, n: int) -> set[tuple[str, ...]]:
     return {tuple(words[i : i + n]) for i in range(len(words) - n + 1)}
 
 
-def find_template_reuse(rows: list[dict], n_words: int = TEMPLATE_REUSE_WORDS) -> dict[str, object]:
+def find_template_reuse(rows: list[dict], n_words: int = TEMPLATE_REUSE_WORDS) -> dict[str, list]:
     """Template-reuse detection across rows: >= n_words consecutive shared words.
 
     Returns ``{"pairs": [(i, j)], "rows_involved": {i, ...}}`` over input order.
