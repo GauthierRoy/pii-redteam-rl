@@ -505,6 +505,29 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
 - Manual read of all 200 target names: one likely mislabel, `short-eval-v2-0016`
   ("Taekwondo" reads as a club). PR #18 relabels it to `Petrea`.
 
+## M07b D1 training prepared, NOT yet run (2026-11-08, feat/m07b-train-d1)
+
+- **Code**: `src/pii_redteam/train_d1.py`, `d1_metrics.py`, CLI `train-d1` and
+  `d1-final-eval`, `configs/m07b_train_d1.yaml`, launcher `colab/M07b_train_d1.ipynb`.
+- **Recipe**: D0 fine-tuned 3 epochs at lr 2e-5 on `d1_aug_v1` plus 3 AI4Privacy
+  train-side rows per augmentation row. Selection uses dev only: within 0.01 of D0's dev
+  F1, then the best name-disjoint 10% hold-out of `d1_aug_v1`. `short_eval` is scored after
+  selection. Final-eval is a separate single-use step, off by default. Gates are proposed
+  pending D07.
+- **Verified**: `PYTHONPATH=src uv run --group ml python -m unittest discover -s tests -t .`
+  (166 tests, 2 skipped); CPU smoke of `train-d1` and `d1-final-eval` with
+  `configs/m07b_train_d1_smoke.yaml`, including the single-use refusal. The smoke starts from
+  a fresh ModernBERT head, so its metrics mean nothing.
+- **Unverified until the T4 run**: frozen D0 loading and the 0.9633 reproduction check,
+  fp16 + GradScaler training, real metrics, runtime.
+- **Data finding**: 9 `d1_aug_v1` rows contain a real unlabeled person (e.g. `Dr. Okafor`,
+  `with Marco`), so they are excluded through `aug_exclude_ids` (plan 4.6); the data file is
+  unchanged. Found by reading spaCy and pattern flags; the search is not exhaustive.
+- **Known gap**: no short negative rows exist in training or evaluation, so D1 precision on
+  name-free short messages is not measured. `rows_with_extra_pred` is the only short-text proxy.
+- **D0 caveat**: the D0 notebook counted truncated spans inside DataLoader workers, so its
+  recorded `truncated_spans_lost: 0` is unreliable. `train_d1.py` counts in the main process.
+
 ## Artifacts
 
 - **`EXPERIMENTS.yaml` (repo root)** — append-only registry of every executed run:

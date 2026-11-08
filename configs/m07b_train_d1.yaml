@@ -1,0 +1,59 @@
+# M07b.2/.3: fine-tune frozen D0 into candidate D1. Colab T4 defaults.
+# Settings and gates are committed BEFORE the run. Gates are proposed values until
+# the owner settles D07: changing one after seeing results needs a recorded decision.
+
+run_id_prefix: d1
+seed: 20260920
+repo_dir: /content/pii-redteam-rl
+cache_dir: /content/drive/MyDrive/pii-redteam-rl/cache
+work_dir: /content/drive/MyDrive/pii-redteam-rl
+rebuild_locks: true
+
+locks:
+  final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
+
+detector:
+  path: /content/drive/MyDrive/pii-redteam-rl/d0-20261004-142714/d0-best
+  sha256: 0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb
+  expected_dev_f1: 0.9633        # the run stops if the pipeline does not reproduce this
+  max_length: 512
+
+data:
+  augmentation:
+    data/synthetic/d1_aug_v1.jsonl: c16e037dd978c5305e510474653ac573a6dde9e560a945da6428c8f31609eb3d
+  # Rows with a real person besides the labeled target (plan 4.6: must not train as
+  # negatives). Found by reading spaCy and pattern flags; the search is not exhaustive.
+  aug_exclude_ids:
+    - d1-aug-v1-01132   # Rowan
+    - d1-aug-v1-01364   # Marta
+    - d1-aug-v1-01379   # Dana
+    - d1-aug-v1-01387   # Dr. Okafor
+    - d1-aug-v1-01389   # Dr. Whitfield
+    - d1-aug-v1-01392   # Marco
+    - d1-aug-v1-01395   # Dana
+    - d1-aug-v1-01916   # Juhasz, Odhiambo, Aguirre
+    - d1-aug-v1-01922   # Marc, Amina
+  aug_dev_fraction: 0.10         # name-disjoint hold-out, used for checkpoint selection
+  expected_rows: { train_side: 28713, dev_calibration: 7923 }
+  short_eval:                    # slices are always reported separately (D17)
+    short_eval_v2:
+      data/synthetic/short_eval_v2.jsonl: 0bee4dc3431f558fb5f076d9ac0acc68d8cddf5313646935100ce3b23e68749a
+    short_eval_deepseek_v1:
+      data/synthetic/short_eval_deepseek_v1.jsonl: bfe130721e2e6d10a11831ac2d4e27fc9cc95cb8e284e9fff6d37cef2a7785ef
+
+training:
+  epochs: 3
+  batch_size: 16
+  eval_batch_size: 32            # as D0, so the baseline reproduces its recorded metrics
+  lr: 2.0e-5                     # below D0's 5e-5: this fine-tunes a converged model
+  replay_per_aug_row: 3          # AI4Privacy train_side rows per augmentation row, resampled each epoch
+
+selection:
+  # An epoch is eligible if its dev span-F1 is within this margin of D0's.
+  # Highest aug-dev span-F1 among eligible epochs wins. short_eval is never used.
+  dev_f1_max_drop: 0.01
+
+gates:                           # PROPOSED, pending D07
+  primary_short_eval_slice: short_eval_v2   # different writer from d1_aug_v1 (D17)
+  short_eval_recall_gain_min: 0.10
+  final_eval_max_drop: 0.01      # max precision or recall drop, D0 to D1
