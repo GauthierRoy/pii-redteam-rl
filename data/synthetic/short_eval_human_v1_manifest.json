@@ -1,0 +1,75 @@
+{
+  "dataset": "short_eval_human_v1",
+  "creator": "llm_authored_direct:deepseek-v1-flash",
+  "date": "2026-10-15",
+  "files": {
+    "short_eval": {
+      "path": "data/synthetic/short_eval_human_v1.jsonl",
+      "rows": 50,
+      "sha256": "7ada7f1c6f829f3abbf5cf89c87723bd38a3e00f4cc7bfa73dcc2d7f9b6ceecf"
+    }
+  },
+  "generation_spec": {
+    "method": "each row written manually by an LLM agent, no scripts or templates; every message composed individually and reviewed against the annotation policy",
+    "pool_provenance": {
+      "name_pools": "artifacts/splits/name_pools.json",
+      "heldout_pool_sha256": "5d9b5ca9458ef5b7aff701e124cb56713ae6f6f6b884b54099e4b83035d50250",
+      "names_used": 50,
+      "heldout_names_only": true,
+      "heldout_excluded_artifacts": [
+        "Last Name 1",
+        "Major|Lustrati"
+      ],
+      "train_side_names_used": 0,
+      "independence": "no text from any existing file under data/synthetic/ was read or copied; only the row schema/keys were inspected"
+    },
+    "coverage": {
+      "context_type": {
+        "appointment reminder": 5,
+        "chat message": 5,
+        "email with signature": 5,
+        "form/record line": 5,
+        "forwarded email thread": 5,
+        "informal text with typos": 5,
+        "list/table row": 5,
+        "meeting notes": 5,
+        "support ticket": 5,
+        "third-person report": 5
+      },
+      "name_position": {
+        "start": 12,
+        "middle": 14,
+        "end": 12,
+        "signature": 12
+      },
+      "name_form": {
+        "first": 15,
+        "surname": 24,
+        "full": 11
+      },
+      "length_bucket": {
+        "20-30": 15,
+        "31-45": 18,
+        "46-60": 17
+      }
+    }
+  },
+  "validation": {
+    "validator": "pii_redteam.sft_synth_v2.validate_row over all 50 rows",
+    "non_provenance_failures": 0,
+    "per_check": {
+      "schema": "50/50",
+      "exact_once": "50/50",
+      "span": "50/50",
+      "length": "50/50",
+      "position": "50/50",
+      "pii_containment": "50/50",
+      "refusal_meta": "50/50"
+    },
+    "exact_dup_pairs": 0,
+    "near_dup_pairs_gt_0.7": 0,
+    "top10_opening_share": 0.2,
+    "name_at_start_share": 0.24,
+    "provenance_flags": "50/50 expected only: validate_row hardcodes provenance == 'template_paraphrase'; this file intentionally uses the task-mandated provenance 'llm_authored_direct:deepseek-v1-flash'"
+  }
+}
