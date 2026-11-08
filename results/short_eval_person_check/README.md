@@ -23,7 +23,8 @@ Each name was read in its surrounding text.
 
 - **Likely mislabelled:** `short-eval-v2-0016`, "After the office manager explained the
   clash to Taekwondo, both clubs agreed…". It reads as a club, but it is labelled PERSON.
-  The row has not been changed.
+  PR #18 relabels it to the held-out name `Petrea`; the files in this directory record the
+  run on the original row.
 - **Unusual but acceptable:** an honorific on a name that looks like a given name, such as
   "Ms. Lívio" and "Mr. Aiden". These labels are still person mentions.
 
