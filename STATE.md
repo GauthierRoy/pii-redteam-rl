@@ -415,6 +415,50 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
     (flag-only; LLM-judge extra-person + person-sense pass NOT run — needs
     Qwen3.5-0.8B weights; script ready at `scripts/person_check_v2.py`).
 
+## short_eval_v2 authored (2026-10-15, feat/short-eval-v2, STEP 2)
+
+- **150 rows, all texts written directly by the LLM, one by one** — no template
+  bank, no paraphrase/synonym tools, no filler (provenance
+  `llm_authored_direct:glm-5.3`). Authored drafts preserved in
+  `data/synthetic/short_eval_v2_batches/` (5 files x 30); finalized by
+  `scripts/finalize_short_eval_v2.py` with code-computed spans.
+- **Names**: 150 distinct held-out names, one row each (never training-side,
+  never final-eval content).
+- **Coverage**: 15 rows per context type (all 10); positions start/middle/end
+  40 each + signature 30; length buckets 50 each (20-30 / 31-45 / 46-60);
+  name_form first 68 / surname 68 / full 14.
+- **Validation** (hard asserts in the finalizer, all passed):
+  `validate_row` 150/150 (schema, exact-once, spans, position, length, hygiene
+  incl. filler checks); 0 exact dupes; 0 near-dupes (>0.7); **0 within-set
+  template-reuse pairs (>= 8-word run)**; **0 8-word overlap with spark_sft_v1
+  train/dev and the deprecated short_eval_v1**. top-10 opening share 0.0667;
+  name-at-start 0.2667.
+- **Independent extra-person check**: spaCy `en_core_web_sm` pass (CPU,
+  ephemeral env) flagged 9/150, all false positives ("Cheers" sign-off cues,
+  "Mill Lane", "Keys", "Volunteer", "metadata") — no real extra person names.
+  LLM-judge extra-person + person-sense pass NOT run (needs Qwen3.5-0.8B
+  weights; `scripts/person_check_v2.py` ready).
+- **Artifacts**: `data/synthetic/short_eval_v2.jsonl` (sha256
+  `bd890d64ede13d76cb19a8850992f174564da31cd80e3c1402fa13d1f70968de`) +
+  `data/synthetic/short_eval_v2_manifest.json`. Human-written slice slot
+  reserved: `data/synthetic/short_eval_human_v1.jsonl` (~50 rows, DeepSeek,
+  PR #11; provenance `human_authored`, same schema/checks).
+- **Name overlap with short_eval_human_v1 (PR #11)**: after writing
+  independently (as required), a names-only comparison found 38 shared names.
+  25 single-name rows were revised to unused held-out names (reviewed
+  substitutions only; texts otherwise untouched). Remaining overlap: **13
+  multi-token names — forced**: the pool holds only 14 usable multi-token
+  held-out names and both eval files use them, so zero overlap is impossible
+  without changing name_form coverage.
+- **Provenance label note**: plan text says `llm_authored_direct:glm-5.2`;
+  this session's active model is **GLM-5.3** (config `active_model =
+  glm-5.3`), so the accurate label `llm_authored_direct:glm-5.3` is used.
+- **Validator quirk found (not changed)**: `_SIGNOFF_CUE`'s second
+  alternative omits `signed`, so a "Signed,\nName" close is not detected as a
+  signature; rows were authored with the accepted cue set (Regards/Best/
+  Thanks/Cheers/--). Proposed fix recorded for a future decision; no
+  pre-committed threshold changed.
+
 ## Artifacts
 
 - **`EXPERIMENTS.yaml` (repo root)** — append-only registry of every executed run:
@@ -433,11 +477,10 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
 
 ## Next three actions (post-D13)
 
-1. **M07b.1:** build `short_eval` — short-message eval set with held-out names
-   plus a style-independent slice (~50 human-written or other-LLM messages);
-   manifest + sha; no training/prompt authoring from it. MUST be independent
-   of the spark-sft-v1 template bank (`data/deprecated/` file is contaminated,
-   D16).
+1. **M07b.1:** `short_eval_v2` DONE (2026-10-15, `feat/short-eval-v2`,
+   `data/synthetic/short_eval_v2.jsonl`, 150 rows, llm_authored_direct, zero
+   template overlap with spark_sft_v1). Remaining: the ~50-row human-written
+   slice (`data/synthetic/short_eval_human_v1.jsonl`, owner-provided).
 2. **M07b.2:** Stage-1 augmentation: generate plain short-message data with the
    base 2B over the frozen bank (validated, contract-passing only) and/or author
    the Spark SFT slice; fine-tune D0 -> **D1**; report D0 vs D1 on short_eval AND
