@@ -61,6 +61,20 @@ class TestValidation(unittest.TestCase):
         )
         self.assertFalse(validation.validate_candidate(text="", supplied_name="Ana Ruiz")[0])
 
+    def test_candidate_name_inside_longer_word_is_not_a_mention(self):
+        self.assertEqual(
+            validation.validate_candidate(
+                text="The Annual review is on Monday", supplied_name="Ann"
+            ),
+            (False, "missing supplied name"),
+        )
+        ok, _ = validation.validate_candidate(
+            text="Ann sent the Annual review on Monday", supplied_name="Ann"
+        )
+        self.assertTrue(ok)
+        ok, _ = validation.validate_candidate(text="We read Ann's review", supplied_name="Ann")
+        self.assertTrue(ok)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,7 +7,8 @@ local reference-pipeline replica and every such number is flagged
 "pending_scorer_verification" until the scorer fix lands.
 
 Raw outputs are ALL saved (valid + invalid, raw completion text) so the run can
-be re-scored later without regenerating.
+be re-scored later without regenerating. They reach samples_raw.partial.jsonl after
+every batch, so a crash or disconnect loses at most one batch of generations.
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ from pii_redteam.prompt_v2 import (
     render_prompt_v2,
 )
 from pii_redteam.prompt_v2 import variant_threshold_report as threshold_report
+from pii_redteam.run_io import append_jsonl, write_jsonl
 from pii_redteam.validity_v2 import classify_sample_v2
 
 SCORER_NOTE = "official probe scorer (probe._score_with_d0), verified vs the D0 eval pipeline by the M07a scorer-sanity regression (PR #5)"
@@ -83,8 +85,12 @@ def _generate(
     batch_prompts,
     log_prefix,
     device,
+    sink_path=None,
 ):
-    """Batched sampling for one (variant, temperature) cell; left padding."""
+    """Batched sampling for one (variant, temperature) cell; left padding.
+
+    When `sink_path` is set, each batch is appended there as soon as it is decoded.
+    """
     tok.padding_side = "left"
     end_id = tok.eos_token_id
     results = []
@@ -101,6 +107,7 @@ def _generate(
         }
         gen = model.generate(**enc, **gen_kwargs)  # stub union
         n_prompt = enc["input_ids"].shape[1]
+        batch_results = []
         for j, request in enumerate(chunk):
             for k in range(n):
                 seq = gen[j * n + k][n_prompt:]
@@ -108,7 +115,7 @@ def _generate(
                 n_tok = (
                     int((seq == end_id).nonzero()[0].item() + 1) if finished else int(seq.shape[0])
                 )
-                results.append(
+                batch_results.append(
                     {
                         "request_id": request["request_id"],
                         "variant": variant,
@@ -123,6 +130,9 @@ def _generate(
                         "truncated": not finished,
                     }
                 )
+        results += batch_results
+        if sink_path:
+            append_jsonl(sink_path, batch_results)
         if (i // batch_prompts) % 5 == 0:
             print(f"  {log_prefix}: {i + len(chunk)}/{len(bank)} requests")
     return results
@@ -161,6 +171,16 @@ def run_compare(config: dict, repo_dir: str) -> dict:
     rng = random.Random(config["seed"])
     gen_cfg = config["generation"]
     device, gpu, dtype = _device_dtype()
+
+    # ---- run dir first: every later stage can then save its output
+    run_id = started.strftime(f"{config['run_id_prefix']}-%Y%m%d-%H%M%S")
+    work_dir = config["work_dir"]
+    if not os.path.isabs(work_dir):
+        work_dir = os.path.join(repo_dir, work_dir)
+    work_dir = os.path.join(work_dir, run_id)
+    os.makedirs(work_dir, exist_ok=True)
+    partial_path = os.path.join(work_dir, "samples_raw.partial.jsonl")
+    samples_path = os.path.join(work_dir, "samples_raw.jsonl")
 
     # ---- bank lock (committed v2 bank; frozen v1 bank untouched)
     bank_path = os.path.join(repo_dir, config["bank"]["path"])
@@ -223,6 +243,7 @@ def run_compare(config: dict, repo_dir: str) -> dict:
                 batch_prompts=gen_cfg["batch_prompts"],
                 log_prefix=f"{variant}|t={temp}",
                 device=device,
+                sink_path=partial_path,
             )
             samples += cell
             done += len(cell)
@@ -254,6 +275,10 @@ def run_compare(config: dict, repo_dir: str) -> dict:
                     (s["target_span"][0] + s["target_span"][1]) / 2 / max(len(s["text"]), 1)
                 )
             s.pop("pred_spans", None)
+
+    # Scores are expensive too: save them before any metric code can fail.
+    write_jsonl(samples_path, samples)
+    os.remove(partial_path)
 
     # ---- metrics + thresholds per (variant, temperature)
     report: dict = {
@@ -340,20 +365,10 @@ def run_compare(config: dict, repo_dir: str) -> dict:
     print("RECOMMENDATION:", report["recommendation"])
 
     # ---- artifacts: run dir + raw samples (re-scoreable)
-    run_id = datetime.datetime.now(datetime.UTC).strftime(
-        f"{config['run_id_prefix']}-%Y%m%d-%H%M%S"
-    )
-    work_dir = config["work_dir"]
-    if not os.path.isabs(work_dir):
-        work_dir = os.path.join(repo_dir, work_dir)
-    work_dir = os.path.join(work_dir, run_id)
-    os.makedirs(work_dir, exist_ok=True)
-    with open(os.path.join(work_dir, "samples_raw.jsonl"), "w", encoding="utf-8") as f:
-        for s in samples:
-            f.write(json.dumps(s, ensure_ascii=False) + "\n")
+    write_jsonl(samples_path, samples)
     report["run_id"] = run_id
     report["finished_utc"] = datetime.datetime.now(datetime.UTC).isoformat()
-    report["samples_raw_path"] = os.path.join(work_dir, "samples_raw.jsonl")
+    report["samples_raw_path"] = samples_path
     report["d0_scored_samples"] = scored
     report["experiments_entry"] = {
         "run_id": run_id,
