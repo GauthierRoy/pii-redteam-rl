@@ -52,7 +52,7 @@
     "within_set_template_reuse_pairs": 0,
     "cross_dataset_8gram_overlap": {
       "short_eval_v2": 0,
-      "short_eval_human_v1": 0,
+      "short_eval_deepseek_v1": 0,
       "deprecated_short_eval_v1": 0,
       "spark_sft_v1_train_dev": 0
     },

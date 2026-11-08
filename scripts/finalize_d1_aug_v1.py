@@ -4,7 +4,7 @@ Reads the authored batch files (data/synthetic/d1_aug_v1_batches/), builds
 final rows with code-computed spans, hard-fails on ANY validation error
 (including filler and placeholder-span checks), requires zero template reuse
 within the set and zero 8-word overlap with the evaluation sets (short_eval_v2,
-short_eval_human_v1 when present, deprecated short_eval_v1) and with
+short_eval_deepseek_v1 when present, deprecated short_eval_v1) and with
 spark_sft_v1 train/dev, then writes:
 
   data/synthetic/d1_aug_v1.jsonl       (2000 rows, split sft_train)
@@ -39,7 +39,7 @@ ROWS = 2000
 
 EVAL_OVERLAP_PATHS = {
     "short_eval_v2": ["data/synthetic/short_eval_v2.jsonl"],
-    "short_eval_human_v1": ["data/synthetic/short_eval_human_v1.jsonl"],
+    "short_eval_deepseek_v1": ["data/synthetic/short_eval_deepseek_v1.jsonl"],
     "deprecated_short_eval_v1": ["data/deprecated/spark_sft_v1_short_eval_v1.jsonl"],
 }
 TRAIN_OVERLAP_PATHS = {

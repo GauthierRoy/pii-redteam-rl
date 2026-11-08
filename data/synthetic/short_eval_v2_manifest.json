@@ -54,9 +54,10 @@
     "name_at_start_share": 0.2667,
     "independent_extra_person_check": "spaCy pass run flag-only (see STATE.md); LLM-judge pass pending weights (scripts/person_check_v2.py)"
   },
-  "human_slice_slot": {
-    "path": "data/synthetic/short_eval_human_v1.jsonl",
-    "provenance": "human_authored",
-    "rows": "~50 (owner-provided; same schema; validated by the same checks)"
+  "companion_slice": {
+    "path": "data/synthetic/short_eval_deepseek_v1.jsonl",
+    "provenance": "llm_authored_direct:deepseek-v1-flash",
+    "rows": 50,
+    "note": "not human-written; shares its writer with d1_aug_v1 (D17)"
   }
 }

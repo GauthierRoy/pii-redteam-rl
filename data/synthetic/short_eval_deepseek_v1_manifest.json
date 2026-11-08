@@ -1,12 +1,12 @@
 {
-  "dataset": "short_eval_human_v1",
+  "dataset": "short_eval_deepseek_v1",
   "creator": "llm_authored_direct:deepseek-v1-flash",
   "date": "2026-10-15",
   "files": {
     "short_eval": {
-      "path": "data/synthetic/short_eval_human_v1.jsonl",
+      "path": "data/synthetic/short_eval_deepseek_v1.jsonl",
       "rows": 50,
-      "sha256": "7ada7f1c6f829f3abbf5cf89c87723bd38a3e00f4cc7bfa73dcc2d7f9b6ceecf"
+      "sha256": "bfe130721e2e6d10a11831ac2d4e27fc9cc95cb8e284e9fff6d37cef2a7785ef"
     }
   },
   "generation_spec": {
@@ -70,6 +70,12 @@
     "near_dup_pairs_gt_0.7": 0,
     "top10_opening_share": 0.2,
     "name_at_start_share": 0.24,
-    "provenance_flags": "50/50 expected only: validate_row hardcodes provenance == 'template_paraphrase'; this file intentionally uses the task-mandated provenance 'llm_authored_direct:deepseek-v1-flash'"
-  }
+    "provenance_flags": "none: validate_row now accepts llm_authored_direct:<writer> provenance"
+  },
+  "renamed_from": {
+    "dataset": "short_eval_human_v1",
+    "sha256": "7ada7f1c6f829f3abbf5cf89c87723bd38a3e00f4cc7bfa73dcc2d7f9b6ceecf",
+    "change": "row ids and file name only; request, target and provenance unchanged (D17)"
+  },
+  "writer_note": "Written by the same LLM as data/synthetic/d1_aug_v1.jsonl, so it cannot show that D1 gains are independent of the training writer. No human-written eval data exists yet (D17)."
 }

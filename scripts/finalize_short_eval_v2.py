@@ -9,9 +9,9 @@ deprecated short_eval_v1, then writes:
   data/synthetic/short_eval_v2.jsonl   (150 rows, provenance llm_authored_direct)
   data/synthetic/short_eval_v2_manifest.json
 
-A ~50-row human-written slice slot is reserved at
-data/synthetic/short_eval_human_v1.jsonl (same schema, provenance
-human_authored; owner-provided, validated by the same checks when it lands).
+The 50-row companion slice is data/synthetic/short_eval_deepseek_v1.jsonl (same
+schema and checks). It was written by an LLM, not by humans, and shares its
+writer with the D1 training data (D17).
 
 Usage: PYTHONPATH=src python3 scripts/finalize_short_eval_v2.py
 """
@@ -33,7 +33,7 @@ from pii_redteam import sft_synth_v2 as v2  # noqa: E402
 BATCH_GLOB = "data/synthetic/short_eval_v2_batches/batch_*.jsonl"
 OUT = "data/synthetic/short_eval_v2.jsonl"
 MANIFEST = "data/synthetic/short_eval_v2_manifest.json"
-HUMAN_SLOT = "data/synthetic/short_eval_human_v1.jsonl"
+COMPANION_SLICE = "data/synthetic/short_eval_deepseek_v1.jsonl"
 PROVENANCE = "llm_authored_direct:glm-5.3"
 DATASET = "short-eval-v2"
 
@@ -151,10 +151,11 @@ def main() -> None:
             "independent_extra_person_check": "spaCy pass run flag-only (see STATE.md); "
             "LLM-judge pass pending weights (scripts/person_check_v2.py)",
         },
-        "human_slice_slot": {
-            "path": HUMAN_SLOT,
-            "provenance": "human_authored",
-            "rows": "~50 (owner-provided; same schema; validated by the same checks)",
+        "companion_slice": {
+            "path": COMPANION_SLICE,
+            "provenance": "llm_authored_direct:deepseek-v1-flash",
+            "rows": 50,
+            "note": "not human-written; shares its writer with d1_aug_v1 (D17)",
         },
     }
     with open(MANIFEST, "w", encoding="utf-8") as f:
