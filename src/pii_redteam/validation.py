@@ -7,6 +7,8 @@ that limitation is recorded here and enforced by audit in M07/M09.
 
 from __future__ import annotations
 
+from .probe_metrics import name_spans
+
 PERSON = "PERSON"
 
 
@@ -42,14 +44,19 @@ def validate_annotated_example(ex: dict) -> list[str]:
 
 
 def validate_candidate(*, text: str, supplied_name: str, max_len: int = 500) -> tuple[bool, str]:
-    """Hard validity gate for a generated positive (M07.1 subset at M01)."""
+    """Hard validity gate for a generated positive (M07.1 subset at M01).
+
+    Occurrences use word boundaries, like the probe and the dataset validators. A name
+    inside a longer word ("Ann" in "Annual") is not a mention: the detector would rightly
+    miss it, which a substring match would turn into a maximum reward.
+    """
     if not isinstance(text, str) or not text:
         return False, "empty output"
     if len(text) > max_len:
         return False, f"exceeds max_len {max_len}"
     if not supplied_name:
         return False, "no supplied name"
-    count = text.count(supplied_name)
+    count = len(name_spans(text, supplied_name))
     if count == 0:
         return False, "missing supplied name"
     if count > 1:

@@ -35,6 +35,7 @@ from pii_redteam.probe_metrics import (
     threshold_report,
 )
 from pii_redteam.requests import render_prompt
+from pii_redteam.run_io import append_jsonl, write_jsonl
 
 
 def _sha256(path: str) -> str:
@@ -116,8 +117,13 @@ def _generate(
     batch_prompts,
     log_prefix,
     device,
+    sink_path=None,
 ):
-    """Batched sampling (or greedy when temperature is None); left padding."""
+    """Batched sampling (or greedy when temperature is None); left padding.
+
+    When `sink_path` is set, each batch is appended there as soon as it is decoded,
+    so a crash or disconnect loses at most one batch of generations.
+    """
     tok.padding_side = "left"
     end_id = tok.eos_token_id
     results = []
@@ -136,6 +142,7 @@ def _generate(
             }
         gen = model.generate(**enc, **gen_kwargs)  # stub union
         n_prompt = enc["input_ids"].shape[1]
+        batch_results = []
         for j, request in enumerate(chunk):
             reps = n if temperature is not None else 1
             for k in range(reps):
@@ -144,7 +151,7 @@ def _generate(
                 n_tok = (
                     int((seq == end_id).nonzero()[0].item() + 1) if finished else int(seq.shape[0])
                 )
-                results.append(
+                batch_results.append(
                     {
                         "request_id": request["request_id"],
                         "name": request["task"]["entities"][0]["value"],
@@ -156,6 +163,9 @@ def _generate(
                         "truncated": not finished,
                     }
                 )
+        results += batch_results
+        if sink_path:
+            append_jsonl(sink_path, batch_results)
         if (i // batch_prompts) % 3 == 0:
             print(f"  {log_prefix}: {i + len(chunk)}/{len(requests)} requests")
     return results
@@ -330,6 +340,13 @@ def run_probe(config: dict, repo_dir: str) -> dict:
     device, gpu, dtype = _device_dtype()
     checks: dict[str, dict] = {}
 
+    # ---- run dir first: every later stage can then save its output
+    run_id = started.strftime(f"{config['run_id_prefix']}-%Y%m%d-%H%M%S")
+    work_dir = os.path.join(config["work_dir"], run_id)
+    os.makedirs(work_dir, exist_ok=True)
+    partial_path = os.path.join(work_dir, "samples.partial.jsonl")
+    samples_path = os.path.join(work_dir, "samples.jsonl")
+
     def check(name, ok, detail=""):
         checks[name] = {"ok": bool(ok), "detail": str(detail)}
         print(f"[{'PASS' if ok else 'FAIL'}] {name}" + (f" -- {detail}" if detail else ""))
@@ -406,6 +423,7 @@ def run_probe(config: dict, repo_dir: str) -> dict:
             batch_prompts=gen_cfg["batch_prompts"],
             log_prefix=f"t={temp}",
             device=device,
+            sink_path=partial_path,
         )
     greedy: list[dict] = []
     if gen_cfg.get("greedy_reference", True):
@@ -421,6 +439,7 @@ def run_probe(config: dict, repo_dir: str) -> dict:
             batch_prompts=gen_cfg["batch_prompts"],
             log_prefix="greedy",
             device=device,
+            sink_path=partial_path,
         )
 
     # ---- validation (spec 3)
@@ -451,6 +470,10 @@ def run_probe(config: dict, repo_dir: str) -> dict:
     for s in samples + greedy:
         s.pop("pred_spans", None)
         s.pop("d0_truncated_target", None)
+
+    # Scores are expensive too: save them before any metric code can fail.
+    write_jsonl(samples_path, samples + greedy)
+    os.remove(partial_path)
 
     # determinism: rescore fresh copies of 50 valid texts and compare
     originals = [x for x in samples if x["status"] == "valid"][:50]
@@ -511,14 +534,7 @@ def run_probe(config: dict, repo_dir: str) -> dict:
     print("RECOMMENDATION:", report["recommendation"])
 
     # ---- artifacts (spec 8)
-    run_id = datetime.datetime.now(datetime.UTC).strftime(
-        f"{config['run_id_prefix']}-%Y%m%d-%H%M%S"
-    )
-    work_dir = os.path.join(config["work_dir"], run_id)
-    os.makedirs(work_dir, exist_ok=True)
-    with open(os.path.join(work_dir, "samples.jsonl"), "w", encoding="utf-8") as f:
-        for s in samples + greedy:
-            f.write(json.dumps(s, ensure_ascii=False) + "\n")
+    write_jsonl(samples_path, samples + greedy)
     report["run_id"] = run_id
     report["finished_utc"] = datetime.datetime.now(datetime.UTC).isoformat()
     report["samples_total"] = len(samples) + len(greedy)

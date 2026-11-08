@@ -33,6 +33,25 @@ class TestRewards(unittest.TestCase):
         loopy = " ".join(["bill"] * 20)
         self.assertLess(rewards.repetition_penalty(loopy), 0.0)
 
+    def test_name_hidden_in_longer_word_gets_invalid_reward(self):
+        r = rewards.score_candidate(
+            text="The Annual review is on Monday", supplied_name="Ann", detector=FakeDetector()
+        )
+        self.assertFalse(r["valid"])
+        self.assertEqual(r["total"], rewards.INVALID_TOTAL)
+
+    def test_detector_scores_the_real_mention_not_an_earlier_substring(self):
+        class RecordingDetector:
+            def score_target(self, text, start, end):
+                self.target = text[start:end], start
+                return 0.5
+
+        detector = RecordingDetector()
+        rewards.score_candidate(
+            text="The Annual note went to Ann today", supplied_name="Ann", detector=detector
+        )
+        self.assertEqual(detector.target, ("Ann", 24))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -22,6 +22,7 @@ def repetition_penalty(text: str) -> float:
 
 def score_candidate(*, text: str, supplied_name: str, detector, max_len: int = 500) -> dict:
     """Score one generated positive. `detector` provides `score_target` (0..1)."""
+    from .probe_metrics import name_spans
     from .validation import validate_candidate
 
     valid, reason = validate_candidate(text=text, supplied_name=supplied_name, max_len=max_len)
@@ -34,8 +35,7 @@ def score_candidate(*, text: str, supplied_name: str, detector, max_len: int = 5
             "repetition": 0.0,
             "total": INVALID_TOTAL,
         }
-    start = text.index(supplied_name)
-    end = start + len(supplied_name)
+    start, end = name_spans(text, supplied_name)[0]
     difficulty = min(
         VALID_MAX, max(VALID_MIN, 1.0 - float(detector.score_target(text, start, end)))
     )
