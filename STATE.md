@@ -439,7 +439,7 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
   LLM-judge extra-person + person-sense pass NOT run (needs Qwen3.5-0.8B
   weights; `scripts/person_check_v2.py` ready).
 - **Artifacts**: `data/synthetic/short_eval_v2.jsonl` (sha256
-  `bd890d64ede13d76cb19a8850992f174564da31cd80e3c1402fa13d1f70968de`) +
+  `0bee4dc3431f558fb5f076d9ac0acc68d8cddf5313646935100ce3b23e68749a`; row 0016 relabeled 2026-11-08, see below) +
   `data/synthetic/short_eval_v2_manifest.json`. Human-written slice slot
   reserved: `data/synthetic/short_eval_human_v1.jsonl` (~50 rows, DeepSeek,
   PR #11; provenance `human_authored`, same schema/checks).
@@ -450,6 +450,11 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
   multi-token names — forced**: the pool holds only 14 usable multi-token
   held-out names and both eval files use them, so zero overlap is impossible
   without changing name_form coverage.
+- **Row 0016 relabeled (2026-11-08)**: "explained the clash to Taekwondo, both
+  clubs agreed" read as a club but was labeled PERSON. The name is now the
+  unused held-out `Petrea`; the sentence is otherwise unchanged. Previous sha256
+  `bd890d64ede13d76cb19a8850992f174564da31cd80e3c1402fa13d1f70968de`. No detector
+  has been scored on this set yet.
 - **Provenance label note**: plan text says `llm_authored_direct:glm-5.2`;
   this session's active model is **GLM-5.3** (config `active_model =
   glm-5.3`), so the accurate label `llm_authored_direct:glm-5.3` is used.
