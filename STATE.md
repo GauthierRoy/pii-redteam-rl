@@ -441,9 +441,10 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
 - **Artifacts**: `data/synthetic/short_eval_v2.jsonl` (sha256
   `bd890d64ede13d76cb19a8850992f174564da31cd80e3c1402fa13d1f70968de`) +
   `data/synthetic/short_eval_v2_manifest.json`. Human-written slice slot
-  reserved: `data/synthetic/short_eval_human_v1.jsonl` (~50 rows, DeepSeek,
-  PR #11; provenance `human_authored`, same schema/checks).
-- **Name overlap with short_eval_human_v1 (PR #11)**: after writing
+  reserved: `data/synthetic/short_eval_deepseek_v1.jsonl` (renamed from
+  `short_eval_human_v1`, see D17; 50 rows, DeepSeek, PR #11; provenance
+  `llm_authored_direct:deepseek-v1-flash`, same schema/checks).
+- **Name overlap with short_eval_deepseek_v1 (PR #11)**: after writing
   independently (as required), a names-only comparison found 38 shared names.
   25 single-name rows were revised to unused held-out names (reviewed
   substitutions only; texts otherwise untouched). Remaining overlap: **13
@@ -479,7 +480,7 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
   `validate_row` 2000/2000 (schema, exact-once, spans, position, length, hygiene
   incl. filler checks); 0 exact dupes; 0 near-dupes (>0.7); **0 within-set
   template-reuse pairs (>= 8-word run)**; **0 8-word overlap with
-  `short_eval_v2`, `short_eval_human_v1` (PR #11 draft), the deprecated
+  `short_eval_v2`, `short_eval_deepseek_v1` (PR #11 draft), the deprecated
   short_eval_v1, and `spark_sft_v1` train/dev**. top-10 opening share 0.0280;
   name-at-start 0.2500.
 - **Artifacts**: `data/synthetic/d1_aug_v1.jsonl` (sha256
@@ -511,8 +512,10 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
 
 1. **M07b.1:** `short_eval_v2` DONE (2026-10-15, `feat/short-eval-v2`,
    `data/synthetic/short_eval_v2.jsonl`, 150 rows, llm_authored_direct, zero
-   template overlap with spark_sft_v1). Remaining: the ~50-row human-written
-   slice (`data/synthetic/short_eval_human_v1.jsonl`, owner-provided).
+   template overlap with spark_sft_v1). Companion slice
+   `data/synthetic/short_eval_deepseek_v1.jsonl` (50 rows) is LLM-written and
+   shares its writer with `d1_aug_v1` (D17); report the slices separately. No
+   human-written eval data exists yet.
 2. **M07b.2:** Stage-1 augmentation: generate plain short-message data with the
    base 2B over the frozen bank (validated, contract-passing only) and/or author
    the Spark SFT slice; fine-tune D0 -> **D1**; report D0 vs D1 on short_eval AND
