@@ -63,7 +63,7 @@ def main() -> None:
     with torch.no_grad():
         for i in range(0, len(rows), args.batch):
             chunk = rows[i : i + args.batch]
-            enc = tok(
+            enc = tok(  # ty: ignore[call-non-callable]  # stub union
                 [t for _, t, _ in chunk],
                 return_offsets_mapping=True,
                 truncation=True,

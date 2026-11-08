@@ -76,5 +76,8 @@ respect-ignore-files = true
 
 # Heavy ML deps live in the optional `ml` group (locked, installed on demand).
 # Ignore unresolved imports; ruff still catches typos via F821.
+# The `ty: ignore` comments for transformers stubs only apply when the `ml` group is
+# installed. CI runs without it, where they look unused, so that check can't be fatal.
 [tool.ty.rules]
 unresolved-import = "ignore"
+unused-ignore-comment = "ignore"
