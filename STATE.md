@@ -492,6 +492,14 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
   retargeted after #10 merged); re-landed on main by `fix/land-d1-aug-v1`
   (2026-11-08), finalizer re-run with an identical sha256.
 
+## Eval-set person check (2026-11-08, `results/short_eval_person_check/`)
+
+- Person-sense judge (Qwen3.5-0.8B, local CPU) is NOT a usable gate: on hand-written
+  controls it said "person" for 10/10 person uses and 8/10 clear non-person uses.
+  Its 0 rejections on the 200 eval rows are not evidence the labels are right.
+- Manual read of all 200 target names: one likely mislabel, `short-eval-v2-0016`
+  ("Taekwondo" reads as a club). Row not changed; owner decision pending.
+
 ## Artifacts
 
 - **`EXPERIMENTS.yaml` (repo root)** — append-only registry of every executed run:
