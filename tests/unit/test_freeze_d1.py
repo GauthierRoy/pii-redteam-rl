@@ -1,3 +1,5 @@
+import copy
+import inspect
 import json
 import os
 import shutil
@@ -6,10 +8,17 @@ import unittest
 
 import yaml
 
-from pii_redteam.d1_metrics import load_negative_rows, negative_fp_metrics, span_metrics
+from pii_redteam.d1_metrics import (
+    FREEZE_RULE,
+    load_negative_rows,
+    negative_fp_metrics,
+    select_freeze_epoch,
+    span_metrics,
+)
 from pii_redteam.freeze_gates import (
     MANIFEST_FILE,
     build_freeze_manifest,
+    candidate_table,
     check_counts,
     dir_file_hashes,
     file_sha256,
@@ -18,6 +27,7 @@ from pii_redteam.freeze_gates import (
     freeze_decision,
     frozen_dir_for,
     make_check,
+    plan_candidates,
     precision_guard,
     probe_comparison,
     probe_gate,
@@ -206,6 +216,12 @@ class ShortNegativesSlotTest(TempDirTest):
         self.assertIsNone(chk["ok"])
         self.assertFalse(chk["required"])
         self.assertIn("skipped: not provided", chk["detail"])
+
+    def test_pinned_but_missing_blocks(self):
+        resolved = resolve_optional_input(self.tmp, "missing.jsonl", "a" * 64)
+        self.assertEqual(resolved["state"], "missing")
+        chk = short_negatives_check(resolved)
+        self.assertEqual((chk["status"], chk["required"]), ("fail", True))
 
     def test_present_but_unpinned_or_mismatched_blocks(self):
         path = self.write_jsonl("neg.jsonl", [_neg_record("n1")])
@@ -446,33 +462,192 @@ class ManifestAndCopyTest(TempDirTest):
             build_freeze_manifest(files={"config.json": "x"}, **self.fields())
 
 
-class FreezeConfigTest(unittest.TestCase):
-    def setUp(self):
-        with open(os.path.join(REPO, "configs", "m07b_freeze_d1.yaml"), encoding="utf-8") as f:
-            self.cfg = yaml.safe_load(f)
+FREEZE_CONFIGS = ("m07b_freeze_d1.yaml", "m07b_freeze_d1_v2.yaml")
+V1_EPOCH2_SHA = "7c66f29e8c372756dfb37a58eb5e2e60c863ffdfc9704316149ab1776f32deb4"
 
+
+def _load_yaml(*parts):
+    with open(os.path.join(REPO, *parts), encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+class FreezeConfigTest(unittest.TestCase):
     def test_pinned_configs_match_the_repo(self):
-        source, probe = self.cfg["source"], self.cfg["probe"]
-        self.assertEqual(
-            file_sha256(os.path.join(REPO, source["train_config"])),
-            source["train_config_sha256"],
-        )
-        self.assertEqual(file_sha256(os.path.join(REPO, probe["config"])), probe["config_sha256"])
+        for name in FREEZE_CONFIGS:
+            cfg = _load_yaml("configs", name)
+            source, probe = cfg["source"], cfg["probe"]
+            with self.subTest(config=name):
+                self.assertEqual(
+                    file_sha256(os.path.join(REPO, source["train_config"])),
+                    source["train_config_sha256"],
+                )
+                self.assertEqual(
+                    file_sha256(os.path.join(REPO, probe["config"])), probe["config_sha256"]
+                )
 
     def test_locks_agree_with_the_training_and_probe_configs(self):
-        with open(os.path.join(REPO, self.cfg["source"]["train_config"]), encoding="utf-8") as f:
-            train = yaml.safe_load(f)
-        with open(os.path.join(REPO, self.cfg["probe"]["config"]), encoding="utf-8") as f:
-            probe = yaml.safe_load(f)
-        locks = self.cfg["locks"]
-        self.assertEqual(locks["final_eval_sha256"], train["locks"]["final_eval_sha256"])
-        self.assertEqual(locks["d0_sha256"], train["detector"]["sha256"])
-        self.assertEqual(locks["d0_sha256"], probe["detector"]["sha256"])
+        for name in FREEZE_CONFIGS:
+            cfg = _load_yaml("configs", name)
+            train = _load_yaml(cfg["source"]["train_config"])
+            probe = _load_yaml(cfg["probe"]["config"])
+            locks = cfg["locks"]
+            with self.subTest(config=name):
+                self.assertEqual(locks["final_eval_sha256"], train["locks"]["final_eval_sha256"])
+                self.assertEqual(locks["d0_sha256"], train["detector"]["sha256"])
+                self.assertEqual(locks["d0_sha256"], probe["detector"]["sha256"])
 
-    def test_short_negatives_pin_matches_when_the_file_exists(self):
-        neg = self.cfg["short_negatives"]
-        resolved = resolve_optional_input(REPO, neg["path"], neg["sha256"])
-        self.assertIn(resolved["state"], ("absent", "ok"))
+    def test_settled_and_proposed_thresholds(self):
+        for name in FREEZE_CONFIGS:
+            cfg = _load_yaml("configs", name)
+            with self.subTest(config=name):
+                guard = cfg["gates"]["precision_guard"]
+                self.assertEqual(guard["max_relative_neg_fp_rate_increase"], 0.30)
+                self.assertEqual(cfg["short_negatives"]["max_fp_row_rate"], 0.05)
+                self.assertFalse(cfg["probe"]["probe_all_candidates"])
+
+    def test_short_negatives_pinned_to_pr19_with_its_distractor_lists(self):
+        for name in FREEZE_CONFIGS:
+            neg = _load_yaml("configs", name)["short_negatives"]
+            with self.subTest(config=name):
+                self.assertEqual(
+                    neg["sha256"],
+                    "a0ffa9ecec0e589d3ae1ad23043c086c2d9250c2d4f3c0581e930f54a379069f",
+                )
+                # Must match sft_synth_v2.DISTRACTORS / GATED_DISTRACTORS in PR #19.
+                self.assertEqual(
+                    neg["gated_distractors"], ["place", "org_product", "calendar", "role_only"]
+                )
+                self.assertEqual(neg["report_only_distractors"], ["homograph"])
+                resolved = resolve_optional_input(REPO, neg["path"], neg["sha256"])
+                # "missing" until PR #19 is merged into this branch; never a wrong file
+                self.assertIn(resolved["state"], ("missing", "ok"))
+
+    def test_v2_training_config_only_adds_epoch_saving_and_the_freeze_rule(self):
+        v1 = _load_yaml("configs", "m07b_train_d1.yaml")
+        v2 = _load_yaml("configs", "m07b_train_d1_v2.yaml")
+        self.assertEqual(v2["run_id_prefix"], "d1v2")
+        self.assertEqual(v2["training"].pop("save_epochs"), [2, 3])
+        self.assertEqual(v2["training"], v1["training"])
+        rule = v2["selection"].pop("freeze_rule")
+        self.assertEqual(rule, {"rule": FREEZE_RULE, "dev_f1_max_drop": 0.01})
+        self.assertEqual(v2["selection"], v1["selection"])
+        self.assertEqual(v2["reference"]["sha256"], V1_EPOCH2_SHA)
+        for key in ("seed", "data", "detector", "locks", "gates", "cache_dir", "work_dir"):
+            self.assertEqual(v2[key], v1[key], key)
+
+
+def _cand(epoch, f1, neg_rows):
+    return {"epoch": epoch, "dev_span_f1": f1, "dev_neg_rows_with_pred": neg_rows}
+
+
+class SelectFreezeEpochTest(unittest.TestCase):
+    def test_fewest_name_free_rows_flagged_wins(self):
+        sel = select_freeze_epoch([_cand(2, 0.9592, 140), _cand(3, 0.9600, 150)], 0.9633, 0.01)
+        self.assertEqual(sel["chosen_epoch"], 2)
+        self.assertEqual(sel["rule"], FREEZE_RULE)
+
+    def test_ineligible_epoch_is_never_chosen(self):
+        sel = select_freeze_epoch([_cand(2, 0.9532, 10), _cand(3, 0.9600, 150)], 0.9633, 0.01)
+        self.assertEqual(sel["eligible_epochs"], [3])
+        self.assertEqual(sel["chosen_epoch"], 3)
+
+    def test_floor_is_inclusive(self):
+        sel = select_freeze_epoch([_cand(2, 0.9533, 10)], 0.9633, 0.01)
+        self.assertEqual(sel["chosen_epoch"], 2)
+
+    def test_ties_go_to_higher_f1_then_earlier_epoch(self):
+        sel = select_freeze_epoch([_cand(2, 0.958, 140), _cand(3, 0.960, 140)], 0.9633, 0.01)
+        self.assertEqual(sel["chosen_epoch"], 3)
+        sel = select_freeze_epoch([_cand(3, 0.960, 140), _cand(2, 0.960, 140)], 0.9633, 0.01)
+        self.assertEqual(sel["chosen_epoch"], 2)
+
+    def test_none_eligible(self):
+        sel = select_freeze_epoch([_cand(2, 0.90, 1), _cand(3, 0.91, 1)], 0.9633, 0.01)
+        self.assertIsNone(sel["chosen_epoch"])
+
+    def test_duplicate_epochs_raise(self):
+        with self.assertRaises(ValueError):
+            select_freeze_epoch([_cand(2, 0.96, 1), _cand(2, 0.96, 2)], 0.9633, 0.01)
+
+
+def _train_report(epochs):
+    """A v2 training report: epoch -> (dev F1, name-free dev rows flagged)."""
+    return {
+        "run_id": "d1v2-x",
+        "d0_baseline": {"dev_calibration": {"span_f1": 0.9633}},
+        "epoch_checkpoints": {
+            str(e): {
+                "epoch": e,
+                "dir": f"d1-epoch{e}",
+                "sha256": f"{e}" * 64,
+                "dev_span_f1": f1,
+                "dev_neg_rows_with_pred": neg,
+            }
+            for e, (f1, neg) in epochs.items()
+        },
+    }
+
+
+TRAIN_V2 = {"selection": {"freeze_rule": {"rule": FREEZE_RULE, "dev_f1_max_drop": 0.01}}}
+
+
+def _fe_result(f1, precision, neg_rows_with_pred):
+    d1 = {
+        "span_f1": f1,
+        "span_precision": precision,
+        "span_recall": 0.96,
+        "neg_rows_with_pred": neg_rows_with_pred,
+    }
+    return {"final_eval": {"d1": d1}, "gates": {"final_eval_f1": {"ok": f1 > 0.955}}}
+
+
+class PlanCandidatesTest(unittest.TestCase):
+    def test_v1_run_has_one_candidate(self):
+        plan = plan_candidates({"d1_model_sha256": "a" * 64, "best_epoch": 2}, {})
+        self.assertEqual(plan["chosen"], "d1-candidate")
+        self.assertEqual(plan["rule"], "single_candidate")
+        self.assertEqual(len(plan["candidates"]), 1)
+
+    def test_v2_run_uses_the_dev_rule(self):
+        plan = plan_candidates(_train_report({2: (0.9592, 140), 3: (0.9600, 150)}), TRAIN_V2)
+        self.assertEqual([c["name"] for c in plan["candidates"]], ["d1-epoch2", "d1-epoch3"])
+        self.assertEqual(plan["chosen"], "d1-epoch2")
+        self.assertEqual(plan["candidates"][0]["sha256"], "2" * 64)
+
+    def test_v2_run_without_the_rule_refuses(self):
+        with self.assertRaises(ValueError):
+            plan_candidates(_train_report({2: (0.96, 1), 3: (0.96, 2)}), {"selection": {}})
+
+    def test_final_eval_never_changes_the_chosen_epoch(self):
+        report = _train_report({2: (0.9592, 140), 3: (0.9600, 150)})
+        plan = plan_candidates(report, TRAIN_V2)
+        self.assertEqual(plan["chosen"], "d1-epoch2")
+        # The planner takes the training report and config only; no final-eval input.
+        self.assertEqual(
+            list(inspect.signature(plan_candidates).parameters), ["train_report", "train_cfg"]
+        )
+        # Final-eval results that strongly favour epoch 3 (and fail epoch 2's gate) ...
+        results = {
+            "d1-epoch2": _fe_result(0.950, 0.940, 60),
+            "d1-epoch3": _fe_result(0.970, 0.975, 20),
+        }
+        # ... even written back into the training report, cannot move the choice.
+        polluted = copy.deepcopy(report)
+        for ckpt in polluted["epoch_checkpoints"].values():
+            fe_d1 = results[ckpt["dir"]]["final_eval"]["d1"]
+            ckpt["final_eval_span_f1"] = fe_d1["span_f1"]
+            ckpt["span_f1"] = fe_d1["span_f1"]
+            ckpt["neg_rows_with_pred"] = fe_d1["neg_rows_with_pred"]
+        polluted["final_eval"] = results
+        self.assertEqual(plan_candidates(polluted, TRAIN_V2)["chosen"], "d1-epoch2")
+        table = candidate_table(plan, results)
+        self.assertEqual([r["chosen"] for r in table], [True, False])
+        self.assertEqual(table[1]["final_eval_f1"], 0.970)
+        self.assertEqual(table[0]["gates_ok"], {"final_eval_f1": False})
+
+    def test_side_by_side_without_results_yet(self):
+        plan = plan_candidates(_train_report({2: (0.96, 1), 3: (0.96, 2)}), TRAIN_V2)
+        self.assertEqual([r["final_eval_f1"] for r in candidate_table(plan, {})], [None, None])
 
 
 if __name__ == "__main__":

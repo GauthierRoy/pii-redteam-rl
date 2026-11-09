@@ -14,7 +14,7 @@ import json
 import os
 import shutil
 
-from pii_redteam.d1_metrics import negative_fp_metrics
+from pii_redteam.d1_metrics import FREEZE_RULE, negative_fp_metrics, select_freeze_epoch
 
 MANIFEST_FILE = "freeze_manifest.json"
 UNRECORDED_COMMITS = {None, "", "unrecorded", "recorded-by-notebook"}
@@ -60,6 +60,68 @@ def check_counts(checks: dict[str, dict]) -> dict:
 
 def repo_commit_recorded(commit: str | None) -> bool:
     return commit not in UNRECORDED_COMMITS
+
+
+# ---------------------------------------------------------------- candidates
+
+
+def plan_candidates(train_report: dict, train_cfg: dict) -> dict:
+    """Which candidates to score, and which one may be frozen, from the TRAINING report only.
+
+    Takes nothing scored by freeze-d1, so final-eval, short negatives and the probe cannot
+    change the choice. A run with `epoch_checkpoints` (save_epochs) is decided by the
+    pre-registered dev-only rule in its training config; a v1 run has one candidate.
+    """
+    checkpoints = train_report.get("epoch_checkpoints")
+    if not checkpoints:
+        sha = train_report.get("d1_model_sha256")
+        name = "d1-candidate"
+        return {
+            "rule": "single_candidate",
+            "candidates": [{"name": name, "epoch": train_report.get("best_epoch"), "sha256": sha}],
+            "chosen": name,
+            "selection": None,
+        }
+    rule_cfg = (train_cfg.get("selection") or {}).get("freeze_rule")
+    if not rule_cfg or rule_cfg.get("rule") != FREEZE_RULE:
+        raise ValueError("multi-epoch run without the pre-registered freeze rule in its config")
+    d0_dev_f1 = train_report["d0_baseline"]["dev_calibration"]["span_f1"]
+    selection = select_freeze_epoch(
+        list(checkpoints.values()), d0_dev_f1, rule_cfg["dev_f1_max_drop"]
+    )
+    candidates = [
+        {"name": c["dir"], "epoch": c["epoch"], "sha256": c["sha256"]}
+        for c in sorted(checkpoints.values(), key=lambda c: c["epoch"])
+    ]
+    chosen_epoch = selection["chosen_epoch"]
+    chosen = next((c["name"] for c in candidates if c["epoch"] == chosen_epoch), None)
+    return {"rule": FREEZE_RULE, "candidates": candidates, "chosen": chosen, "selection": selection}
+
+
+def candidate_table(plan: dict, results: dict[str, dict]) -> list[dict]:
+    """Side-by-side rows for every candidate; `chosen` comes from the plan, never results."""
+    rows = []
+    for cand in plan["candidates"]:
+        res = results.get(cand["name"], {})
+        fe = res.get("final_eval") or {}
+        d1 = fe.get("d1") or {}
+        neg = (res.get("short_negatives") or {}).get("gate") or {}
+        probe = res.get("probe_gate") or {}
+        rows.append(
+            {
+                "name": cand["name"],
+                "epoch": cand["epoch"],
+                "chosen": cand["name"] == plan["chosen"],
+                "final_eval_f1": d1.get("span_f1"),
+                "final_eval_precision": d1.get("span_precision"),
+                "final_eval_recall": d1.get("span_recall"),
+                "final_eval_neg_rows_with_pred": d1.get("neg_rows_with_pred"),
+                "gates_ok": {k: g.get("ok") for k, g in (res.get("gates") or {}).items()},
+                "short_negatives_gated_fp_row_rate": neg.get("d1_fp_row_rate"),
+                "probe_ok": probe.get("ok"),
+            }
+        )
+    return rows
 
 
 # ---------------------------------------------------------------- final-eval gates
@@ -135,10 +197,15 @@ def file_sha256(path: str) -> str:
 
 
 def resolve_optional_input(repo_dir: str, rel_path: str, expected_sha: str | None) -> dict:
-    """State of an optional, hash-pinned input: absent | unpinned | mismatch | ok."""
+    """State of an optional, hash-pinned input: absent | missing | unpinned | mismatch | ok.
+
+    `missing` = a sha256 is pinned but the file is not there: the input was expected
+    (e.g. a checkout without the data branch), so it must not degrade to a skip.
+    """
     path = os.path.join(repo_dir, rel_path)
     if not os.path.exists(path):
-        return {"state": "absent", "path": rel_path, "sha256": None}
+        state = "absent" if expected_sha is None else "missing"
+        return {"state": state, "path": rel_path, "sha256": None}
     actual = file_sha256(path)
     if expected_sha is None:
         state = "unpinned"
@@ -215,12 +282,14 @@ def short_negatives_report(
 def short_negatives_check(resolved: dict, gate: dict | None = None) -> dict:
     """Check record for the optional short-negatives slot.
 
-    Absent -> skipped (optional, recorded). Present but unpinned or hash-mismatched ->
-    a REQUIRED failure: a file that exists but cannot be trusted must not be ignored.
+    Absent and unpinned -> skipped (optional, recorded). Pinned but missing, or present
+    but unpinned or hash-mismatched -> a REQUIRED failure: a file that exists but cannot be trusted must not be ignored.
     """
     state = resolved["state"]
     if state == "absent":
         return make_check(None, f"skipped: not provided ({resolved['path']})", required=False)
+    if state == "missing":
+        return make_check(False, f"{resolved['path']} is pinned in the config but missing")
     if state == "unpinned":
         return make_check(
             False, f"{resolved['path']} exists but its sha256 is not pinned in the config"
@@ -318,6 +387,8 @@ def build_freeze_manifest(
     locks: dict,
     checks: dict[str, dict],
     gates: dict,
+    source_candidate: str = "d1-candidate",
+    selection: dict | None = None,
     created_utc: str | None = None,
 ) -> dict:
     if "model.safetensors" not in files:
@@ -329,6 +400,8 @@ def build_freeze_manifest(
         "created_utc": created_utc or datetime.datetime.now(datetime.UTC).isoformat(),
         "source_run_id": source_run_id,
         "source_dir": source_dir,
+        "source_candidate": source_candidate,
+        "selection": selection,
         "freeze_run_id": freeze_run_id,
         "repo_commit": repo_commit,
         "source_repo_commit": source_repo_commit,

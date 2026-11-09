@@ -1,0 +1,86 @@
+# M07b.3/.4 for the v2 training run (configs/m07b_train_d1_v2.yaml, epochs 2 and 3 saved).
+# Same gates as m07b_freeze_d1.yaml. Both epochs are scored side by side on final-eval and
+# short negatives; only the epoch chosen by the pre-registered dev-only rule in the
+# training config may be frozen, and gates apply to it alone.
+# Colab T4 defaults. Committed BEFORE the run: changing a threshold after seeing
+# results needs a recorded owner decision (no silent threshold edits).
+#
+#   python -m pii_redteam.cli freeze-d1 --config configs/m07b_freeze_d1_v2.yaml \
+#       --source-run-dir /content/drive/MyDrive/pii-redteam-rl/d1v2-<timestamp>
+#
+# D1 is copied to <frozen_root>/d1-frozen-<source run_id>/ only if every REQUIRED check
+# passes; otherwise the report status is freeze_blocked with the failing checks listed.
+# An existing frozen dir is never overwritten.
+
+run_id_prefix: d1v2-freeze
+repo_dir: /content/pii-redteam-rl
+cache_dir: /content/drive/MyDrive/pii-redteam-rl/cache
+work_dir: /content/drive/MyDrive/pii-redteam-rl
+frozen_root: /content/drive/MyDrive/pii-redteam-rl
+rebuild_locks: true              # carve the splits again and assert the final-eval lock
+
+locks:
+  final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
+  d0_sha256: 0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb
+  # Unknown until the v2 run: null = each candidate is verified against the shas the
+  # training report recorded (the check says "not pinned in config"). Optionally pin
+  # {d1-epoch2: <sha>, d1-epoch3: <sha>} from d1_report.json before freezing.
+  d1_candidate_sha256: null
+
+source:                          # the v2 training run, passed with --source-run-dir
+  run_id: null
+  run_dir: null
+  # The training config the run used. Its D0 path, eval batch size, max_length and the
+  # pre-registered final_eval_max_drop (precision AND recall) and the freeze rule
+  # (selection.freeze_rule) are reused from it.
+  train_config: configs/m07b_train_d1_v2.yaml
+  train_config_sha256: b758b364637d301ec1bf7789c28ad6e1b8db7cd2e0d07b4a0efddd4d6e03ea21
+
+gates:
+  # M07b.3 no-regression: D1 final-eval span-F1 >= D0 span-F1 - this.
+  final_eval_f1_max_drop: 0.01
+  precision_guard:
+    # SETTLED, owner decision 2026-11-09 (raised from the proposed 0.25). On the
+    # final-eval partition's name-free rows, D1's false-positive row rate (rows with >= 1
+    # predicted span / name-free rows) must not exceed D0's by more than this relative
+    # amount: 0.30 = +30% relative. With D0 at 0 flagged rows, D1 must also flag 0.
+    # Precision and FP-span counts are reported next to it either way. For reference
+    # only (dev, not this partition): neg_false_positives (spans) on name-free dev rows
+    # went 129 -> 162 (+25.6%) in d1-20261108-145253.
+    max_relative_neg_fp_rate_increase: 0.30
+
+short_negatives:
+  # Name-free short messages, same schema as short_eval_v2 but request.entities == []
+  # and target.span == null. sha256 null and file absent -> "skipped: not provided"
+  # (never a pass). sha256 pinned (as now) -> the file must exist and match, or the
+  # freeze is blocked: run from a checkout that contains it (PR #19).
+  path: data/synthetic/short_eval_neg_v1.jsonl
+  sha256: a0ffa9ecec0e589d3ae1ad23043c086c2d9250c2d4f3c0581e930f54a379069f  # PR #19, 111 rows (95 gated, 16 homograph)
+  # Each row carries a top-level "distractor" type (owner decision). v1 file: place 20,
+  # org_product 23, calendar 23, role_only 29 (95 gated), homograph 16. These lists must
+  # match sft_synth_v2.DISTRACTORS / GATED_DISTRACTORS from PR #19.
+  # The gate counts the clear-cut types only. homograph rows (names used in their
+  # ordinary sense: "rose bush", "frank feedback", "the May deadline") are REPORTED
+  # D0 vs D1 side by side with their flagged texts, and never affect the gate.
+  # A type in neither list makes the run fail loudly.
+  gated_distractors: [place, org_product, calendar, role_only]
+  report_only_distractors: [homograph]
+  # PROPOSED, OWNER DECISION PENDING: max share of gated rows on which D1 predicts any
+  # PERSON span.
+  max_fp_row_rate: 0.05
+
+probe:
+  # M07b.4: the M07a probe, unchanged (prompt v1, frozen bank, same thresholds), with
+  # the detector swapped for the D1 candidate. D0 is rescored on the same texts.
+  config: configs/m07a_probe.yaml
+  config_sha256: 261ec8685b553ccb7a1f0f402124af3e9c4a9a26117f244ccad156c261fd680e
+  run_id_prefix: m07a-d1v2
+  # M07b acceptance gate: "the probe go/no-go passes against D1 (miss rate inside the
+  # pre-declared band)". The M07a table alone also accepts a high live-group share
+  # instead of an in-band miss rate; true requires the band as well.
+  require_miss_rate_in_band: true
+  probe_all_candidates: false    # true also probes non-chosen candidates (3,400 gens each)
+  run_if_blocked: false          # skip the ~probe generation when a required check failed
+  # "auto" = reuse the newest FINISHED m07a-d1v2-* run for the chosen sha (resume after a
+  # disconnect); a dir path = that run; null = always generate.
+  reuse_run_dir: auto

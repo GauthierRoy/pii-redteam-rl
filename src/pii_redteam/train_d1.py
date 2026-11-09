@@ -22,10 +22,12 @@ import transformers
 from transformers import AutoModelForTokenClassification, AutoTokenizer
 
 from pii_redteam.d1_metrics import (
+    FREEZE_RULE,
     is_better_candidate,
     load_synthetic_rows,
     no_regression_gate,
     paired_changes,
+    select_freeze_epoch,
     short_eval_gate,
     span_metrics,
     split_by_name,
@@ -42,6 +44,26 @@ DEV_FILE = "1english_openpii_8k.jsonl"
 CANDIDATE_DIR = "d1-candidate"
 REPORT_FILE = "d1_report.json"
 FINAL_EVAL_REPORT_FILE = "d1_final_eval_report.json"
+
+
+def epoch_dir_name(epoch: int) -> str:
+    return f"d1-epoch{epoch}"
+
+
+def final_eval_report_name(candidate: str) -> str:
+    """One single-use final-eval report per candidate directory."""
+    if candidate == CANDIDATE_DIR:
+        return FINAL_EVAL_REPORT_FILE
+    return f"d1_final_eval_report.{candidate}.json"
+
+
+def _save_checkpoint(model, tok, target: str) -> None:
+    tmp = target + ".tmp"
+    shutil.rmtree(tmp, ignore_errors=True)
+    model.save_pretrained(tmp)
+    tok.save_pretrained(tmp)
+    shutil.rmtree(target, ignore_errors=True)
+    os.replace(tmp, target)
 
 
 def _write_json(path: str, payload: dict) -> None:
@@ -338,6 +360,12 @@ def run_train_d1(config: dict, repo_dir: str) -> dict:
     curve: list[dict] = []
     report["curve"] = curve
     report["best_epoch"] = None
+    save_epochs = sorted(set(train_cfg.get("save_epochs") or []))
+    if any(not 1 <= e <= train_cfg["epochs"] for e in save_epochs):
+        raise SystemExit(f"save_epochs {save_epochs} outside 1..{train_cfg['epochs']}")
+    epoch_checkpoints: dict[str, dict] = {}
+    if save_epochs:
+        report["epoch_checkpoints"] = epoch_checkpoints
     lost_spans = 0
     if use_amp:
         torch.cuda.reset_peak_memory_stats()
@@ -377,13 +405,22 @@ def run_train_d1(config: dict, repo_dir: str) -> dict:
         )
         if improved:
             best_aug_f1 = aug["span_f1"]
-            tmp = candidate + ".tmp"
-            shutil.rmtree(tmp, ignore_errors=True)
-            model.save_pretrained(tmp)
-            tok.save_pretrained(tmp)  # ty: ignore[unresolved-attribute]  # stub union
-            shutil.rmtree(candidate, ignore_errors=True)
-            os.replace(tmp, candidate)
+            _save_checkpoint(model, tok, candidate)
             report["best_epoch"] = epoch
+        if epoch in save_epochs:
+            name = epoch_dir_name(epoch)
+            _save_checkpoint(model, tok, os.path.join(work, name))
+            epoch_checkpoints[str(epoch)] = {
+                "epoch": epoch,
+                "dir": name,
+                "sha256": _sha256(os.path.join(work, name, "model.safetensors")),
+                "dev_span_f1": dev["span_f1"],
+                "dev_span_precision": dev["span_precision"],
+                "dev_neg_rows": dev["neg_rows"],
+                "dev_neg_rows_with_pred": dev["neg_rows_with_pred"],
+                "dev_neg_false_positives": dev["neg_false_positives"],
+                "aug_dev_span_f1": aug["span_f1"],
+            }
         curve.append(
             {
                 "epoch": epoch,
@@ -407,6 +444,8 @@ def run_train_d1(config: dict, repo_dir: str) -> dict:
         "peak_mem_gb": round(torch.cuda.max_memory_allocated() / 1e9, 2) if use_amp else None,
         "replay_spans_lost_to_truncation": lost_spans,
     }
+    if save_epochs:
+        _record_freeze_selection(report, config, d0_dev["span_f1"], check)
     has_candidate = report["best_epoch"] is not None
     check(
         "an epoch stayed within the dev F1 floor",
@@ -444,6 +483,20 @@ def run_train_d1(config: dict, repo_dir: str) -> dict:
     )
     report["short_eval_gate"] = {"slice": primary, **gate}
     check(f"short_eval recall gain on {primary}", gate["ok"], gate)
+    if epoch_checkpoints:
+        # Every saved epoch on short_eval too, side by side (reported, never selected on).
+        by_epoch = {}
+        for key, ckpt in epoch_checkpoints.items():
+            model_e = _load_detector(os.path.join(work, ckpt["dir"]), device)
+            by_epoch[key] = {}
+            for name, rows in slices.items():
+                scored = score(model_e, rows)
+                by_epoch[key][name] = {
+                    "d1": strip_per_row(scored),
+                    "paired": paired_changes(d0_scores[name], scored),
+                }
+            del model_e
+        report["short_eval_by_epoch"] = by_epoch
     report["status"] = "trained_pending_final_eval"
     report["finished_utc"] = datetime.datetime.now(datetime.UTC).isoformat()
     report["experiments_entry"] = {
@@ -466,6 +519,19 @@ def run_train_d1(config: dict, repo_dir: str) -> dict:
             },
         },
     }
+    if epoch_checkpoints:
+        report["experiments_entry"]["metrics"]["epoch_checkpoints"] = {
+            key: {
+                k: ckpt[k]
+                for k in ("sha256", "dev_span_f1", "dev_neg_rows_with_pred", "dev_span_precision")
+            }
+            for key, ckpt in epoch_checkpoints.items()
+        }
+        report["experiments_entry"]["metrics"]["freeze_selection_chosen_epoch"] = report[
+            "freeze_selection"
+        ]["chosen_epoch"]
+        if "reproduction" in report:
+            report["experiments_entry"]["metrics"]["reproduction"] = report["reproduction"]
     flush()
 
     print("=" * 70)
@@ -482,22 +548,80 @@ def run_train_d1(config: dict, repo_dir: str) -> dict:
         print(f"  {name} paired: +{paired['gained_exact']} / -{paired['lost_exact']} exact hits")
     print(f"candidate: {candidate}  sha256 {report['d1_model_sha256']}")
     print(f"report:    {report_path}")
-    print("Final-eval NOT run. D1 is NOT frozen: both are owner decisions.")
+    if epoch_checkpoints:
+        for key, ckpt in epoch_checkpoints.items():
+            print(
+                f"saved epoch {key}: {ckpt['dir']} sha256 {ckpt['sha256'][:16]} dev F1 "
+                f"{ckpt['dev_span_f1']} name-free dev rows flagged "
+                f"{ckpt['dev_neg_rows_with_pred']}/{ckpt['dev_neg_rows']}"
+            )
+        print(
+            f"freeze rule ({FREEZE_RULE}, dev only) chose epoch "
+            f"{report['freeze_selection']['chosen_epoch']}"
+        )
+    print("Final-eval NOT run. D1 is NOT frozen: run freeze-d1 for that.")
     return report
 
 
-def run_d1_final_eval(config: dict, repo_dir: str, run_dir: str) -> dict:
+def _record_freeze_selection(report: dict, config: dict, d0_dev_f1: float, check) -> None:
+    """Apply the pre-registered dev-only freeze rule and the reproduction note."""
+    rule_cfg = config["selection"]["freeze_rule"]
+    if rule_cfg["rule"] != FREEZE_RULE:
+        raise SystemExit(f"unknown freeze rule {rule_cfg['rule']!r}")
+    selection = select_freeze_epoch(
+        list(report["epoch_checkpoints"].values()), d0_dev_f1, rule_cfg["dev_f1_max_drop"]
+    )
+    report["freeze_selection"] = selection
+    check(
+        "freeze rule found an eligible saved epoch (dev only)",
+        selection["chosen_epoch"] is not None,
+        f"chosen {selection['chosen_epoch']}, eligible {selection['eligible_epochs']}",
+    )
+    ref = config.get("reference")
+    if ref:
+        new = report["epoch_checkpoints"].get(str(ref["epoch"]), {}).get("sha256")
+        same = new == ref["sha256"]
+        report["reproduction"] = {
+            "reference_run_id": ref["run_id"],
+            "epoch": ref["epoch"],
+            "reference_sha256": ref["sha256"],
+            "new_sha256": new,
+            "reproduced": same,
+            "note": "bit-identical weights"
+            if same
+            else "weights differ from the reference run (recorded, not a failure: T4 fp16 "
+            "training may be nondeterministic)",
+        }
+        print(
+            f"NOTE reproduction of {ref['run_id']} epoch {ref['epoch']}: "
+            f"{report['reproduction']['note']}"
+        )
+
+
+def candidate_sha_from_report(train_report: dict, candidate: str) -> str | None:
+    """The sha256 the training run recorded for a candidate directory."""
+    if candidate == CANDIDATE_DIR:
+        return train_report.get("d1_model_sha256")
+    for ckpt in (train_report.get("epoch_checkpoints") or {}).values():
+        if ckpt["dir"] == candidate:
+            return ckpt["sha256"]
+    return None
+
+
+def run_d1_final_eval(
+    config: dict, repo_dir: str, run_dir: str, candidate_name: str = CANDIDATE_DIR
+) -> dict:
     """Single-use final-eval no-regression check for one saved candidate."""
-    out_path = os.path.join(run_dir, FINAL_EVAL_REPORT_FILE)
+    out_path = os.path.join(run_dir, final_eval_report_name(candidate_name))
     if os.path.exists(out_path):
         raise SystemExit(f"Final-eval already ran for this candidate: {out_path}")
     with open(os.path.join(run_dir, REPORT_FILE), encoding="utf-8") as f:
         train_report = json.load(f)
     if train_report.get("status") != "trained_pending_final_eval":
         raise SystemExit(f"No candidate ready: status {train_report.get('status')}")
-    candidate = os.path.join(run_dir, CANDIDATE_DIR)
+    candidate = os.path.join(run_dir, candidate_name)
     d1_sha = _sha256(os.path.join(candidate, "model.safetensors"))
-    if d1_sha != train_report["d1_model_sha256"]:
+    if d1_sha != candidate_sha_from_report(train_report, candidate_name):
         raise SystemExit(f"Candidate changed since training: {d1_sha}")
     _verify_detector(config)
 
@@ -526,6 +650,7 @@ def run_d1_final_eval(config: dict, repo_dir: str, run_dir: str) -> dict:
     gate = no_regression_gate(scores["d0"], scores["d1"], config["gates"]["final_eval_max_drop"])
     report = {
         "run_id": train_report["run_id"],
+        "candidate": candidate_name,
         "executed_utc": datetime.datetime.now(datetime.UTC).isoformat(),
         "device": gpu,
         "d1_model_sha256": d1_sha,

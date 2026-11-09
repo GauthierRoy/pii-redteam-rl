@@ -218,3 +218,38 @@ def no_regression_gate(d0_metrics: dict, d1_metrics: dict, max_drop: float) -> d
         "max_drop": max_drop,
         "ok": precision_drop <= max_drop and recall_drop <= max_drop,
     }
+
+
+FREEZE_RULE = "fewest_dev_neg_fp_rows"
+
+
+def select_freeze_epoch(candidates: list[dict], d0_dev_f1: float, max_drop: float) -> dict:
+    """Pre-registered freeze rule over saved epochs, from DEV (dev_calibration) data only.
+
+    Each candidate is {"epoch", "dev_span_f1", "dev_neg_rows_with_pred"}. Eligible: dev
+    span-F1 >= D0's - max_drop. Among eligible, fewest name-free dev rows with a predicted
+    span wins; tie -> higher dev span-F1; tie -> earlier epoch. Any other field in a
+    candidate is ignored, so nothing scored later (final-eval, probe) can change the pick.
+    """
+    keyed = [
+        {
+            "epoch": int(c["epoch"]),
+            "dev_span_f1": c["dev_span_f1"],
+            "dev_neg_rows_with_pred": c["dev_neg_rows_with_pred"],
+        }
+        for c in candidates
+    ]
+    if len({c["epoch"] for c in keyed}) != len(keyed):
+        raise ValueError("duplicate epochs among candidates")
+    eligible = [c for c in keyed if round(d0_dev_f1 - c["dev_span_f1"], 4) <= max_drop]
+    ranked = sorted(
+        eligible, key=lambda c: (c["dev_neg_rows_with_pred"], -c["dev_span_f1"], c["epoch"])
+    )
+    return {
+        "rule": FREEZE_RULE,
+        "d0_dev_f1": d0_dev_f1,
+        "dev_f1_max_drop": max_drop,
+        "candidates": sorted(keyed, key=lambda c: c["epoch"]),
+        "eligible_epochs": sorted(c["epoch"] for c in eligible),
+        "chosen_epoch": ranked[0]["epoch"] if ranked else None,
+    }

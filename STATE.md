@@ -530,35 +530,57 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
 
 ## M07b D1 freeze prepared, NOT yet run (2026-11-09, feat/m07b-freeze-d1)
 
-- **Input**: training run `d1-20261108-145253` (repo `b8550eb`, T4, best epoch 2, status
+- **v1 training run**: `d1-20261108-145253` (repo `b8550eb`, T4, best epoch 2, status
   `trained_pending_final_eval`, d1 sha `7c66f29e…deb4`). Per its report: short_eval_v2
   recall 0.42 -> 0.9933, short_eval_deepseek_v1 0.44 -> 1.0; dev F1 0.9633 -> 0.9592,
   dev precision 0.9587 -> 0.9511, FP spans on name-free dev rows 129 -> 162.
-  Not yet in `EXPERIMENTS.yaml` (add from `d1_report.json`).
-- **Code**: `src/pii_redteam/freeze_d1.py` (orchestration), `freeze_gates.py` (pure gates,
-  manifest, never-overwrite copy), CLI `freeze-d1`, `configs/m07b_freeze_d1.yaml`,
-  launcher `colab/M07b_freeze_d1.ipynb`. Reuses `run_d1_final_eval` (single use: an
-  existing `d1_final_eval_report.json` is reused, never re-scored) and `run_probe`
-  unchanged; the probe's per-temperature block moved to
-  `probe_metrics.per_temperature_metrics` so D0 can be rescored on D1's probe texts.
-- **Required gates**: final-eval span-F1 drop <= 0.01; the pre-registered precision AND
-  recall drop <= 0.01 (`m07b_train_d1.yaml`); precision guard; M07a probe go/no-go
-  against D1 with the miss rate inside the 1–30% band at one temperature at least.
-- **PROPOSED, owner decision pending (D07)**: precision guard = D1's name-free-row
-  flagged rate on final-eval at most +25% relative to D0's; short-negatives gate = D1
-  flags <= 5% of the gated rows. On dev the FP span count rose +25.6%, so the guard may
-  be close.
-- **Short negatives**: optional `data/synthetic/short_eval_neg_v1.jsonl` (not yet
-  written; sha unpinned). Rows carry `distractor`: place, org_product, calendar,
-  role_only are gated; homograph is reported D0 vs D1 only (owner decision). Absent ->
-  "skipped: not provided"; present but unpinned or mismatched -> blocks the freeze.
-- **Verified**: unit tests (`tests/unit/test_freeze_d1.py`), lint, ty, and a mocked
-  CPU dry run of `run_freeze_d1` (pass, blocked, existing-frozen-dir, short-negatives).
-  **Unverified until the T4 run**: real scoring, probe runtime (3,400 generations).
+  Not yet in `EXPERIMENTS.yaml` (add from `d1_report.json`). Only epoch 2 was saved.
+- **Owner decisions 2026-11-09**:
+  - **Precision guard SETTLED at +30%** (raised from the proposed 25%): on final-eval
+    name-free rows, D1's flagged-row rate <= D0's * 1.30; D0 flags none => D1 must flag none.
+  - **Retrain as v2 and compare epochs 2 AND 3** (`configs/m07b_train_d1_v2.yaml`, prefix
+    `d1v2`): the v1 recipe (same seed, data, hyperparameters) plus `training.save_epochs:
+    [2, 3]` (`d1-epoch2/`, `d1-epoch3/`, sha256 each in `epoch_checkpoints`). Whether the
+    new epoch 2 reproduces `7c66f29e…` is a recorded note (`reproduction`), not a failure.
+  - **Pre-registered freeze rule (dev_calibration only)**: among saved epochs with dev
+    span-F1 >= D0 - 0.01, fewest name-free dev rows with any predicted span; tie -> higher
+    dev F1; tie -> earlier epoch (`d1_metrics.select_freeze_epoch`). Recorded in the
+    training report as `freeze_selection`; freeze-d1 recomputes it and checks they agree.
+  - **Short negatives**: `data/synthetic/short_eval_neg_v1.jsonl` (PR #19, sha
+    `a0ffa9ec…9069f`, 111 rows) pinned. Gated: place, org_product, calendar, role_only
+    (95 rows, D1 flags <= 5%: still PROPOSED). homograph (16 rows): report-only, D0 vs each
+    candidate with flagged texts. Pinned but missing -> blocks the freeze.
+- **Code**: `train_d1.py` (save_epochs, freeze rule, per-candidate single-use final-eval
+  `d1_final_eval_report.<candidate>.json`), `freeze_d1.py` (orchestration),
+  `freeze_gates.py` (pure gates, candidate plan, manifest, never-overwrite copy),
+  `overnight.py` (resume detection, progress JSON), CLI `freeze-d1 [--source-run-dir]` and
+  `d1-final-eval --candidate`, configs `m07b_freeze_d1.yaml` (v1 run) and
+  `m07b_freeze_d1_v2.yaml` (v2 run). `probe_metrics.per_temperature_metrics` is the
+  probe's per-temperature block, shared so D0 can be rescored on D1's probe texts.
+- **Multi-candidate freeze**: the candidate that may be frozen is fixed from the training
+  report before anything is scored (`plan_candidates` takes no final-eval input; a unit test
+  shows final-eval results favouring the other epoch do not move it). All candidates are
+  scored on final-eval and short negatives and reported side by side; gates apply to the
+  chosen one only. The probe (3,400 generations) runs on the chosen candidate only unless
+  `probe.probe_all_candidates: true`.
+- **Required gates (chosen candidate)**: final-eval span-F1 drop <= 0.01; the
+  pre-registered precision AND recall drop <= 0.01 (training config); precision guard
+  (+30%); short negatives (gated rows); M07a probe go/no-go with the miss rate inside the
+  1–30% band at one temperature at least.
+- **Notebooks**: `colab/M07b_d1_overnight.ipynb` (unattended: train v2 -> choice -> freeze,
+  resumable, `d1v2-overnight/progress.json` with per-stage timings, logs on Drive),
+  `M07b_train_d1.ipynb` (now v2 by default), `M07b_freeze_d1.ipynb` (`VERSION` v2/v1).
+- **Verified**: unit tests (`test_freeze_d1.py`, `test_overnight.py`), lint, ty, and mocked
+  CPU dry runs of `run_freeze_d1` (v1 one candidate; v2 two epochs with the rule picking
+  epoch 2 while epoch 3 scores better on final-eval; chosen epoch failing final-eval ->
+  blocked; pinned-but-missing negatives -> blocked; rerun -> final-eval reused, frozen dir
+  never overwritten) and of the overnight notebook's reuse and failure paths.
+  **Unverified until the T4 run**: real training/scoring, probe runtime.
 - **Open**: the M07a probe was never run in full on GPU (only the pilot and the local
   smoke), so there is no recorded D0 full-probe baseline; the D0 numbers come from
   rescoring D1's probe texts. The probe uses the v1 prompt, as M07a did, while M08
-  will use P1 (D14).
+  will use P1 (D14). A probe cut off mid-generation restarts from scratch (only finished
+  probe runs are reused).
 
 ## Artifacts
 

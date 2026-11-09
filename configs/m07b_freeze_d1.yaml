@@ -18,9 +18,10 @@ rebuild_locks: true              # carve the splits again and assert the final-e
 locks:
   final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
   d0_sha256: 0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb
-  d1_model_sha256: 7c66f29e8c372756dfb37a58eb5e2e60c863ffdfc9704316149ab1776f32deb4
+  d1_candidate_sha256:           # candidate dir -> sha256 (null: verified against the
+    d1-candidate: 7c66f29e8c372756dfb37a58eb5e2e60c863ffdfc9704316149ab1776f32deb4  # training report only)
 
-source:                          # the training run being frozen
+source:                          # the training run being frozen (v1: one candidate)
   run_id: d1-20261108-145253     # repo commit b8550eb, T4, best epoch 2
   run_dir: /content/drive/MyDrive/pii-redteam-rl/d1-20261108-145253
   # The training config the run used. Its D0 path, eval batch size, max_length and the
@@ -32,22 +33,25 @@ gates:
   # M07b.3 no-regression: D1 final-eval span-F1 >= D0 span-F1 - this.
   final_eval_f1_max_drop: 0.01
   precision_guard:
-    # PROPOSED, OWNER DECISION PENDING (D07). On the final-eval partition's name-free
-    # rows, D1's false-positive row rate (rows with >= 1 predicted span / name-free rows)
-    # must not exceed D0's by more than this relative amount. 0.25 = +25% relative.
-    # With D0 at 0 flagged rows, D1 must also flag 0. Precision and FP-span counts are
-    # reported next to it either way. For reference only (dev, not this partition):
-    # neg_false_positives (spans) on name-free dev rows went 129 -> 162 (+25.6%).
-    max_relative_neg_fp_rate_increase: 0.25
+    # SETTLED, owner decision 2026-11-09 (raised from the proposed 0.25). On the
+    # final-eval partition's name-free rows, D1's false-positive row rate (rows with >= 1
+    # predicted span / name-free rows) must not exceed D0's by more than this relative
+    # amount: 0.30 = +30% relative. With D0 at 0 flagged rows, D1 must also flag 0.
+    # Precision and FP-span counts are reported next to it either way. For reference
+    # only (dev, not this partition): neg_false_positives (spans) on name-free dev rows
+    # went 129 -> 162 (+25.6%) in d1-20261108-145253.
+    max_relative_neg_fp_rate_increase: 0.30
 
 short_negatives:
-  # OPTIONAL slot: name-free short messages, same schema as short_eval_v2 but
-  # request.entities == [] and target.span == null. Absent -> the check is recorded as
-  # "skipped: not provided" (never a pass). Present -> sha256 must be pinned here and
-  # match, or the freeze is blocked.
+  # Name-free short messages, same schema as short_eval_v2 but request.entities == []
+  # and target.span == null. sha256 null and file absent -> "skipped: not provided"
+  # (never a pass). sha256 pinned (as now) -> the file must exist and match, or the
+  # freeze is blocked: run from a checkout that contains it (PR #19).
   path: data/synthetic/short_eval_neg_v1.jsonl
-  sha256: null                   # pin when the file lands
-  # Each row carries a top-level "distractor" type (owner decision, 30 rows each).
+  sha256: a0ffa9ecec0e589d3ae1ad23043c086c2d9250c2d4f3c0581e930f54a379069f  # PR #19, 111 rows (95 gated, 16 homograph)
+  # Each row carries a top-level "distractor" type (owner decision). v1 file: place 20,
+  # org_product 23, calendar 23, role_only 29 (95 gated), homograph 16. These lists must
+  # match sft_synth_v2.DISTRACTORS / GATED_DISTRACTORS from PR #19.
   # The gate counts the clear-cut types only. homograph rows (names used in their
   # ordinary sense: "rose bush", "frank feedback", "the May deadline") are REPORTED
   # D0 vs D1 side by side with their flagged texts, and never affect the gate.
@@ -68,5 +72,6 @@ probe:
   # pre-declared band)". The M07a table alone also accepts a high live-group share
   # instead of an in-band miss rate; true requires the band as well.
   require_miss_rate_in_band: true
+  probe_all_candidates: false    # true also probes non-chosen candidates (3,400 gens each)
   run_if_blocked: false          # skip the ~probe generation when a required check failed
   reuse_run_dir: null            # a finished m07a-d1-* run dir, to resume after a disconnect

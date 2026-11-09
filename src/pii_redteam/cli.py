@@ -30,11 +30,19 @@ def main() -> None:
     )
     final_eval.add_argument("--config", required=True, help="path to a train-d1 YAML config")
     final_eval.add_argument("--run-dir", required=True, help="the train-d1 run directory")
+    final_eval.add_argument(
+        "--candidate", default="d1-candidate", help="candidate dir, e.g. d1-epoch2"
+    )
     freeze = sub.add_parser(
         "freeze-d1",
         help="M07b.3/.4 final-eval no-regression, re-probe, then freeze D1 if every gate passes",
     )
     freeze.add_argument("--config", required=True, help="path to a freeze-d1 YAML config")
+    freeze.add_argument(
+        "--source-run-dir",
+        default=None,
+        help="training run dir; required when the config leaves source.run_dir null",
+    )
     args = parser.parse_args()
 
     if args.command == "probe-base":
@@ -76,7 +84,7 @@ def main() -> None:
             report = run_train_d1(config, repo_dir)
             print(json.dumps({"run_id": report["run_id"], "status": report["status"]}, indent=2))
         else:
-            run_d1_final_eval(config, repo_dir, args.run_dir)
+            run_d1_final_eval(config, repo_dir, args.run_dir, args.candidate)
     elif args.command == "freeze-d1":
         with open(args.config, encoding="utf-8") as f:
             config = yaml.safe_load(f)
@@ -84,6 +92,10 @@ def main() -> None:
             os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         )
         config.setdefault("repo_commit", os.environ.get("PROBE_REPO_COMMIT", "unrecorded"))
+        if args.source_run_dir:
+            if config["source"].get("run_dir"):
+                raise SystemExit("source.run_dir is set in the config; do not also pass it")
+            config["source"]["run_dir"] = args.source_run_dir
         from pii_redteam.freeze_d1 import run_freeze_d1
 
         report = run_freeze_d1(config, repo_dir)
