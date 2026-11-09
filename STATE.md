@@ -39,6 +39,23 @@
   verified requestable. Same seed + pool version reproduces the bank; regeneration is
   never assumed.
 
+## short_eval_neg_v1: name-free short messages for the D1 freeze (2026-11-09)
+
+D1 run `d1-20261108-145253` was only scored on short messages that each contain one
+name, so its false-positive rate on name-free short text was unmeasured; on AI4Privacy
+dev its name-free false positives rose 129 → 162. New eval set
+`data/synthetic/short_eval_neg_v1.jsonl` (111 rows, sha256 `a0ffa9ec…9069f`), written
+by GLM-5.3 via Mistral Vibe, every row with no PERSON span and a `distractor` group:
+place 20, org_product 23, calendar 23, role_only 29 (95 gated rows) and homograph 16
+(report-only; owner decision 2026-11-09: words that are also names, used in their
+ordinary sense, never gate the freeze). 150 raw rows → 111 after a deterministic
+reuse cap on invented names copied from the prompt examples (owner: "drop some of the
+duplicates"), with the two capitalized subject-line homographs (idx 128, 133) kept by
+owner decision, and 1 validator drop. All 150 raw rows read by hand: no person names.
+Validator: `sft_synth_v2.validate_negative_row`. Rebuild with
+`PYTHONPATH=src python3 scripts/finalize_short_eval_neg_v1.py`. The freeze config on
+`feat/m07b-freeze-d1` must pin this sha.
+
 ## Interim analysis + D0 notebook prepared (2026-10-04)
 
 - **Name-pool quality census + R07 implemented (owner-approved 2026-10-04)**:
