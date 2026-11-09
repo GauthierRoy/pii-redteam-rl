@@ -288,6 +288,83 @@ def validate_row(row: dict) -> list[str]:
     return validate_row_schema(row) + validate_row_content(row)
 
 
+# Name-free ("negative") eval rows (short_eval_neg_v1). Each row carries the
+# kind of non-person word it is built around. GATED_DISTRACTORS decide the
+# false-positive gate; "homograph" (words that are also names, used in their
+# ordinary sense) is report-only (owner decision, 2026-11-09).
+DISTRACTORS = ("place", "org_product", "calendar", "homograph", "role_only")
+GATED_DISTRACTORS = ("place", "org_product", "calendar", "role_only")
+
+_PLACEHOLDER_RE = re.compile(r"\[[^\]]*\]|\{[^}]*\}|<[^>]*>|\bX{3,}\b")
+_HEADER_LINE_RE = re.compile(r"^(?:Subject|From|To):.*$", re.MULTILINE)
+
+
+def validate_negative_row(row: dict) -> list[str]:
+    """All hard errors for a name-free eval row. Empty means shippable.
+
+    Schema: split ``short_eval``; ``request.entities == []``; ``name_position``,
+    ``name_form`` and ``target.span`` are null; ``distractor`` is one of
+    DISTRACTORS. Content: non-empty text, word count inside target_length, the
+    filler checks, no refusal/meta text, no placeholders. Absence of person
+    names cannot be proven in code; it is a manual audit recorded in the manifest.
+    """
+    errors: list[str] = []
+    if row.get("split") != "short_eval":
+        errors.append(f"split must be 'short_eval', got {row.get('split')!r}")
+    request = row.get("request")
+    if not isinstance(request, dict):
+        return errors + ["row needs a mapping 'request'"]
+    if request.get("language") != "en":
+        errors.append(f"request.language must be 'en', got {request.get('language')!r}")
+    if request.get("context_type") not in CONTEXT_TYPES:
+        errors.append(f"unknown context_type {request.get('context_type')!r}")
+    bounds = request.get("target_length")
+    if not isinstance(bounds, list) or tuple(bounds) not in LENGTH_BUCKETS:
+        errors.append(f"target_length {bounds!r} is not one of {LENGTH_BUCKETS}")
+    if request.get("entities") != []:
+        errors.append("request.entities must be [] for a name-free row")
+    if request.get("name_position") is not None:
+        errors.append("request.name_position must be null for a name-free row")
+    if row.get("name_form") is not None:
+        errors.append("name_form must be null for a name-free row")
+    if row.get("distractor") not in DISTRACTORS:
+        errors.append(f"distractor must be one of {DISTRACTORS}, got {row.get('distractor')!r}")
+    provenance = row.get("provenance")
+    if provenance not in PROVENANCES and not (
+        isinstance(provenance, str) and provenance.startswith(LLM_DIRECT_PREFIX)
+    ):
+        errors.append(f"bad provenance {provenance!r}")
+    target = row.get("target")
+    if not isinstance(target, dict):
+        return errors + ["row needs a mapping 'target'"]
+    if target.get("span") is not None:
+        errors.append("target.span must be null for a name-free row")
+    text = target.get("text")
+    if not isinstance(text, str) or not text.strip():
+        return errors + ["target.text must be a non-empty string"]
+    rep = repeated_sentence(text)
+    if rep:
+        errors.append(f"filler: repeated sentence {rep!r}")
+    if short_sentence_excess(text):
+        errors.append("filler: >= 3 sentences under 4 words")
+    # A subject line echoed in the body is normal email, not filler padding, so
+    # the 3-gram check runs on the text with email header lines removed.
+    tg = repeated_trigram(_HEADER_LINE_RE.sub("", text))
+    if tg:
+        errors.append(f"filler: repeated 3-gram {' '.join(tg)!r}")
+    if isinstance(bounds, list) and len(bounds) == 2:
+        n = word_count(text)
+        if not bounds[0] <= n <= bounds[1]:
+            errors.append(f"word count {n} outside target_length {bounds}")
+    hit = refusal_or_meta_hit(text)
+    if hit:
+        errors.append(f"refusal/meta-text pattern {hit!r}")
+    ph = _PLACEHOLDER_RE.search(text)
+    if ph:
+        errors.append(f"placeholder {ph.group(0)!r}")
+    return errors
+
+
 def normalize(text: str) -> str:
     """Lowercase whitespace-collapsed form for exact-dup detection."""
     return re.sub(r"\s+", " ", text.lower()).strip()
