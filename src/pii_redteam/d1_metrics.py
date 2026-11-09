@@ -39,6 +39,68 @@ def load_synthetic_rows(path: str) -> list[dict]:
     return rows
 
 
+def load_negative_rows(path: str) -> list[dict]:
+    """Name-free short messages -> detector rows with no gold span.
+
+    Same schema as the short_eval files, but `request.entities == []`,
+    `target.span is None`, and a top-level `distractor` type (place, org_product, ...). Any row that names an entity or carries a span is rejected:
+    a negative set with a labeled person in it would count true hits as false positives.
+    """
+    rows = []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            rec = json.loads(line)
+            entities = rec["request"]["entities"]
+            if entities != []:
+                raise ValueError(f"{rec['id']}: a negative row must have no entities")
+            if rec["target"].get("span") is not None:
+                raise ValueError(f"{rec['id']}: a negative row must have target.span == null")
+            text = rec["target"]["text"]
+            if not isinstance(text, str) or not text.strip():
+                raise ValueError(f"{rec['id']}: empty text")
+            distractor = rec.get("distractor")
+            if not isinstance(distractor, str) or not distractor:
+                raise ValueError(f"{rec['id']}: a negative row needs a 'distractor' type")
+            rows.append(
+                {
+                    "example_id": rec["id"],
+                    "text": text,
+                    "spans": [],
+                    "name": None,
+                    "distractor": distractor,
+                }
+            )
+    if not rows:
+        raise ValueError(f"{path}: no rows")
+    return rows
+
+
+def negative_fp_metrics(rows: list[dict], preds: list[list[tuple[int, int]]]) -> dict:
+    """False positives on name-free rows: rows with any predicted span, and span count."""
+    if len(rows) != len(preds):
+        raise ValueError(f"{len(rows)} rows but {len(preds)} predictions")
+    if any(row["spans"] for row in rows):
+        raise ValueError("negative_fp_metrics takes name-free rows only")
+    flagged = [
+        {
+            "id": row["example_id"],
+            "text": row["text"],
+            "spans": [[s, e, row["text"][s:e]] for s, e in sorted(set(pred))],
+        }
+        for row, pred in zip(rows, preds, strict=True)
+        if pred
+    ]
+    return {
+        "rows": len(rows),
+        "rows_with_pred": len(flagged),
+        "pred_spans": sum(len(set(pred)) for pred in preds),
+        "fp_row_rate": round(len(flagged) / len(rows), 4) if rows else None,
+        "flagged": sorted(flagged, key=lambda f: f["id"]),
+    }
+
+
 def split_by_name(rows: list[dict], dev_fraction: float, seed: int) -> tuple[list, list]:
     """Seeded train/dev split with no exact name (case-folded) in both parts."""
     by_name: dict[str, list[dict]] = {}
@@ -67,7 +129,7 @@ def span_metrics(rows: list[dict], preds: list[list[tuple[int, int]]]) -> dict:
     """
     if len(rows) != len(preds):
         raise ValueError(f"{len(rows)} rows but {len(preds)} predictions")
-    tp = fp = fn = neg_rows = neg_fp = extra_spans = rows_with_extra = 0
+    tp = fp = fn = neg_rows = neg_fp = neg_rows_with_pred = extra_spans = rows_with_extra = 0
     outcomes = dict.fromkeys(OUTCOMES, 0)
     per_row: dict[str, str] = {}
     for row, pred in zip(rows, preds, strict=True):
@@ -79,6 +141,7 @@ def span_metrics(rows: list[dict], preds: list[list[tuple[int, int]]]) -> dict:
         if not gold:
             neg_rows += 1
             neg_fp += len(pred_set)
+            neg_rows_with_pred += bool(pred_set)
         extra = [p for p in pred_set if not any(p[0] < g[1] and p[1] > g[0] for g in gold_set)]
         extra_spans += len(extra)
         rows_with_extra += bool(extra)
@@ -104,6 +167,7 @@ def span_metrics(rows: list[dict], preds: list[list[tuple[int, int]]]) -> dict:
         else None,
         "neg_rows": neg_rows,
         "neg_false_positives": neg_fp,
+        "neg_rows_with_pred": neg_rows_with_pred,
         "extra_pred_spans": extra_spans,
         "rows_with_extra_pred": rows_with_extra,
         "per_row_outcome": per_row,

@@ -27,7 +27,10 @@ CONTROLS_NON_PERSON = (
     ("Peru", "We spent two weeks hiking in Peru last spring and the mountain views were superb."),
     ("Church", "Turn left at the old Church and the bakery is the second door on the right."),
     ("Taekwondo", "Taekwondo practice moved to the small gym, so bring your own mat on Thursday."),
-    ("Franklin", "The Franklin stove in the cabin needs a new flue before the cold weather starts."),
+    (
+        "Franklin",
+        "The Franklin stove in the cabin needs a new flue before the cold weather starts.",
+    ),
     ("Pika", "The Pika is a small mountain mammal that gathers grass and stores it for winter."),
     ("Monterosa", "The ski lifts at Monterosa open at nine, and the valley road closes at dusk."),
     ("George", "The George is a quiet pub by the river that serves food until nine each night."),

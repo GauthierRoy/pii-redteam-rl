@@ -30,9 +30,8 @@ from pii_redteam.probe_metrics import (
     diversity_metrics,
     outcome_for_sample,
     parse_json_tolerant,
-    reward_metrics,
+    per_temperature_metrics,
     reward_variants,
-    threshold_report,
 )
 from pii_redteam.requests import render_prompt
 from pii_redteam.run_io import append_jsonl, write_jsonl
@@ -505,18 +504,13 @@ def run_probe(config: dict, repo_dir: str) -> dict:
         "checks": checks,
     }
     greedy_metrics = diversity_metrics(greedy)
-    per_temp: dict[str, dict] = {}
-    for temp in gen_cfg["temperatures"]:
-        subset = [s for s in samples if s["temperature"] == temp]
-        dm = diversity_metrics(subset)
-        rm = reward_metrics(subset, config["rewards"]["logit_clip"])
-        rm["target_spans_lost_to_d0_truncation"] = lost
-        dm["json_tolerant_rate"] = round(
-            sum(1 for s in subset if s["json_tolerant_ok"]) / len(subset), 4
-        )
-        dm.update(rm)
-        dm["thresholds"] = threshold_report(dm | rm, config["thresholds"])
-        per_temp[str(temp)] = dm
+    per_temp = per_temperature_metrics(
+        samples,
+        gen_cfg["temperatures"],
+        config["rewards"]["logit_clip"],
+        config["thresholds"],
+        lost,
+    )
     report["greedy_reference"] = {
         k: v for k, v in greedy_metrics.items() if k in ("contract_rate", "failure_breakdown")
     }

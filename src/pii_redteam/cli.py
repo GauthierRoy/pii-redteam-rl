@@ -30,6 +30,11 @@ def main() -> None:
     )
     final_eval.add_argument("--config", required=True, help="path to a train-d1 YAML config")
     final_eval.add_argument("--run-dir", required=True, help="the train-d1 run directory")
+    freeze = sub.add_parser(
+        "freeze-d1",
+        help="M07b.3/.4 final-eval no-regression, re-probe, then freeze D1 if every gate passes",
+    )
+    freeze.add_argument("--config", required=True, help="path to a freeze-d1 YAML config")
     args = parser.parse_args()
 
     if args.command == "probe-base":
@@ -72,6 +77,28 @@ def main() -> None:
             print(json.dumps({"run_id": report["run_id"], "status": report["status"]}, indent=2))
         else:
             run_d1_final_eval(config, repo_dir, args.run_dir)
+    elif args.command == "freeze-d1":
+        with open(args.config, encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        repo_dir = config.get("repo_dir") or os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+        config.setdefault("repo_commit", os.environ.get("PROBE_REPO_COMMIT", "unrecorded"))
+        from pii_redteam.freeze_d1 import run_freeze_d1
+
+        report = run_freeze_d1(config, repo_dir)
+        print(
+            json.dumps(
+                {
+                    "run_id": report["run_id"],
+                    "status": report["status"],
+                    "failing_required": report["decision"]["failing_required"],
+                },
+                indent=2,
+            )
+        )
+        if report["status"] != "frozen":
+            raise SystemExit(2)
 
 
 if __name__ == "__main__":

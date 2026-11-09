@@ -290,3 +290,31 @@ def threshold_report(metrics: dict, thresholds: dict) -> dict:
         ),
     }
     return {name: {"ok": bool(ok), "detail": detail} for name, (ok, detail) in checks.items()}
+
+
+def per_temperature_metrics(
+    samples: list[dict],
+    temperatures: list[float],
+    clip: float,
+    thresholds: dict,
+    target_spans_lost: int,
+) -> dict[str, dict]:
+    """Diversity + reward metrics and the go/no-go table for each sampling temperature.
+
+    `samples` must already be validated, scored and finalized (see `probe.py`). Used by
+    the M07a probe itself and by the M07b.4 re-probe, which rescores the same samples
+    with a second detector.
+    """
+    per_temp: dict[str, dict] = {}
+    for temp in temperatures:
+        subset = [s for s in samples if s["temperature"] == temp]
+        dm = diversity_metrics(subset)
+        rm = reward_metrics(subset, clip)
+        rm["target_spans_lost_to_d0_truncation"] = target_spans_lost
+        dm["json_tolerant_rate"] = round(
+            sum(1 for s in subset if s["json_tolerant_ok"]) / len(subset), 4
+        )
+        dm.update(rm)
+        dm["thresholds"] = threshold_report(dm | rm, thresholds)
+        per_temp[str(temp)] = dm
+    return per_temp

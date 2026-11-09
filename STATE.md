@@ -528,6 +528,38 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
 - **D0 caveat**: the D0 notebook counted truncated spans inside DataLoader workers, so its
   recorded `truncated_spans_lost: 0` is unreliable. `train_d1.py` counts in the main process.
 
+## M07b D1 freeze prepared, NOT yet run (2026-11-09, feat/m07b-freeze-d1)
+
+- **Input**: training run `d1-20261108-145253` (repo `b8550eb`, T4, best epoch 2, status
+  `trained_pending_final_eval`, d1 sha `7c66f29e…deb4`). Per its report: short_eval_v2
+  recall 0.42 -> 0.9933, short_eval_deepseek_v1 0.44 -> 1.0; dev F1 0.9633 -> 0.9592,
+  dev precision 0.9587 -> 0.9511, FP spans on name-free dev rows 129 -> 162.
+  Not yet in `EXPERIMENTS.yaml` (add from `d1_report.json`).
+- **Code**: `src/pii_redteam/freeze_d1.py` (orchestration), `freeze_gates.py` (pure gates,
+  manifest, never-overwrite copy), CLI `freeze-d1`, `configs/m07b_freeze_d1.yaml`,
+  launcher `colab/M07b_freeze_d1.ipynb`. Reuses `run_d1_final_eval` (single use: an
+  existing `d1_final_eval_report.json` is reused, never re-scored) and `run_probe`
+  unchanged; the probe's per-temperature block moved to
+  `probe_metrics.per_temperature_metrics` so D0 can be rescored on D1's probe texts.
+- **Required gates**: final-eval span-F1 drop <= 0.01; the pre-registered precision AND
+  recall drop <= 0.01 (`m07b_train_d1.yaml`); precision guard; M07a probe go/no-go
+  against D1 with the miss rate inside the 1–30% band at one temperature at least.
+- **PROPOSED, owner decision pending (D07)**: precision guard = D1's name-free-row
+  flagged rate on final-eval at most +25% relative to D0's; short-negatives gate = D1
+  flags <= 5% of the gated rows. On dev the FP span count rose +25.6%, so the guard may
+  be close.
+- **Short negatives**: optional `data/synthetic/short_eval_neg_v1.jsonl` (not yet
+  written; sha unpinned). Rows carry `distractor`: place, org_product, calendar,
+  role_only are gated; homograph is reported D0 vs D1 only (owner decision). Absent ->
+  "skipped: not provided"; present but unpinned or mismatched -> blocks the freeze.
+- **Verified**: unit tests (`tests/unit/test_freeze_d1.py`), lint, ty, and a mocked
+  CPU dry run of `run_freeze_d1` (pass, blocked, existing-frozen-dir, short-negatives).
+  **Unverified until the T4 run**: real scoring, probe runtime (3,400 generations).
+- **Open**: the M07a probe was never run in full on GPU (only the pilot and the local
+  smoke), so there is no recorded D0 full-probe baseline; the D0 numbers come from
+  rescoring D1's probe texts. The probe uses the v1 prompt, as M07a did, while M08
+  will use P1 (D14).
+
 ## Artifacts
 
 - **`EXPERIMENTS.yaml` (repo root)** — append-only registry of every executed run:
