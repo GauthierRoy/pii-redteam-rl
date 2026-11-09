@@ -38,6 +38,7 @@ from pii_redteam.freeze_gates import (
     short_negatives_report,
 )
 from pii_redteam.probe_metrics import per_temperature_metrics
+from pii_redteam.sft_synth_v2 import DISTRACTORS, GATED_DISTRACTORS
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -513,14 +514,25 @@ class FreezeConfigTest(unittest.TestCase):
                     neg["sha256"],
                     "a0ffa9ecec0e589d3ae1ad23043c086c2d9250c2d4f3c0581e930f54a379069f",
                 )
-                # Must match sft_synth_v2.DISTRACTORS / GATED_DISTRACTORS in PR #19.
+                # Same lists as the dataset's own constants (PR #19).
+                self.assertEqual(tuple(neg["gated_distractors"]), GATED_DISTRACTORS)
                 self.assertEqual(
-                    neg["gated_distractors"], ["place", "org_product", "calendar", "role_only"]
+                    set(neg["gated_distractors"]) | set(neg["report_only_distractors"]),
+                    set(DISTRACTORS),
                 )
                 self.assertEqual(neg["report_only_distractors"], ["homograph"])
                 resolved = resolve_optional_input(REPO, neg["path"], neg["sha256"])
-                # "missing" until PR #19 is merged into this branch; never a wrong file
-                self.assertIn(resolved["state"], ("missing", "ok"))
+                self.assertEqual(resolved["state"], "ok")
+
+    def test_pinned_short_negatives_load_as_95_gated_and_16_homograph_rows(self):
+        neg = _load_yaml("configs", "m07b_freeze_d1_v2.yaml")["short_negatives"]
+        rows = load_negative_rows(os.path.join(REPO, neg["path"]))
+        empty = [[] for _ in rows]
+        rep = short_negatives_report(
+            rows, empty, empty, neg["gated_distractors"], neg["report_only_distractors"], 0.05
+        )
+        self.assertEqual((rep["rows"], rep["gate"]["rows"]), (111, 95))
+        self.assertEqual(rep["report_only"]["d1"]["rows"], 16)
 
     def test_v2_training_config_only_adds_epoch_saving_and_the_freeze_rule(self):
         v1 = _load_yaml("configs", "m07b_train_d1.yaml")
