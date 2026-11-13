@@ -15,10 +15,8 @@ import hashlib
 import json
 import math
 import os
-import statistics
 import sys
 import time
-from collections import defaultdict
 
 import torch
 from datasets import Dataset
@@ -40,6 +38,7 @@ from .grpo_compat import build_grpo_config
 from .rl_bank import bank_names, build_rl_requests
 from .rl_dataset import RL_PROMPT_VARIANT, rl_rows
 from .rl_reward import D1Reward
+from .rl_signal import signal_summary
 
 DETECTOR_MAX_LENGTH = 512
 
@@ -165,29 +164,6 @@ def sample_and_score(tok, model, requests, config: dict, reward: D1Reward, devic
     ):
         sample.update({"reward": r, "status": status, "p_target_mean": p})
     return samples, metrics
-
-
-def signal_summary(samples: list[dict], metrics: dict) -> dict:
-    """Group-level view of the reward signal: is there anything for GRPO to learn from?"""
-    groups: dict[str, list[dict]] = defaultdict(list)
-    for sample in samples:
-        groups[sample["request_id"]].append(sample)
-    group_std = [statistics.pstdev([s["reward"] for s in g]) for g in groups.values()]
-    group_has_miss = [any(s["reward"] > 0.5 for s in g) for g in groups.values()]
-    group_unique = [len({s["raw_text"] for s in g}) / len(g) for g in groups.values()]
-    valid = [s for s in samples if s["status"] == "valid"]
-    return {
-        "samples": len(samples),
-        "groups": len(groups),
-        **metrics,
-        "groups_with_detector_miss": sum(group_has_miss) / len(groups),
-        "mean_group_reward_std": statistics.mean(group_std),
-        "mean_valid_reward": statistics.mean(s["reward"] for s in valid) if valid else None,
-        "mean_unique_text_share_per_group": statistics.mean(group_unique),
-        "mean_valid_words": statistics.mean(len(s["text"].split()) for s in valid)
-        if valid
-        else None,
-    }
 
 
 def smoke_checks(config: dict, summary: dict) -> dict[str, dict]:
