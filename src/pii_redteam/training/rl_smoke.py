@@ -67,6 +67,16 @@ def resolve(path: str, repo_dir: str) -> str:
     return path if os.path.isabs(path) else os.path.join(repo_dir, path)
 
 
+def upcast_trainable_params_to_fp32(model) -> int:
+    """TRL casts QLoRA adapters to bf16; the fp16 grad scaler (T4) cannot unscale bf16 grads."""
+    changed = 0
+    for param in model.parameters():
+        if param.requires_grad and param.dtype != torch.float32:
+            param.data = param.data.to(torch.float32)
+            changed += 1
+    return changed
+
+
 def save_report(report: dict, path: str) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
@@ -277,6 +287,8 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
         ),
         callbacks=[stopper],
     )
+    if device == "cuda" and dtype == torch.float16:
+        print(f"fp16 run: {upcast_trainable_params_to_fp32(model)} trainable tensors cast to fp32")
     started_training = time.time()
     trainer.train(resume_from_checkpoint=config.get("resume_from_checkpoint"))
     train_seconds = time.time() - started_training

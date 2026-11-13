@@ -32,7 +32,7 @@ BIO_LABELS = {0: "O", 1: "B-PERSON", 2: "I-PERSON"}
 if HAS_STACK:
     import torch
     from datasets import Dataset
-    from peft import LoraConfig
+    from peft import LoraConfig, get_peft_model
     from transformers import (
         AutoModelForCausalLM,
         AutoModelForTokenClassification,
@@ -43,6 +43,7 @@ if HAS_STACK:
 
     from pii_redteam.training.d1_scorer import D1Scorer
     from pii_redteam.training.rl_reward import INVALID_REWARD, D1Reward
+    from pii_redteam.training.rl_smoke import upcast_trainable_params_to_fp32
 
     class RecordingTrainer(GRPOTrainer):
         """Keeps every generation batch the trainer builds, before it is split for training."""
@@ -267,6 +268,24 @@ class TestGrpoUpdatePath(unittest.TestCase):
         rewards = [e["reward"] for e in trainer.state.log_history if "reward" in e]
         first, last = sum(rewards[:5]) / 5, sum(rewards[-5:]) / 5
         self.assertGreater(last, first + 2.0)
+
+
+@unittest.skipUnless(HAS_STACK, "needs torch, transformers, peft and trl")
+class TestUpcastTrainableParams(unittest.TestCase):
+    def test_trainable_adapters_become_fp32_and_frozen_weights_keep_their_dtype(self):
+        try:
+            base = AutoModelForCausalLM.from_pretrained(TINY_MODEL, dtype=torch.float16)
+        except OSError as error:
+            raise unittest.SkipTest(f"tiny model not available: {error}") from error
+        model = get_peft_model(base, LoraConfig(r=4, target_modules="all-linear"))
+        for param in model.parameters():
+            if param.requires_grad:
+                param.data = param.data.to(torch.bfloat16)
+        changed = upcast_trainable_params_to_fp32(model)
+        self.assertGreater(changed, 0)
+        for name, param in model.named_parameters():
+            expected = torch.float32 if param.requires_grad else torch.float16
+            self.assertEqual(param.dtype, expected, name)
 
 
 if __name__ == "__main__":
