@@ -237,3 +237,32 @@ runs:
       name_at_start_share: 0.2508
       d0_extra_name_flags: pending
     outcome: "Synthetic SFT v2 dataset complete: 1195 train (idx 0-1149 + 45 gap-fill over 15 tail cells), 100 dev (balanced 100-subset of 150), 300 short_eval (held-out names only). Seeded quotas (20260920) + template-bank generation with synonym paraphrase; validator ground truth. /tmp wipe mid-flight destroyed all staging; quotas regenerated bit-identically and texts re-generated. D0 flagging pending (frozen checkpoint unavailable at finalize time). No training."
+
+  - run_id: d1v2-freeze-20261110-081446
+    kind: detector-freeze
+    milestone: M07b.3/M07b.4
+    executed: 2026-11-10
+    where: colab (GPU type not recorded in the manifest)
+    repo_commit: 676ce54cf8cefed521bae037c9c5cf901fa8ee51
+    source_run_id: d1v2-20261110-075731
+    artifacts: "Drive: pii-redteam-rl/d1-frozen-d1v2-20261110-075731/ (freeze_manifest.json, model.safetensors, config, tokenizer); source run Drive: pii-redteam-rl/d1v2-20261110-075731/"
+    checks: { pass: 20, fail: 0 }
+    metrics:
+      d1_model_sha256: ebfe4c693958c84cdb093d1a55b535e51f1ba0563a702e69e3c97bf5a36a4143
+      chosen_candidate: d1-epoch2
+      selection_rule: fewest_dev_neg_fp_rows
+      dev_span_f1_by_candidate: { d1-epoch2: 0.9605, d1-epoch3: 0.9636 }
+      dev_neg_rows_with_pred: { d1-epoch2: 67, d1-epoch3: 100 }
+      final_eval_span_f1: { d0: 0.9539, d1: 0.953, drop: 0.0009, max_drop: 0.01 }
+      final_eval_precision_recall_drop: { precision: -0.0026, recall: 0.0042, max_drop: 0.01 }
+      final_eval_name_free: { rows: 710, d0_rows_with_pred: 9, d1_rows_with_pred: 9 }
+      short_negatives_fp_row_rate: { gated_types: [place, org_product, calendar, role_only], rows: 95, d0: 0.0, d1: 0.0316, max: 0.05 }
+      probe_miss_rate_d1: { t1.0: 0.0138, t0.7: 0.0134 }
+      probe_go: { t1.0: true, t0.7: false }
+      local_reproduction_2026-11-12:
+        note: "Frozen D0 and D1 (both sha verified) rescored on a laptop CPU with the freeze's own predict_spans at commit 676ce54; data shas match the config locks. Not a Colab run."
+        short_negatives_flagged_rows: { gated: { d0: 0, d1: 3 }, rows: 95, d1_by_distractor: { place: 1, org_product: 2, calendar: 0, role_only: 0, homograph: 0 } }
+        short_eval_v2: { rows: 150, d0: { precision: 0.759, recall: 0.42, complete_miss: 69 }, d1: { precision: 0.9868, recall: 0.9933, complete_miss: 1 }, recall_gain: 0.5733, gain_min: 0.10, gate_ok: true }
+        short_eval_deepseek_v1: { rows: 50, d0: { precision: 0.6875, recall: 0.44, complete_miss: 19 }, d1: { precision: 1.0, recall: 1.0, complete_miss: 0 } }
+        regressions_d1_vs_d0: 0
+    outcome: "D1 FROZEN (d1-epoch2). All 20 required manifest checks pass. Probe go only at temperature 1.0 (0.7 fails on duplicates); miss rate ~1.4% is just above the 1% band floor. D0-vs-D1 short_eval gate computed locally 2026-11-12 (recall +0.5733 vs 0.10 min, pass, 0 regressions); training run d1v2-20261110-075731 itself is not yet registered."

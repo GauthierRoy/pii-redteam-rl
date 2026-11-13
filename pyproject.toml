@@ -3,7 +3,7 @@ name = "pii-redteam-rl"
 version = "0.1.0"
 description = "RL-guided synthetic data for robust PII detection (M01 scaffolding)"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 # uv is the single dependency-management method (`uv sync`, `uv run`).
 # `requirements.txt` is a Colab/pip fallback exporting the same runtime set.
 # Keep runtime deps minimal; uv.lock pins the tested environment (M01.2).
@@ -25,6 +25,7 @@ ml = [
   "transformers>=5.18",
   "accelerate>=1.0",
   "peft>=0.16",
+  "trl>=1.17",
   "matplotlib>=3.8",
   "spacy>=3.7",
   "en-core-web-sm",
