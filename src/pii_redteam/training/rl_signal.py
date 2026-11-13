@@ -19,7 +19,7 @@ def signal_summary(samples: list[dict], metrics: dict) -> dict:
     group_has_miss = [any(s["reward"] > MISS_REWARD for s in g) for g in groups.values()]
     group_unique = [len({s["raw_text"] for s in g}) / len(g) for g in groups.values()]
     valid = [s for s in samples if s["status"] == "valid"]
-    words = [len(parse_json_strict(s["raw_text"]).split()) for s in valid]
+    words = [len((parse_json_strict(s["raw_text"]) or "").split()) for s in valid]
     return {
         "samples": len(samples),
         "groups": len(groups),
