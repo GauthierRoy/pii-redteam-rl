@@ -1,0 +1,56 @@
+# M08 timing benchmark: 10 GRPO steps on one GPU, bf16 LoRA (no 4-bit), to compare generation
+# backends and kernels before the long run. Same reward, prompt and sampling as the smoke run.
+# The Modal launcher (scripts/modal_rl.py) overrides the paths and the vllm_* keys per arm.
+
+run_id_prefix: m08-bench
+model_id: Qwen/Qwen3.5-2B
+seed: 20261113
+work_dir: artifacts/m08
+splits_dir: artifacts/splits
+locks:
+  final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
+max_minutes: 10                    # hard wall-clock cap on training, then save and stop
+resume_from_checkpoint: null
+
+bank:
+  seed: 20261113
+  n_signal: 8                      # sanity sample only: 8 requests x 8 rollouts before and after
+  n_train: 40                      # 10 steps x 4 prompts
+  exclude_banks:
+    - banks/v2_prompting/spark_seed20260920_v2_n20.jsonl
+
+detector:
+  path: artifacts/d1-frozen-d1v2-20261110-075731
+  sha256: ebfe4c693958c84cdb093d1a55b535e51f1ba0563a702e69e3c97bf5a36a4143
+
+model:
+  quantize_4bit: false
+
+lora:
+  r: 16
+  alpha: 32
+  target_modules: all-linear
+
+sampling:
+  temperature: 1.0
+  top_p: 1.0
+  batch_prompts: 4
+
+grpo:
+  num_generations: 8
+  per_device_train_batch_size: 8
+  gradient_accumulation_steps: 4
+  max_completion_length: 192
+  max_steps: 10
+  learning_rate: 2.0e-5
+  beta: 0.02
+  scale_rewards: false
+  gradient_checkpointing: true
+  save_steps: 10
+  save_total_limit: 2
+
+thresholds:                        # timing run: only the health checks that do not depend on 10 steps
+  pre_valid_rate_min: 0.0
+  peak_memory_fraction_max: 0.92
+  valid_rate_drop_max: 1.0
+  skipped_update_fraction_max: 0.5

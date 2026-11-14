@@ -53,3 +53,4 @@ thresholds:                        # health checks, not learning claims
   pre_valid_rate_min: 0.85
   peak_memory_fraction_max: 0.92
   valid_rate_drop_max: 0.10
+  skipped_update_fraction_max: 0.5   # fp16 grad-scaler skips (inf grads) are expected early on

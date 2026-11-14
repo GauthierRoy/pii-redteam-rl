@@ -1,0 +1,62 @@
+# M08 long RL run: GRPO + LoRA on Qwen3.5-2B against the frozen D1 reward, colocated vLLM sampling.
+# Same reward (D18: r_prob, invalid = -1), prompt (P1), sampling and optimizer settings as the
+# smoke run; only the scale, the backend (bf16 + vLLM) and the checkpoint cadence change.
+# The Modal launcher (scripts/modal_rl.py) overrides the paths.
+
+run_id_prefix: m08-long
+model_id: Qwen/Qwen3.5-2B
+seed: 20261113
+work_dir: artifacts/m08
+splits_dir: artifacts/splits
+locks:
+  final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
+max_minutes: 135                   # hard wall-clock cap on training, then save and stop
+resume_from_checkpoint: null
+vllm_multimodal_names: true        # sync the text-only policy into vLLM's multimodal Qwen3.5
+
+bank:
+  seed: 20261113
+  n_signal: 32                     # same held-out pre/post comparison size as the smoke run
+  n_train: 2000                    # 1000 steps x 4 prompts = 2 passes
+  exclude_banks:
+    - banks/v2_prompting/spark_seed20260920_v2_n20.jsonl
+
+detector:
+  path: artifacts/d1-frozen-d1v2-20261110-075731
+  sha256: ebfe4c693958c84cdb093d1a55b535e51f1ba0563a702e69e3c97bf5a36a4143
+
+model:
+  quantize_4bit: false
+
+lora:
+  r: 16
+  alpha: 32
+  target_modules: all-linear
+
+sampling:
+  temperature: 1.0
+  top_p: 1.0
+  batch_prompts: 4
+
+grpo:
+  num_generations: 8
+  per_device_train_batch_size: 8
+  gradient_accumulation_steps: 4
+  max_completion_length: 192
+  max_steps: 1000
+  learning_rate: 2.0e-5
+  beta: 0.02
+  scale_rewards: false
+  gradient_checkpointing: true
+  save_steps: 50
+  save_total_limit: 3
+  use_vllm: true
+  vllm_mode: colocate
+  vllm_gpu_memory_utilization: 0.3
+  vllm_max_model_length: 1024
+
+thresholds:                        # health checks, not learning claims
+  pre_valid_rate_min: 0.7
+  peak_memory_fraction_max: 0.92
+  valid_rate_drop_max: 0.10
+  skipped_update_fraction_max: 0.5

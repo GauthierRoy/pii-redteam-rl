@@ -16,6 +16,7 @@ so the policy actually responds to small hidden-state changes.
 import importlib.util
 import tempfile
 import unittest
+from unittest import mock
 
 HAS_STACK = all(importlib.util.find_spec(m) for m in ("torch", "transformers", "peft", "trl"))
 TINY_MODEL = "hf-internal-testing/tiny-random-LlamaForCausalLM"
@@ -43,7 +44,14 @@ if HAS_STACK:
 
     from pii_redteam.training.d1_scorer import D1Scorer
     from pii_redteam.training.rl_reward import INVALID_REWARD, D1Reward
-    from pii_redteam.training.rl_smoke import upcast_trainable_params_to_fp32
+    from pii_redteam.training.rl_smoke import (
+        TimedGRPOTrainer,
+        align_vllm_names_with_multimodal_checkpoint,
+        restrict_vllm_to_language_model,
+        timing_summary,
+        to_multimodal_qwen_name,
+        upcast_trainable_params_to_fp32,
+    )
 
     class RecordingTrainer(GRPOTrainer):
         """Keeps every generation batch the trainer builds, before it is split for training."""
@@ -72,6 +80,7 @@ if HAS_STACK:
         group=GROUP,
         eos_bias=EOS_BIAS,
         head_scale=1.0,
+        trainer_cls=RecordingTrainer,
         **overrides,
     ):
         set_seed(0)
@@ -92,7 +101,7 @@ if HAS_STACK:
         }
         args.update(overrides)
         rows = [{"prompt": f"Write a message for {n}.", "name": n} for n in names]
-        trainer = RecordingTrainer(
+        trainer = trainer_cls(
             model=eos_prone_model(tokenizer.eos_token_id, eos_bias, head_scale),
             reward_funcs=reward_funcs,
             args=GRPOConfig(**args),
@@ -255,6 +264,16 @@ class TestGrpoUpdatePath(unittest.TestCase):
         self.trainer(ScoringReward(scorer, sample), max_steps=2).train()
         self.assertEqual(max_change(before, detector), 0.0)
 
+    def test_generation_is_timed_once_per_update_and_within_the_step_time(self):
+        trainer = self.trainer(length_reward, max_steps=3, trainer_cls=TimedGRPOTrainer)
+        trainer.train()
+        step_times = [e["step_time"] for e in trainer.state.log_history if "step_time" in e]
+        self.assertEqual(len(step_times), 3)
+        self.assertEqual(len(trainer.generation_seconds), 3)
+        for step, generation in zip(step_times, trainer.generation_seconds, strict=True):
+            self.assertGreater(generation, 0.0)
+            self.assertGreaterEqual(step, generation)
+
     def test_controlled_reward_learning_shortens_completions(self):
         trainer = self.trainer(
             length_reward,
@@ -268,6 +287,60 @@ class TestGrpoUpdatePath(unittest.TestCase):
         rewards = [e["reward"] for e in trainer.state.log_history if "reward" in e]
         first, last = sum(rewards[:5]) / 5, sum(rewards[-5:]) / 5
         self.assertGreater(last, first + 2.0)
+
+
+@unittest.skipUnless(HAS_STACK, "needs torch, transformers, peft and trl")
+class TestRestrictVllmToLanguageModel(unittest.TestCase):
+    def test_trl_vllm_engine_is_built_with_language_model_only(self):
+        from trl.generation import vllm_generation
+
+        engine = mock.Mock()
+        with mock.patch.object(vllm_generation, "LLM", engine, create=True):
+            restrict_vllm_to_language_model()
+            vllm_generation.LLM(model="m", seed=1)
+        engine.assert_called_once_with(model="m", seed=1, language_model_only=True)
+
+
+@unittest.skipUnless(HAS_STACK, "needs torch, transformers, peft and trl")
+class TestMultimodalQwenNames(unittest.TestCase):
+    def test_text_only_names_get_the_language_model_prefix(self):
+        self.assertEqual(
+            to_multimodal_qwen_name("model.layers.0.mlp.down_proj.weight"),
+            "model.language_model.layers.0.mlp.down_proj.weight",
+        )
+        self.assertEqual(
+            to_multimodal_qwen_name("model.embed_tokens.weight"),
+            "model.language_model.embed_tokens.weight",
+        )
+
+    def test_head_and_already_multimodal_names_are_left_alone(self):
+        for name in (
+            "lm_head.weight",
+            "model.language_model.layers.0.mlp.down_proj.weight",
+            "model.visual.blocks.0.attn.qkv.weight",
+        ):
+            self.assertEqual(to_multimodal_qwen_name(name), name)
+
+    def test_trl_name_fixer_applies_both_the_trl_cleanup_and_the_rename(self):
+        from trl.generation import vllm_generation
+
+        with mock.patch.object(vllm_generation.VLLMGeneration, "_fix_param_name_to_vllm"):
+            align_vllm_names_with_multimodal_checkpoint()
+            fixed = vllm_generation.VLLMGeneration._fix_param_name_to_vllm(
+                object(), "model._checkpoint_wrapped_module.layers.0.norm.weight"
+            )
+        self.assertEqual(fixed, "model.language_model.layers.0.norm.weight")
+
+
+@unittest.skipUnless(HAS_STACK, "needs torch, transformers, peft and trl")
+class TestTimingSummary(unittest.TestCase):
+    def test_median_and_rounded_per_step_values(self):
+        summary = timing_summary([1.0, 3.0, 2.0], [0.5, 0.25, 0.123])
+        self.assertEqual(summary["step"], {"median": 2.0, "per_step": [1.0, 3.0, 2.0]})
+        self.assertEqual(summary["generation"], {"median": 0.25, "per_step": [0.5, 0.25, 0.12]})
+
+    def test_no_steps_gives_no_median(self):
+        self.assertIsNone(timing_summary([], [])["step"]["median"])
 
 
 @unittest.skipUnless(HAS_STACK, "needs torch, transformers, peft and trl")

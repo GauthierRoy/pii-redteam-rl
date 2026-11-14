@@ -737,7 +737,32 @@ and re-probe.
    and the ordinary-generation baseline on the frozen request bank, so M08.4 has
    its comparison arms.
 
-## M08.3 smoke run prepared, not run (2026-11-13)
+## M08.3 smoke run EXECUTED on Colab T4 (2026-11-13, run m08-smoke-20261113-170803)
+
+Registered in `EXPERIMENTS.yaml`. 30 GRPO steps, 688 s (22.9 s/step), peak memory 3.8 of 15.6 GB.
+Fixed on the way (each found by running on the GPU, not locally): summary read a field the
+sampled rows lack; TRL casts QLoRA adapters to bf16 which the fp16 grad scaler cannot unscale
+(trainable params now cast to fp32 on fp16 runs); Colab hides subprocess output (now streamed).
+
+Findings (read-only analysis of the saved samples, D1 rescoring matched stored p within 3e-6):
+- Valid rate 0.64 -> 0.90 (json 49 -> 2, truncated 5 -> 0, too_short 12 -> 3, name_missing 23 -> 12,
+  name_dup 1 -> 7). About 93% of the reward gain is validity; detector misses 2 -> 1 of 256.
+- The 0.64 baseline is far below M07b (0.92): pre-RL had fences (19), think-tag leaks (6), `{}` (5),
+  truncations (5) that M07b almost never saw. Cause not isolated: top_p 1.0 vs 0.95, 4-bit fp16 vs
+  fp32 CPU, different request set.
+- Style drift toward "Dear Name," openers (19% -> 35% of valid texts), where D1 is weakest
+  (mean p 0.83 vs 0.97 for other openings). Persistent D1 weak requests: Jabar, Swetha, Cirilla.
+- Extra person names (sign-offs, "Dr. X") in 5.5% -> 8.7% of valid texts (not significant); D1 sees
+  only about a third of them. Validity v2 does not reject them: they must be filtered before
+  any generated text is labelled (the extra name would be labelled O) in M09.
+- grad_norm NaN on steps 1-4 and 15 with finite loss, KL ~0 until step 6: consistent with fp16
+  grad-scaler skipped updates (about 25 real updates). Not verified. bf16 GPUs avoid it.
+- Minor: RL bank contains placeholder name `Surname_A` (R07 filter gap); report `rule` provenance
+  label is the held-out rule text (label only, the code loads `train_side_pool`).
+- Not shown: any detector-evasion learning, durable effect of the style drift (one seed, one stage),
+  `resume_from_checkpoint`, scale_rewards comparison.
+
+## M08.3 smoke run prepared (2026-11-13, before the run)
 
 - **Reward validity fixed before any GPU run:** `D1Reward` first used the v1 classifier, under
   which a 2-word text such as "Hi Lucas" is valid and could earn reward ~1 if D1 missed it

@@ -11,14 +11,17 @@ here so the notebook stays a thin launcher.
 from __future__ import annotations
 
 import datetime
+import functools
 import hashlib
 import json
 import math
 import os
+import statistics
 import sys
 import time
 
 import torch
+import trl.generation.vllm_generation as trl_vllm
 from datasets import Dataset
 from peft import LoraConfig
 from transformers import (
@@ -41,6 +44,8 @@ from .rl_reward import D1Reward
 from .rl_signal import signal_summary
 
 DETECTOR_MAX_LENGTH = 512
+MULTIMODAL_QWEN_PREFIXES = ("model.language_model.", "model.visual.")
+TRL_FIX_PARAM_NAME = trl_vllm.VLLMGeneration._fix_param_name_to_vllm
 
 
 class WallClockStop(TrainerCallback):
@@ -56,6 +61,51 @@ class WallClockStop(TrainerCallback):
             control.should_save = True
             control.should_training_stop = True
         return control
+
+
+class TimedGRPOTrainer(GRPOTrainer):
+    """GRPOTrainer that records the seconds spent generating completions (vLLM weight sync included)."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.generation_seconds: list[float] = []
+
+    def _generate_single_turn(self, *args, **kwargs):
+        started = time.perf_counter()
+        output = super()._generate_single_turn(*args, **kwargs)
+        self.generation_seconds.append(time.perf_counter() - started)
+        return output
+
+
+def to_multimodal_qwen_name(name: str) -> str:
+    """Text-only Qwen3.5 parameter name -> the multimodal checkpoint name vLLM's loader expects."""
+    if name.startswith("model.") and not name.startswith(MULTIMODAL_QWEN_PREFIXES):
+        return "model.language_model." + name.removeprefix("model.")
+    return name
+
+
+def fix_param_name_for_multimodal_vllm(self, name: str, extra_prefixes: list[str] | None = None):
+    return to_multimodal_qwen_name(TRL_FIX_PARAM_NAME(self, name, extra_prefixes))
+
+
+def align_vllm_names_with_multimodal_checkpoint() -> None:
+    """Sync a text-only policy into vLLM, which only registers Qwen3.5 as a multimodal model."""
+    trl_vllm.VLLMGeneration._fix_param_name_to_vllm = fix_param_name_for_multimodal_vllm
+
+
+def restrict_vllm_to_language_model() -> None:
+    """Make TRL's colocated vLLM skip the vision tower: TRL exposes no engine-argument pass-through."""
+    trl_vllm.LLM = functools.partial(trl_vllm.LLM, language_model_only=True)
+
+
+def timing_summary(step_seconds: list[float], generation_seconds: list[float]) -> dict:
+    return {
+        name: {
+            "median": round(statistics.median(values), 2) if values else None,
+            "per_step": [round(value, 2) for value in values],
+        }
+        for name, values in (("step", step_seconds), ("generation", generation_seconds))
+    }
 
 
 def file_sha256(path: str) -> str:
@@ -180,7 +230,10 @@ def smoke_checks(config: dict, summary: dict) -> dict[str, dict]:
     """Health checks on the finished run (not learning claims)."""
     thresholds = config["thresholds"]
     history = [e for e in summary["log_history"] if "loss" in e]
-    finite = all(math.isfinite(e[k]) for e in history for k in ("loss", "grad_norm") if k in e)
+    grad_norms = [e["grad_norm"] for e in history if "grad_norm" in e]
+    skipped = sum(1 for g in grad_norms if not math.isfinite(g))
+    applied = [g for g in grad_norms if math.isfinite(g) and g > 0.0]
+    skipped_max = thresholds["skipped_update_fraction_max"]
     pre, post = summary["pre"], summary.get("post")
     checks = {
         "pre-RL valid rate": (
@@ -192,10 +245,14 @@ def smoke_checks(config: dict, summary: dict) -> dict[str, dict]:
             f"{summary['steps_done']}/{config['grpo']['max_steps']} steps, "
             f"wall-clock stop={summary['wall_clock_stop']}",
         ),
-        "loss and grad_norm finite": (finite and bool(history), f"{len(history)} logged steps"),
-        "some update was non-zero": (
-            any(e.get("grad_norm", 0.0) > 0.0 for e in history),
-            f"max grad_norm {max((e.get('grad_norm', 0.0) for e in history), default=0.0):.3g}",
+        "loss finite": (
+            bool(history) and all(math.isfinite(e["loss"]) for e in history),
+            f"{len(history)} logged steps",
+        ),
+        "most updates were applied": (
+            bool(history) and skipped <= skipped_max * len(history) and bool(applied),
+            f"{len(applied)} steps with finite non-zero grad_norm (max {max(applied, default=0.0):.3g}), "
+            f"{skipped} non-finite = skipped by the fp16 grad scaler (max {skipped_max:.0%})",
         ),
         "adapter saved": (os.path.exists(summary["adapter_path"]), summary["adapter_path"]),
         "peak GPU memory": (
@@ -271,9 +328,13 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
         use_cpu=device == "cpu",
         **grpo,
     )
+    if config.get("vllm_multimodal_names"):
+        align_vllm_names_with_multimodal_checkpoint()
+    if config.get("vllm_language_model_only"):
+        restrict_vllm_to_language_model()
     lora = config["lora"]
     stopper = WallClockStop(config["max_minutes"])
-    trainer = GRPOTrainer(
+    trainer = TimedGRPOTrainer(
         model=model,
         reward_funcs=reward,
         args=args,
@@ -299,6 +360,10 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
         "train_seconds": round(train_seconds, 1),
         "sec_per_step": round(train_seconds / max(steps_done, 1), 2),
         "wall_clock_stop": stopper.triggered,
+        "timing": timing_summary(
+            [e["step_time"] for e in trainer.state.log_history if "step_time" in e],
+            trainer.generation_seconds,
+        ),
         "log_history": trainer.state.log_history,
         "adapter_path": adapter_path,
     }

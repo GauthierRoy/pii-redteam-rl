@@ -54,6 +54,7 @@ def main() -> None:
     elif args.command == "rl-smoke":
         with open(args.config, encoding="utf-8") as f:
             config = yaml.safe_load(f)
+        config.setdefault("repo_commit", os.environ.get("PROBE_REPO_COMMIT", "unrecorded"))
         repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         from pii_redteam.training.rl_smoke import run_rl_smoke
 
