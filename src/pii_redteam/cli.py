@@ -21,6 +21,8 @@ def main() -> None:
         help="M07b prompt-variant comparison (P0/P1/P2 on the request bank v2)",
     )
     compare.add_argument("--config", required=True, help="path to a comparison YAML config")
+    smoke = sub.add_parser("rl-smoke", help="M08.3 capped RL smoke run (TRL GRPO vs frozen D1)")
+    smoke.add_argument("--config", required=True, help="path to an RL smoke YAML config")
     args = parser.parse_args()
 
     if args.command == "probe-base":
@@ -49,6 +51,15 @@ def main() -> None:
                 {"run_id": report["run_id"], "pass_by_cell": report["pass_by_cell"]}, indent=2
             )
         )
+    elif args.command == "rl-smoke":
+        with open(args.config, encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        config.setdefault("repo_commit", os.environ.get("PROBE_REPO_COMMIT", "unrecorded"))
+        repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from pii_redteam.training.rl_smoke import run_rl_smoke
+
+        report = run_rl_smoke(config, repo_dir)
+        print(json.dumps({"run_id": report["run_id"], "checks": report["checks"]}, indent=2))
 
 
 if __name__ == "__main__":

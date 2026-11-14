@@ -1,0 +1,56 @@
+# M08.3 RL smoke run: capped TRL GRPO + LoRA on Qwen3.5-2B against the frozen D1 reward.
+# Values are proposals until the owner confirms the cost cap; the smoke run measures, it does
+# not decide the pilot. Decisions D14 (P1 prompt), D18 (TRL, scale_rewards off, explicit beta).
+
+run_id_prefix: m08-smoke
+model_id: Qwen/Qwen3.5-2B
+seed: 20261113
+work_dir: artifacts/m08            # Colab: Drive (the notebook overrides it)
+splits_dir: artifacts/splits       # rebuilt by scripts/carve_splits.py before the run
+locks:
+  final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
+max_minutes: 60                    # hard wall-clock cap on training, then save and stop
+resume_from_checkpoint: null
+
+bank:
+  seed: 20261113
+  n_signal: 32                     # held-out requests for the pre/post sample comparison
+  n_train: 128                     # 30 steps x 4 prompts = 120 prompts, almost one epoch
+  exclude_banks:
+    - banks/v2_prompting/spark_seed20260920_v2_n20.jsonl
+
+detector:                          # frozen D1 (d1-epoch2), sha verified before use
+  path: artifacts/d1-frozen-d1v2-20261110-075731
+  sha256: ebfe4c693958c84cdb093d1a55b535e51f1ba0563a702e69e3c97bf5a36a4143
+
+model:
+  quantize_4bit: true              # QLoRA nf4 as in the M05 SFT run; false only for CPU checks
+
+lora:
+  r: 16
+  alpha: 32
+  target_modules: all-linear
+
+sampling:                          # RL and pre/post checks sample the same way (on-policy)
+  temperature: 1.0
+  top_p: 1.0
+  batch_prompts: 4
+
+grpo:
+  num_generations: 8
+  per_device_train_batch_size: 8   # one prompt group per micro-batch
+  gradient_accumulation_steps: 4   # 4 prompts x 8 rollouts per optimizer step
+  max_completion_length: 192
+  max_steps: 30
+  learning_rate: 2.0e-5
+  beta: 0.02
+  scale_rewards: false
+  gradient_checkpointing: true
+  save_steps: 10
+  save_total_limit: 2
+
+thresholds:                        # health checks, not learning claims
+  pre_valid_rate_min: 0.85
+  peak_memory_fraction_max: 0.92
+  valid_rate_drop_max: 0.10
+  skipped_update_fraction_max: 0.5   # fp16 grad-scaler skips (inf grads) are expected early on

@@ -237,3 +237,53 @@ runs:
       name_at_start_share: 0.2508
       d0_extra_name_flags: pending
     outcome: "Synthetic SFT v2 dataset complete: 1195 train (idx 0-1149 + 45 gap-fill over 15 tail cells), 100 dev (balanced 100-subset of 150), 300 short_eval (held-out names only). Seeded quotas (20260920) + template-bank generation with synonym paraphrase; validator ground truth. /tmp wipe mid-flight destroyed all staging; quotas regenerated bit-identically and texts re-generated. D0 flagging pending (frozen checkpoint unavailable at finalize time). No training."
+
+  - run_id: d1v2-freeze-20261110-081446
+    kind: detector-freeze
+    milestone: M07b.3/M07b.4
+    executed: 2026-11-10
+    where: colab (GPU type not recorded in the manifest)
+    repo_commit: 676ce54cf8cefed521bae037c9c5cf901fa8ee51
+    source_run_id: d1v2-20261110-075731
+    artifacts: "Drive: pii-redteam-rl/d1-frozen-d1v2-20261110-075731/ (freeze_manifest.json, model.safetensors, config, tokenizer); source run Drive: pii-redteam-rl/d1v2-20261110-075731/"
+    checks: { pass: 20, fail: 0 }
+    metrics:
+      d1_model_sha256: ebfe4c693958c84cdb093d1a55b535e51f1ba0563a702e69e3c97bf5a36a4143
+      chosen_candidate: d1-epoch2
+      selection_rule: fewest_dev_neg_fp_rows
+      dev_span_f1_by_candidate: { d1-epoch2: 0.9605, d1-epoch3: 0.9636 }
+      dev_neg_rows_with_pred: { d1-epoch2: 67, d1-epoch3: 100 }
+      final_eval_span_f1: { d0: 0.9539, d1: 0.953, drop: 0.0009, max_drop: 0.01 }
+      final_eval_precision_recall_drop: { precision: -0.0026, recall: 0.0042, max_drop: 0.01 }
+      final_eval_name_free: { rows: 710, d0_rows_with_pred: 9, d1_rows_with_pred: 9 }
+      short_negatives_fp_row_rate: { gated_types: [place, org_product, calendar, role_only], rows: 95, d0: 0.0, d1: 0.0316, max: 0.05 }
+      probe_miss_rate_d1: { t1.0: 0.0138, t0.7: 0.0134 }
+      probe_go: { t1.0: true, t0.7: false }
+      local_reproduction_2026-11-12:
+        note: "Frozen D0 and D1 (both sha verified) rescored on a laptop CPU with the freeze's own predict_spans at commit 676ce54; data shas match the config locks. Not a Colab run."
+        short_negatives_flagged_rows: { gated: { d0: 0, d1: 3 }, rows: 95, d1_by_distractor: { place: 1, org_product: 2, calendar: 0, role_only: 0, homograph: 0 } }
+        short_eval_v2: { rows: 150, d0: { precision: 0.759, recall: 0.42, complete_miss: 69 }, d1: { precision: 0.9868, recall: 0.9933, complete_miss: 1 }, recall_gain: 0.5733, gain_min: 0.10, gate_ok: true }
+        short_eval_deepseek_v1: { rows: 50, d0: { precision: 0.6875, recall: 0.44, complete_miss: 19 }, d1: { precision: 1.0, recall: 1.0, complete_miss: 0 } }
+        regressions_d1_vs_d0: 0
+    outcome: "D1 FROZEN (d1-epoch2). All 20 required manifest checks pass. Probe go only at temperature 1.0 (0.7 fails on duplicates); miss rate ~1.4% is just above the 1% band floor. D0-vs-D1 short_eval gate computed locally 2026-11-12 (recall +0.5733 vs 0.10 min, pass, 0 regressions); training run d1v2-20261110-075731 itself is not yet registered."
+
+  - run_id: m08-smoke-20261113-170803
+    kind: rl-smoke
+    milestone: M08.3
+    executed: 2026-11-13
+    where: colab T4 (15.6 GB), owner-run
+    repo_commit: "40448d2 (presumed: the report did not record it; the run followed that push)"
+    artifacts: "Drive: pii-redteam-rl/m08-smoke-20261113-170803/ (rl_smoke_report.json, samples_pre.jsonl, samples_post.jsonl, requests_*.jsonl, adapter/, checkpoints/)"
+    checks: { pass: 5, fail: 2 }
+    metrics:
+      setup: { model: Qwen/Qwen3.5-2B, quantization: nf4 4-bit QLoRA, precision: fp16 (T4), lora_r: 16, steps: 30, rollouts_per_prompt: 8, prompts_per_step: 4, lr: 2.0e-5, beta: 0.02, scale_rewards: false, temperature: 1.0, top_p: 1.0, detector: frozen D1 d1-epoch2 }
+      bank: { train: 128, heldout_signal: 32, names_disjoint_from_v2_bank: true }
+      cost: { train_seconds: 688, sec_per_step: 22.9, peak_memory_gb: 3.8 }
+      failed_checks: "pre-RL valid rate 0.641 < 0.85 (real); loss-and-grad_norm-finite (check design flaw: grad_norm was NaN on steps 1-4 and 15 with finite loss, consistent with fp16 grad-scaler skips, not verified; check since split into loss-finite plus a capped skipped-update count)"
+      pre_vs_post_heldout: { valid_rate: [0.6406, 0.8984], true_miss_rate: [0.0078, 0.0039], groups_with_detector_miss: [0.15625, 0.15625], mean_valid_reward: [0.0688, 0.0907], mean_valid_p: [0.931, 0.909] }
+      invalid_json: [49, 2]
+      name_dup: [1, 7]
+      dear_name_opening_share_of_valid: [0.189, 0.348]
+      extra_person_names_manual_share_of_valid: [0.055, 0.087]
+      reward_gain_from_validity_share: 0.93
+    outcome: "Update path works end to end on Qwen3.5-2B QLoRA on a T4 (30/30 steps, no OOM). Valid rate rose 0.64 -> 0.90, almost entirely the output format being learned (about 93% of the reward gain); no evidence yet of detector evasion (misses 2 -> 1 of 256, within noise). Side effects to watch: more 'Dear Name,' openers (where D1 is weakest, p ~0.82 vs ~0.97), name_dup 1 -> 7, extra person names in 5-9% of valid texts that validity v2 does not reject. The pre-RL valid rate (0.64) is far below M07b P1 at t=1.0 (~0.92); cause not isolated (top_p 1.0 vs 0.95, 4-bit fp16 vs fp32, different request set). Smoke run only: not a pilot result, one seed."
