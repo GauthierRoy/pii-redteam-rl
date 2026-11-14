@@ -6,8 +6,8 @@ length and content, no refusal), so a degenerate text such as "Hi Lucas" cannot 
 reward by being short. Reward = 1 - mean detector probability over the name's tokens. Invalid completions
 get INVALID_REWARD, strictly below the valid range [0, 1].
 
-Optional collapse guard (D20): a valid text whose opening word is shared by too many texts
-written for other requests earns REPEATED_OPENING_REWARD instead of its detector reward.
+Optional collapse guard (D20): the detector reward of a valid text is scaled down, to zero
+at worst, when its opening word is shared by too many texts written for other requests.
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ from ..validity_v2 import classify_sample_v2
 from .opening_share import OpeningShare, opening_word
 
 INVALID_REWARD = -1.0
-REPEATED_OPENING_REWARD = 0.0
 SCORER_TRUNCATED = "invalid:scorer_truncated"
 
 
@@ -80,7 +79,7 @@ class TargetDetectorReward:
     def _flag_repeated_openings(
         self, samples: list[dict], names: list[str], requests: list[str]
     ) -> None:
-        """Set `opening_share` and `repeated_opening` on valid samples when the guard is on."""
+        """Set `opening_share` and `opening_factor` on valid samples when the guard is on."""
         if self.opening_share is None:
             return
         valid = [i for i, sample in enumerate(samples) if sample["status"] == "valid"]
@@ -90,7 +89,7 @@ class TargetDetectorReward:
         )
         for i, share in zip(valid, shares, strict=True):
             samples[i]["opening_share"] = share
-            samples[i]["repeated_opening"] = self.opening_share.is_repeated(share)
+            samples[i]["opening_factor"] = self.opening_share.reward_factor(share)
 
     @staticmethod
     def _reward(sample: dict) -> float:
@@ -99,9 +98,9 @@ class TargetDetectorReward:
         if sample.get("p_target_mean") is None:
             sample["status"] = SCORER_TRUNCATED
             return INVALID_REWARD
-        if sample.get("repeated_opening"):
-            return REPEATED_OPENING_REWARD
-        return reward_variants(sample["p_target_mean"])["r_prob"]
+        return reward_variants(sample["p_target_mean"])["r_prob"] * sample.get(
+            "opening_factor", 1.0
+        )
 
     @staticmethod
     def metrics(samples: list[dict]) -> dict[str, float]:
@@ -118,6 +117,6 @@ class TargetDetectorReward:
         if shares:
             metrics["opening_share_mean"] = sum(shares) / len(shares)
             metrics["repeated_opening_rate"] = (
-                sum(1 for s in samples if s.get("repeated_opening")) / total
+                sum(1 for s in samples if s.get("opening_factor", 1.0) < 1.0) / total
             )
         return metrics

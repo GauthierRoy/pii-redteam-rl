@@ -207,7 +207,8 @@ def opening_share_guard(config: dict, window: int | None = None) -> OpeningShare
     if not settings:
         return None
     return OpeningShare(
-        threshold=settings["threshold"],
+        full_reward_until=settings["full_reward_until"],
+        zero_reward_from=settings["zero_reward_from"],
         window=window or settings["window"],
         min_other_texts=settings["min_other_texts"],
     )

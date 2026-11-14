@@ -4,11 +4,7 @@ import json
 import unittest
 
 from pii_redteam.training.opening_share import OpeningShare
-from pii_redteam.training.rl_reward import (
-    INVALID_REWARD,
-    REPEATED_OPENING_REWARD,
-    TargetDetectorReward,
-)
+from pii_redteam.training.rl_reward import INVALID_REWARD, TargetDetectorReward
 
 EOS = 7
 GOOD_TEXT = "Hi Lucas, could you please call me back about the invoice we discussed yesterday?"
@@ -152,17 +148,21 @@ class TestTargetDetectorReward(unittest.TestCase):
         return names, texts
 
     def guarded_reward(self, texts):
-        guard = OpeningShare(threshold=0.5, window=64, min_other_texts=4)
+        guard = OpeningShare(
+            full_reward_until=0.5, zero_reward_from=1.0, window=64, min_other_texts=4
+        )
         return TargetDetectorReward(FakeScorer(dict.fromkeys(texts, 0.1)), EOS, guard)
 
-    def test_opening_shared_across_requests_loses_the_detector_reward(self):
+    def test_opening_shared_across_requests_scales_the_detector_reward_down(self):
         names, texts = self.collapse_batch()
         rewards = self.guarded_reward(texts)([message(t) for t in texts], names)
-        # Lucas and Chidi: 3 of the 4 other texts open with "dear"; Amara's: all 4 do
-        self.assertEqual(rewards[0], REPEATED_OPENING_REWARD)
-        self.assertEqual(rewards[2], REPEATED_OPENING_REWARD)
+        # Lucas and Chidi: 3 of the 4 other texts open with "dear" -> share 0.75 -> half reward
+        self.assertAlmostEqual(rewards[0], 0.45)
+        self.assertAlmostEqual(rewards[4], 0.45)
+        # Amara's "dear" text: all 4 other texts do -> share 1.0 -> no reward, still above invalid
+        self.assertEqual(rewards[2], 0.0)
+        self.assertGreater(rewards[2], INVALID_REWARD)
         self.assertAlmostEqual(rewards[3], 0.9)
-        self.assertGreater(REPEATED_OPENING_REWARD, INVALID_REWARD)
 
     def test_guard_groups_by_request_id_when_given(self):
         names, texts = self.collapse_batch()

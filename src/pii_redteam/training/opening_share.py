@@ -2,8 +2,12 @@
 
 The first long run (long-20261114-004948) drove the attacker to open every text with "Dear",
 whatever the request. Measured on its samples, the share of texts written for OTHER requests
-that start with the same word was at most 0.15 before RL and 0.99 after. A text above
-`threshold` is flagged; texts at the base attacker's level are never flagged.
+that start with the same word was at most 0.15 before RL and 0.99 after.
+
+A text keeps its full reward up to a share of `full_reward_until` and none from
+`zero_reward_from`, with a straight line in between. A hard cut at 0.20 was tried first
+(pilot-opening-20261114-103332): in training the base attacker's share swings around 0.15
+from window to window, so 14-29% of valid texts lost their reward and nothing was learned.
 """
 
 from __future__ import annotations
@@ -27,8 +31,13 @@ def opening_word(text: str, name: str) -> str:
 class OpeningShare:
     """Rolling window of (request, opening word) over the most recent valid texts."""
 
-    def __init__(self, threshold: float, window: int, min_other_texts: int) -> None:
-        self.threshold = threshold
+    def __init__(
+        self, full_reward_until: float, zero_reward_from: float, window: int, min_other_texts: int
+    ) -> None:
+        if not 0.0 <= full_reward_until < zero_reward_from <= 1.0:
+            raise ValueError("need 0 <= full_reward_until < zero_reward_from <= 1")
+        self.full_reward_until = full_reward_until
+        self.zero_reward_from = zero_reward_from
         self.min_other_texts = min_other_texts
         self.recent: deque[tuple[str, str]] = deque(maxlen=window)
 
@@ -51,5 +60,9 @@ class OpeningShare:
                 shares.append((per_opening[opening] - per_pair[(request, opening)]) / others)
         return shares
 
-    def is_repeated(self, share: float | None) -> bool:
-        return share is not None and share > self.threshold
+    def reward_factor(self, share: float | None) -> float:
+        """1.0 up to `full_reward_until`, falling linearly to 0.0 at `zero_reward_from`."""
+        if share is None:
+            return 1.0
+        span = self.zero_reward_from - self.full_reward_until
+        return min(1.0, max(0.0, (self.zero_reward_from - share) / span))

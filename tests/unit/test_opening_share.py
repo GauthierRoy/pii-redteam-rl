@@ -24,7 +24,13 @@ class TestOpeningWord(unittest.TestCase):
 
 class TestOpeningShare(unittest.TestCase):
     def guard(self, **overrides):
-        settings = {"threshold": 0.2, "window": 100, "min_other_texts": 4, **overrides}
+        settings = {
+            "full_reward_until": 0.25,
+            "zero_reward_from": 0.5,
+            "window": 100,
+            "min_other_texts": 4,
+            **overrides,
+        }
         return OpeningShare(**settings)
 
     def test_share_counts_only_texts_written_for_other_requests(self):
@@ -47,7 +53,7 @@ class TestOpeningShare(unittest.TestCase):
         guard = self.guard(min_other_texts=6)
         first = guard.shares(["a", "a", "b", "b"], ["dear"] * 4)
         self.assertEqual(first, [None] * 4)
-        self.assertFalse(guard.is_repeated(first[0]))
+        self.assertEqual(guard.reward_factor(first[0]), 1.0)
         second = guard.shares(["c", "c", "d", "d"], ["dear"] * 4)
         self.assertEqual(second, [1.0] * 4)
 
@@ -57,10 +63,17 @@ class TestOpeningShare(unittest.TestCase):
         shares = guard.shares(["c", "c", "d", "d"], ["hi", "hey", "row", "re"])
         self.assertEqual(shares, [0.0] * 4)
 
-    def test_threshold_is_exclusive(self):
-        guard = self.guard(threshold=0.2)
-        self.assertFalse(guard.is_repeated(0.2))
-        self.assertTrue(guard.is_repeated(0.21))
+    def test_reward_factor_is_full_then_linear_then_zero(self):
+        guard = self.guard(full_reward_until=0.25, zero_reward_from=0.5)
+        self.assertEqual(guard.reward_factor(0.0), 1.0)
+        self.assertEqual(guard.reward_factor(0.25), 1.0)
+        self.assertAlmostEqual(guard.reward_factor(0.375), 0.5)
+        self.assertEqual(guard.reward_factor(0.5), 0.0)
+        self.assertEqual(guard.reward_factor(0.99), 0.0)
+
+    def test_bounds_must_be_ordered(self):
+        with self.assertRaises(ValueError):
+            self.guard(full_reward_until=0.5, zero_reward_from=0.5)
 
 
 if __name__ == "__main__":

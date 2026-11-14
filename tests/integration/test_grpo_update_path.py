@@ -395,12 +395,16 @@ class TestStopAndGuardConfig(unittest.TestCase):
         self.assertIsNone(opening_share_guard({"reward": None}))
 
     def test_guard_reads_settings_and_window_override(self):
-        settings = {"threshold": 0.2, "window": 256, "min_other_texts": 128}
+        settings = {
+            "full_reward_until": 0.25,
+            "zero_reward_from": 0.5,
+            "window": 256,
+            "min_other_texts": 128,
+        }
         config = {"reward": {"opening_share": settings}}
         guard = opening_share_guard(config)
-        self.assertEqual(
-            (guard.threshold, guard.recent.maxlen, guard.min_other_texts), (0.2, 256, 128)
-        )
+        self.assertEqual((guard.full_reward_until, guard.zero_reward_from), (0.25, 0.5))
+        self.assertEqual((guard.recent.maxlen, guard.min_other_texts), (256, 128))
         self.assertEqual(opening_share_guard(config, window=64).recent.maxlen, 64)
 
 

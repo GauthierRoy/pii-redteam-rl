@@ -1,8 +1,9 @@
 # M08 collapse-guard pilot (D20): the long-run setup (configs/m08_rl_long.yaml) with the
-# opening-share guard in the reward, stopped at step 200. The long run's reward had saturated
-# by step 200 (0.79, detector miss rate 0.85), so 200 steps is enough to see whether the guard
-# prevents the collapse onto one opening. Seed, bank, sampling, optimizer and max_steps (so the
-# learning-rate schedule) are unchanged: the first 200 steps differ only by the guard.
+# opening-share guard in the reward, stopped at step 400. The long run's reward had saturated
+# by step 200 (0.79, detector miss rate 0.85). Seed, bank, sampling, optimizer and max_steps (so
+# the learning-rate schedule) are unchanged: the steps differ from the long run only by the guard.
+# First pilot (pilot-opening-20261114-103332): hard cut at 0.20, 200 steps: no collapse, but no
+# learning either (reward -0.07 -> +0.04). This version scales the reward down gradually.
 # The Modal launcher (scripts/modal_rl.py) overrides the paths.
 
 run_id_prefix: m08-opening
@@ -12,8 +13,8 @@ work_dir: artifacts/m08
 splits_dir: artifacts/splits
 locks:
   final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
-max_minutes: 45                    # hard wall-clock cap on training, then save and stop
-stop_at_step: 200                  # end here; max_steps below still sets the lr schedule
+max_minutes: 70                    # hard wall-clock cap on training, then save and stop
+stop_at_step: 400                  # end here; max_steps below still sets the lr schedule
 resume_from_checkpoint: null
 vllm_multimodal_names: true        # sync the text-only attacker into vLLM's multimodal Qwen3.5
 
@@ -43,7 +44,8 @@ sampling:
 
 reward:
   opening_share:                   # D20; calibrated on long-20261114-004948 (pre max 0.15, post 0.99)
-    threshold: 0.20                # flagged above this share of other requests' texts
+    full_reward_until: 0.25        # share of other requests' texts with the same opening word
+    zero_reward_from: 0.50         # reward falls linearly from full to zero between the two
     window: 256                    # most recent valid texts = 8 steps of 32
     min_other_texts: 128           # no flag until this many texts from other requests are seen
 
