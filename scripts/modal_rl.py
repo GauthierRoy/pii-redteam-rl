@@ -1,6 +1,6 @@
 """Modal launcher for the M08 RL runs.
 
-One-time setup (D1 weights go to the volume, everything else is fetched by `prepare`):
+One-time setup (target detector weights go to the volume, everything else is fetched by `prepare`):
     modal volume put pii-redteam-rl <local>/d1-frozen-d1v2-20261110-075731 /d1-frozen-d1v2-20261110-075731
     modal run scripts/modal_rl.py::prepare
 
@@ -8,7 +8,7 @@ Timing benchmark, three arms in parallel on one L4 each (10 GRPO steps, bf16 LoR
     modal run scripts/modal_rl.py::bench                       # the vLLM arms
     modal run scripts/modal_rl.py::bench --arms hf,vllm_lm   # any subset
 Arms: hf = Hugging Face generate (baseline); fla = plus flash-linear-attention; vllm_names =
-TRL colocated vLLM with the policy's weights renamed to the multimodal Qwen3.5 checkpoint names;
+TRL colocated vLLM with the attacker's weights renamed to the multimodal Qwen3.5 checkpoint names;
 vllm_lm = the same plus vLLM loading only the language model (no vision tower).
 
 Cost is bounded by `BENCH_TIMEOUT_S` per arm: Modal kills the container at the timeout.
@@ -32,7 +32,7 @@ import modal
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REPO_DIR = "/repo"
 VOLUME_DIR = "/vol"
-D1_DIR = f"{VOLUME_DIR}/d1-frozen-d1v2-20261110-075731"
+TARGET_DETECTOR_DIR = f"{VOLUME_DIR}/d1-frozen-d1v2-20261110-075731"
 CACHE_DIR = f"{VOLUME_DIR}/cache"
 SPLITS_DIR = f"{VOLUME_DIR}/splits"
 RUNS_DIR = f"{VOLUME_DIR}/runs"
@@ -225,7 +225,7 @@ def run_arm(
         {
             "work_dir": run_dir,
             "splits_dir": SPLITS_DIR,
-            "detector.path": D1_DIR,
+            "detector.path": TARGET_DETECTOR_DIR,
             **overrides,
         },
     )
@@ -250,15 +250,17 @@ def run_arm(
 
 @app.function(image=IMAGE_HF, volumes={VOLUME_DIR: volume}, cpu=2, memory=8192, timeout=1800)
 def prepare() -> dict:
-    """CPU only: check the D1 lock, cache the policy model, fetch the data and carve the splits."""
+    """CPU only: check the target detector lock, cache the attacker model, fetch the data and carve the splits."""
     with open(BENCH_CONFIG, encoding="utf-8") as f:
         config = yaml.safe_load(f)
-    weights = f"{D1_DIR}/model.safetensors"
+    weights = f"{TARGET_DETECTOR_DIR}/model.safetensors"
     if not os.path.exists(weights):
-        raise SystemExit(f"D1 weights missing in the volume: upload the folder to {D1_DIR}")
+        raise SystemExit(
+            f"target detector weights missing in the volume: upload the folder to {TARGET_DETECTOR_DIR}"
+        )
     weights_sha = sha256_of(weights)
     if weights_sha != config["detector"]["sha256"]:
-        raise SystemExit(f"D1 lock mismatch: {weights_sha}")
+        raise SystemExit(f"target detector lock mismatch: {weights_sha}")
     snapshot_download(config["model_id"])
     carve = [
         sys.executable,
@@ -271,7 +273,11 @@ def prepare() -> dict:
     if stream(carve, f"{VOLUME_DIR}/carve_splits.log", dict(os.environ)) != 0:
         raise SystemExit("carve_splits failed, see the log above")
     volume.commit()
-    return {"d1_sha256": weights_sha, "splits_dir": SPLITS_DIR, "model_id": config["model_id"]}
+    return {
+        "target_detector_sha256": weights_sha,
+        "splits_dir": SPLITS_DIR,
+        "model_id": config["model_id"],
+    }
 
 
 @app.function(image=IMAGE_HF, **GPU_FUNCTION)

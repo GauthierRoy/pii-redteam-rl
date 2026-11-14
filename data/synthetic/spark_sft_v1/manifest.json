@@ -61,6 +61,6 @@
     "near_dup_pairs_gt_0.7": 0,
     "top10_opening_share": 0.0752,
     "name_at_start_share": 0.2508,
-    "d0_extra_name_flags": "pending (frozen checkpoint unavailable at finalize time; /tmp/d0zip wiped; flag script ready at scripts/flag_extra_names_d0.py)"
+    "base_detector_extra_name_flags": "pending (frozen checkpoint unavailable at finalize time; /tmp/d0zip wiped; flag script ready at scripts/flag_extra_names_base_detector.py)"
   }
 }

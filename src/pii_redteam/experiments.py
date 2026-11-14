@@ -10,14 +10,14 @@ import json
 from pathlib import Path
 
 from . import evaluation
+from .attacker import FakeAttacker
 from .config import config_hash, save_resolved
 from .detector import FakeDetector
-from .generator import FakeGenerator
 from .manifest import complete_manifest, guard_resume, new_manifest, save_manifest
 from .rewards import score_candidate
 from .validation import validate_annotated_example
 
-MOCK_NOTICE = "MOCK run: fake detector/generator; outputs excluded from scientific results"
+MOCK_NOTICE = "MOCK run: fake detector/attacker; outputs excluded from scientific results"
 
 
 def run_smoke(cfg: dict, run_dir: str | Path, examples: list[dict]) -> dict:
@@ -54,7 +54,7 @@ def run_smoke(cfg: dict, run_dir: str | Path, examples: list[dict]) -> dict:
     precision = agg_tp / agg_pred if agg_pred else 0.0
     recall = agg_tp / agg_gold if agg_gold else 0.0
 
-    generator = FakeGenerator(model_id=cfg["model_id"])
+    attacker = FakeAttacker(model_id=cfg["model_id"])
     names = cfg["data"].get("names") or ["Ana Ruiz"]
     max_examples = int(cfg["data"]["max_examples"])
     budget = int(cfg["budget"]["max_candidates"])
@@ -64,13 +64,13 @@ def run_smoke(cfg: dict, run_dir: str | Path, examples: list[dict]) -> dict:
         for name in names:
             if len(candidates) >= budget:
                 break
-            text = generator.generate(supplied_name=name)
+            text = attacker.generate(supplied_name=name)
             reward = score_candidate(text=text, supplied_name=name, detector=detector)
             candidates.append(
                 {
                     "candidate_id": f"cand-{idx:03d}",
                     "generation_method": "fake-generate",
-                    "generator_checkpoint": generator.model_id,
+                    "attacker_checkpoint": attacker.model_id,
                     "serving_backend": cfg["backend"],
                     "sampling": {"temperature": 0.0},
                     "supplied_name": name,

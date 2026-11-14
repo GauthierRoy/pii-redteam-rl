@@ -1,6 +1,6 @@
-"""Independent person checks for D1 training-data acceptance (M07b.2, D14/D15 era).
+"""Independent person checks for the target detector training-data acceptance (M07b.2, D14/D15 era).
 
-The extra-person check must NOT rely on D0 (D13: D0 misses ~50% of names in
+The extra-person check must NOT rely on the base detector (D13: base detector misses ~50% of names in
 short conversational texts). Two independent signals:
 
   1. spaCy general-domain NER (`en_core_web_sm`): any PERSON entity besides the
@@ -11,7 +11,7 @@ short conversational texts). Two independent signals:
      - person-sense question: is the requested name used as a PERSON (a
        human), not a place / organization / object / title of a work?
 
-A row is REJECTED for D1 training data if any extra person is found (spaCy OR
+A row is REJECTED for the target detector training data if any extra person is found (spaCy OR
 LLM) or the person-sense answer is "no". The LLM judge is validated by a manual
 audit of 50 rows (docs/PROMPT_V2_RESULTS.md).
 """

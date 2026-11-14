@@ -42,7 +42,7 @@
         "live_group_share_r_prob": 0.3684,
         "live_group_share_r_logit": 0.5789,
         "dead_group_share": 0.0,
-        "note": "official probe scorer (probe._score_with_d0), scorer verified by PR #5"
+        "note": "official probe scorer (probe._score_with_detector), scorer verified by PR #5"
       }
     },
     "P0|t1.0": {
@@ -82,7 +82,7 @@
         "live_group_share_r_prob": 0.4737,
         "live_group_share_r_logit": 0.6842,
         "dead_group_share": 0.0,
-        "note": "official probe scorer (probe._score_with_d0), scorer verified by PR #5"
+        "note": "official probe scorer (probe._score_with_detector), scorer verified by PR #5"
       }
     },
     "P1|t0.7": {
@@ -122,7 +122,7 @@
         "live_group_share_r_prob": 0.85,
         "live_group_share_r_logit": 1.0,
         "dead_group_share": 0.0,
-        "note": "official probe scorer (probe._score_with_d0), scorer verified by PR #5"
+        "note": "official probe scorer (probe._score_with_detector), scorer verified by PR #5"
       }
     },
     "P1|t1.0": {
@@ -174,7 +174,7 @@
         "live_group_share_r_prob": 0.9,
         "live_group_share_r_logit": 1.0,
         "dead_group_share": 0.0,
-        "note": "official probe scorer (probe._score_with_d0), scorer verified by PR #5"
+        "note": "official probe scorer (probe._score_with_detector), scorer verified by PR #5"
       }
     },
     "P2|t0.7": {
@@ -220,7 +220,7 @@
         "live_group_share_r_prob": 0.95,
         "live_group_share_r_logit": 1.0,
         "dead_group_share": 0.0,
-        "note": "official probe scorer (probe._score_with_d0), scorer verified by PR #5"
+        "note": "official probe scorer (probe._score_with_detector), scorer verified by PR #5"
       }
     },
     "P2|t1.0": {
@@ -253,7 +253,7 @@
         "live_group_share_r_prob": 0.95,
         "live_group_share_r_logit": 1.0,
         "dead_group_share": 0.0,
-        "note": "official probe scorer (probe._score_with_d0), scorer verified by PR #5"
+        "note": "official probe scorer (probe._score_with_detector), scorer verified by PR #5"
       }
     }
   },

@@ -3,7 +3,7 @@
   "samples": "eval_samples.jsonl",
   "n_valid_checked": 220,
   "checkers": {
-    "extra_person": "spaCy en_core_web_sm NER OR Qwen3.5-2B LLM judge (independent of D0)",
+    "extra_person": "spaCy en_core_web_sm NER OR Qwen3.5-2B LLM judge (independent of the base detector)",
     "person_sense": "Qwen3.5-2B LLM judge"
   },
   "per_cell": {
@@ -17,8 +17,8 @@
       "reject_extra_person_rate": 0.1,
       "reject_extra_person_lenient_rate": 0.0,
       "reject_person_sense_rate": 0.2,
-      "accepted_for_d1_rate": 0.7,
-      "accepted_for_d1_n": 7
+      "accepted_for_target_detector_rate": 0.7,
+      "accepted_for_target_detector_n": 7
     },
     "control_person|t0.0": {
       "n_valid": 10,
@@ -30,8 +30,8 @@
       "reject_extra_person_rate": 0.0,
       "reject_extra_person_lenient_rate": 0.0,
       "reject_person_sense_rate": 0.0,
-      "accepted_for_d1_rate": 1.0,
-      "accepted_for_d1_n": 10
+      "accepted_for_target_detector_rate": 1.0,
+      "accepted_for_target_detector_n": 10
     },
     "short_eval_deepseek_v1|t0.0": {
       "n_valid": 50,
@@ -43,8 +43,8 @@
       "reject_extra_person_rate": 0.18,
       "reject_extra_person_lenient_rate": 0.04,
       "reject_person_sense_rate": 0.0,
-      "accepted_for_d1_rate": 0.82,
-      "accepted_for_d1_n": 41
+      "accepted_for_target_detector_rate": 0.82,
+      "accepted_for_target_detector_n": 41
     },
     "short_eval_v2|t0.0": {
       "n_valid": 150,
@@ -56,15 +56,15 @@
       "reject_extra_person_rate": 0.1,
       "reject_extra_person_lenient_rate": 0.06,
       "reject_person_sense_rate": 0.0,
-      "accepted_for_d1_rate": 0.9,
-      "accepted_for_d1_n": 135
+      "accepted_for_target_detector_rate": 0.9,
+      "accepted_for_target_detector_n": 135
     }
   },
   "overall": {
     "reject_extra_person_rate": 0.1136,
     "reject_extra_person_lenient_rate": 0.05,
     "reject_person_sense_rate": 0.0091,
-    "accepted_for_d1_rate": 0.8773,
-    "accepted_for_d1_n": 193
+    "accepted_for_target_detector_rate": 0.8773,
+    "accepted_for_target_detector_n": 193
   }
 }

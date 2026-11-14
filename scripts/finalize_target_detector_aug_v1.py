@@ -1,19 +1,19 @@
-"""Finalize d1_aug_v1 (LLM-authored-direct stage-1 augmentation set; M07b.2).
+"""Finalize target_detector_aug_v1 (LLM-authored-direct stage-1 augmentation set; M07b.2).
 
-Reads the authored batch files (data/synthetic/d1_aug_v1_batches/), builds
+Reads the authored batch files (data/synthetic/target_detector_aug_v1_batches/), builds
 final rows with code-computed spans, hard-fails on ANY validation error
 (including filler and placeholder-span checks), requires zero template reuse
 within the set and zero 8-word overlap with the evaluation sets (short_eval_v2,
 short_eval_deepseek_v1 when present, deprecated short_eval_v1) and with
 spark_sft_v1 train/dev, then writes:
 
-  data/synthetic/d1_aug_v1.jsonl       (2000 rows, split sft_train)
-  data/synthetic/d1_aug_v1_manifest.json
+  data/synthetic/target_detector_aug_v1.jsonl       (2000 rows, split sft_train)
+  data/synthetic/target_detector_aug_v1_manifest.json
 
-This set is training-side augmentation data for D1 (M07b.2). Names come from
+This set is training-side augmentation data for the target detector (M07b.2). Names come from
 the training-side pool only; held-out/final-eval names are excluded.
 
-Usage: PYTHONPATH=src python3 scripts/finalize_d1_aug_v1.py
+Usage: PYTHONPATH=src python3 scripts/finalize_target_detector_aug_v1.py
 """
 
 from __future__ import annotations
@@ -30,12 +30,21 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from pii_redteam import sft_synth_v2 as v2  # noqa: E402
 
-BATCH_GLOB = "data/synthetic/d1_aug_v1_batches/batch_*.jsonl"
-OUT = "data/synthetic/d1_aug_v1.jsonl"
-MANIFEST = "data/synthetic/d1_aug_v1_manifest.json"
+BATCH_GLOB = "data/synthetic/target_detector_aug_v1_batches/batch_*.jsonl"
+OUT = "data/synthetic/target_detector_aug_v1.jsonl"
+MANIFEST = "data/synthetic/target_detector_aug_v1_manifest.json"
 PROVENANCE = "llm_authored_direct:deepseek-v1-flash"
-DATASET = "d1-aug-v1"
+DATASET = "target-detector-aug-v1"
 ROWS = 2000
+# 2026-11-14 model rename (D1 -> target detector): only the row-id prefix and the file names
+# changed. Texts, spans and row order are identical to the file the target detector was
+# trained on, which is recorded under the old name and hash below.
+RENAMED_FROM = {
+    "dataset": "d1-aug-v1",
+    "path": "data/synthetic/d1_aug_v1.jsonl",
+    "sha256": "c16e037dd978c5305e510474653ac573a6dde9e560a945da6428c8f31609eb3d",
+    "change": "row id prefix d1-aug-v1- became target-detector-aug-v1-; nothing else",
+}
 
 EVAL_OVERLAP_PATHS = {
     "short_eval_v2": ["data/synthetic/short_eval_v2.jsonl"],
@@ -155,17 +164,18 @@ def main() -> None:
 
     manifest = {
         "dataset": DATASET,
+        "renamed_from": RENAMED_FROM,
         "provenance": PROVENANCE,
         "authoring": "each text written directly by the LLM (DeepSeek V1 Flash via opencode, "
         "2026-10-15/16); no templates, paraphrase tools, synonym swaps, or filler padding; "
-        "authored drafts preserved in data/synthetic/d1_aug_v1_batches/ (40 files x 50); "
+        "authored drafts preserved in data/synthetic/target_detector_aug_v1_batches/ (40 files x 50); "
         "batch assignments (context/position/length/name) pre-generated deterministically "
         "(seed 20261015) and each text authored around the assigned entity",
         "names": "training-side names only (artifacts/splits/name_pools.json train_side_pool); "
         f"{len(set(names))} distinct names across {len(rows)} rows; zero overlap with "
         "held-out (final-eval-only) names; not evaluation data",
         "role": "M07b.2 stage-1 augmentation data: plain short-message SFT rows used to "
-        "fine-tune D0 -> D1 (same task schema / request distribution as short_eval); "
+        "fine-tune base detector -> target detector (same task schema / request distribution as short_eval); "
         "not to be used as evaluation data",
         "files": {
             DATASET.replace("-", "_"): {"path": OUT, "rows": len(rows), "sha256": sha256_file(OUT)}
@@ -191,7 +201,9 @@ def main() -> None:
     with open(MANIFEST, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
-    print(f"rows: {len(rows)} -> {OUT} sha256={manifest['files']['d1_aug_v1']['sha256']}")
+    print(
+        f"rows: {len(rows)} -> {OUT} sha256={manifest['files']['target_detector_aug_v1']['sha256']}"
+    )
     print(f"coverage: ctx={dict(sorted(by_ctx.items()))}")
     print(
         f"  pos={dict(sorted(by_pos.items()))} bucket={ {f'{lo}-{hi}': n for (lo, hi), n in sorted(by_bucket.items())} } form={dict(sorted(by_form.items()))}"

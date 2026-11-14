@@ -3,7 +3,7 @@
 import json
 import unittest
 
-from pii_redteam.training.rl_reward import INVALID_REWARD, D1Reward
+from pii_redteam.training.rl_reward import INVALID_REWARD, TargetDetectorReward
 
 EOS = 7
 GOOD_TEXT = "Hi Lucas, could you please call me back about the invoice we discussed yesterday?"
@@ -32,11 +32,11 @@ def message(text: str) -> str:
 
 
 def reward_for(completions, names, p_by_text, completion_ids=None, **kwargs):
-    reward = D1Reward(FakeScorer(p_by_text), EOS)
+    reward = TargetDetectorReward(FakeScorer(p_by_text), EOS)
     return reward(completions, names, completion_ids=completion_ids, **kwargs)
 
 
-class TestD1Reward(unittest.TestCase):
+class TestTargetDetectorReward(unittest.TestCase):
     def test_valid_reward_is_one_minus_detector_probability(self):
         text = GOOD_TEXT
         rewards = reward_for([message(text)], ["Lucas"], {text: 0.25})
@@ -62,7 +62,9 @@ class TestD1Reward(unittest.TestCase):
 
     def test_short_text_that_v1_accepted_is_invalid_and_never_scored(self):
         scorer = FakeScorer({})
-        rewards = D1Reward(scorer, EOS)([message("Hi Lucas")], ["Lucas"], completion_ids=[[1, EOS]])
+        rewards = TargetDetectorReward(scorer, EOS)(
+            [message("Hi Lucas")], ["Lucas"], completion_ids=[[1, EOS]]
+        )
         self.assertEqual(rewards, [INVALID_REWARD])
         self.assertEqual(scorer.scored_texts, [])
 
@@ -78,7 +80,7 @@ class TestD1Reward(unittest.TestCase):
 
     def test_invalid_samples_are_never_sent_to_the_scorer(self):
         scorer = FakeScorer({})
-        D1Reward(scorer, EOS)(["garbage", message("no name here")], ["Lucas", "Lucas"])
+        TargetDetectorReward(scorer, EOS)(["garbage", message("no name here")], ["Lucas", "Lucas"])
         self.assertEqual(scorer.scored_texts, [])
 
     def test_scorer_returning_no_probability_is_invalid(self):
@@ -132,7 +134,9 @@ class TestD1Reward(unittest.TestCase):
         self.assertEqual([round(r, 1) for r in rewards], [0.7, 0.7, 0.4, 0.4])
 
     def test_trl_expects_a_function_name_for_logging(self):
-        self.assertEqual(D1Reward(FakeScorer({}), EOS).__name__, "d1_reward")
+        self.assertEqual(
+            TargetDetectorReward(FakeScorer({}), EOS).__name__, "target_detector_reward"
+        )
 
 
 if __name__ == "__main__":

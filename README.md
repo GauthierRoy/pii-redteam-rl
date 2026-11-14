@@ -37,14 +37,14 @@ src/pii_redteam/
   backends.py     precision/decoder contract, no-speculation reference (M01.3)
   validation.py   span schema + exact-name-once candidate gate
   detector.py     Detector.predict_spans/score_target + FakeDetector
-  generator.py    Generator.generate + FakeGenerator
+  attacker.py    Attacker.generate + FakeAttacker
   rewards.py      Reward.score stub: invalid < valid range, components separate
   evaluation.py   exact-span P/R/F1 on fixtures (M04 stub)
   experiments.py  data-to-report smoke workflow
   training/grpo_compat.py  reused TRL-compat shim (see docs/REUSE_AUDIT.md)
 scripts/run_smoke.py  smoke CLI
 tests/unit/ tests/integration/ tests/fixtures/  stdlib unittest, CPU-only
-docs/REUSE_AUDIT.md docs/DECISIONS.md
+docs/REUSE_AUDIT.md docs/DECISIONS.md docs/GLOSSARY.md (model names)
 STATE.md  session continuity log
 ```
 

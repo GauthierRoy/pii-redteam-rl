@@ -11,7 +11,7 @@ deprecated short_eval_v1, then writes:
 
 The 50-row companion slice is data/synthetic/short_eval_deepseek_v1.jsonl (same
 schema and checks). It was written by an LLM, not by humans, and shares its
-writer with the D1 training data (D17).
+writer with the target detector training data (D17).
 
 Usage: PYTHONPATH=src python3 scripts/finalize_short_eval_v2.py
 """
@@ -155,7 +155,7 @@ def main() -> None:
             "path": COMPANION_SLICE,
             "provenance": "llm_authored_direct:deepseek-v1-flash",
             "rows": 50,
-            "note": "not human-written; shares its writer with d1_aug_v1 (D17)",
+            "note": "not human-written; shares its writer with target_detector_aug_v1 (D17)",
         },
     }
     with open(MANIFEST, "w", encoding="utf-8") as f:

@@ -21,7 +21,9 @@ def main() -> None:
         help="M07b prompt-variant comparison (P0/P1/P2 on the request bank v2)",
     )
     compare.add_argument("--config", required=True, help="path to a comparison YAML config")
-    smoke = sub.add_parser("rl-smoke", help="M08.3 capped RL smoke run (TRL GRPO vs frozen D1)")
+    smoke = sub.add_parser(
+        "rl-smoke", help="M08.3 capped RL smoke run (TRL GRPO vs the frozen target detector)"
+    )
     smoke.add_argument("--config", required=True, help="path to an RL smoke YAML config")
     args = parser.parse_args()
 

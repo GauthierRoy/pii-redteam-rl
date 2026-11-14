@@ -172,9 +172,9 @@ def main() -> None:
             "near_dup_pairs_gt_0.7": len(dup["near"]),
             "top10_opening_share": round(top10, 4),
             "name_at_start_share": round(name_at_start, 4),
-            "d0_extra_name_flags": "pending (frozen checkpoint unavailable at finalize time; "
+            "base_detector_extra_name_flags": "pending (frozen checkpoint unavailable at finalize time; "
             "/tmp/d0zip wiped; flag script ready at "
-            "scripts/flag_extra_names_d0.py)",
+            "scripts/flag_extra_names_base_detector.py)",
         },
     }
     with open(f"{OUT_DIR}/manifest.json", "w", encoding="utf-8") as f:

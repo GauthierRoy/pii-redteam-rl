@@ -45,7 +45,7 @@
   trainer knobs (`train_countdown.py:35-114` pattern) → new PII trainer entry in M08 only.
   At M01 this yields just the config loader + run-manifest/resume-guard scaffolding.
 - Qwen3 `enable_thinking=False` template patch (`train_countdown.py:48-60`) → recorded as a
-  known generator-tokenizer hazard for M05; re-implemented only if the chosen generator needs it.
+  known attacker-tokenizer hazard for M05; re-implemented only if the chosen attacker needs it.
 - Reward-function *signature convention* and overlong-band *shape* (`rewards_countdown.py`)
   → new `Reward.score` interface returning separately-logged components
   (validity / difficulty / repetition / KL), per plan M07.3. No countdown tiers ported.
@@ -87,9 +87,9 @@
    equations/answers with `math-verify`/AST eval. The PII reward needs a *frozen* detector,
    subword-to-character offset alignment, truncation-window checks, and exact-name-once
    validity (plan M07.1–M07.2). No component for any of this exists in `../rl`.
-2. **Single decoder task ≠ detector+generator loop.** Source trains one Qwen policy on one
+2. **Single decoder task ≠ detector+attacker loop.** Source trains one Qwen policy on one
    synthetic task. The project needs a ModernBERT(-compatible) token-classifier detector
-   (M03), an SFT generator (M05), RL against the frozen detector (M08), matched augmentation
+   (M03), an SFT attacker (M05), RL against the frozen detector (M08), matched augmentation
    arms incl. generate-and-filter + continued-training control (M06/M09/M10), and disparity
    analysis (M11). No detector, annotation, split, or retraining code exists to reuse.
 3. **Serving setup ≠ RL rollout setup.** Source runs `use_vllm: true/false` as a simple flag.
@@ -106,7 +106,7 @@
    separating SFT, rollouts (incl. rejected), filtering, detector retraining, and DFlash
    trace/training costs under a ~€50 exploratory envelope (plan §9). No accounting code exists.
 7. **Qwen-specific template patch** (`enable_thinking=False`, pre-closed `<think>`) must not
-   be applied blindly to the future generator/detector tokenizers; it is a documented hazard,
+   be applied blindly to the future attacker/detector tokenizers; it is a documented hazard,
    not a default.
 8. **No license file** was found in `../rl`; checkpoint/model licenses (Qwen, GSM8K, MATH,
    SVAMP) are not recorded there. The new project records provenance per source from M02
@@ -119,7 +119,7 @@
 2. Copy scaffolding only: `.gitignore` rules, `scripts/lint.sh`, `.pre-commit-config.yaml`,
    ruff/ty `pyproject.toml` sections, `Makefile` target shape.
 3. Write new M01 modules from scratch against the plan §7 interfaces
-   (`Detector.predict_spans/score_target`, `Generator.generate`, `Validator.validate`,
+   (`Detector.predict_spans/score_target`, `Attacker.generate`, `Validator.validate`,
    `Reward.score`, `Evaluator.evaluate`) with an explicit fake-model CPU path; add the
    generation-backend contract (precision/decoder options, no-speculation reference,
    `UnsupportedBackendError`) and the manifest/resume guard.

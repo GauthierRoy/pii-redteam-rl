@@ -158,7 +158,7 @@ def diversity_metrics(samples: list[dict]) -> dict:
 
 
 def outcome_for_sample(target_span: tuple[int, int], pred_spans: list[tuple[int, int]]) -> str:
-    """Classify one sample against D0's decoded PERSON spans."""
+    """Classify one sample against the base detector's decoded PERSON spans."""
     ts, te = target_span
     overlap = [p for p in pred_spans if p[0] < te and p[1] > ts]
     if not overlap:
@@ -284,9 +284,9 @@ def threshold_report(metrics: dict, thresholds: dict) -> dict:
             f"live_group_share={live}, miss_rate={miss_rate}",
         ),
         "truncation": (
-            metrics.get("target_spans_lost_to_d0_truncation", 0)
+            metrics.get("target_spans_lost_to_base_detector_truncation", 0)
             <= thresholds["target_spans_lost_max"],
-            f"lost={metrics.get('target_spans_lost_to_d0_truncation', 0)}",
+            f"lost={metrics.get('target_spans_lost_to_base_detector_truncation', 0)}",
         ),
     }
     return {name: {"ok": bool(ok), "detail": detail} for name, (ok, detail) in checks.items()}

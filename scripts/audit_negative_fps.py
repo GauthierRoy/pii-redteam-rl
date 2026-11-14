@@ -55,7 +55,7 @@ def main() -> None:
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--cache-dir", default="/tmp/pii-redteam-cache")
     parser.add_argument("--manifest", default="artifacts/splits/final_eval_manifest.json")
-    parser.add_argument("--out", default="artifacts/d0_audit/negative_fp_audit.json")
+    parser.add_argument("--out", default="artifacts/base_detector_audit/negative_fp_audit.json")
     parser.add_argument("--batch-size", type=int, default=32)
     args = parser.parse_args()
 

@@ -77,5 +77,5 @@
     "sha256": "7ada7f1c6f829f3abbf5cf89c87723bd38a3e00f4cc7bfa73dcc2d7f9b6ceecf",
     "change": "row ids and file name only; request, target and provenance unchanged (D17)"
   },
-  "writer_note": "Written by the same LLM as data/synthetic/d1_aug_v1.jsonl, so it cannot show that D1 gains are independent of the training writer. No human-written eval data exists yet (D17)."
+  "writer_note": "Written by the same LLM as data/synthetic/target_detector_aug_v1.jsonl, so it cannot show that the target detector gains are independent of the training writer. No human-written eval data exists yet (D17)."
 }

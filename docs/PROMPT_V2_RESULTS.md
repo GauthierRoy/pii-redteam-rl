@@ -15,7 +15,7 @@ non-thinking) produce varied, realistic short messages instead of
 short data required?
 
 Branch: `feat/request-v2-prompting`. The M07a probe scorer is NOT touched
-(separate fix in flight); all D0-dependent numbers here are flagged
+(separate fix in flight); all base-detector-dependent numbers here are flagged
 **pending scorer verification**.
 
 ## 1. Stricter validity rules (v2)
@@ -157,9 +157,9 @@ Per variant x temperature:
 - distinct-1 / distinct-2 over valid texts
 - median unique valid texts per 8-sample group (+ min)
 - length distribution in words (p10/p50/p90, min/max)
-- D0 p_target percentiles, outcome rates, live-group shares — **flagged
+- Base detector p_target percentiles, outcome rates, live-group shares — **flagged
   `pending scorer verification`** (computed with a local reference-pipeline
-  replica of the D0 eval path, NOT the M07a probe scorer under repair)
+  replica of the base detector eval path, NOT the M07a probe scorer under repair)
 
 ## 7. Pass criteria (pre-committed BEFORE the run)
 
@@ -186,7 +186,7 @@ Command:
 
 960 generations (3 variants x {1.0, 0.7} x 20 requests x n=8, top_p 0.95,
 seed 20260920, max_new_tokens 192) in **58.8 min** (3526 s, ~3.7 s/generation
-effective with batch=4 x n=8); frozen-D0 scored 668 valid samples. ALL raw
+effective with batch=4 x n=8); frozen base detector scored 668 valid samples. ALL raw
 outputs saved: `results/m07b_prompt_v2/m07b-20261012-224819/samples_raw.jsonl`
 (960 records incl. every invalid, re-scoreable) + `prompt_compare_report.json`.
 
@@ -249,8 +249,8 @@ Reading:
 ### 8.3 p_target / live-group stats — official probe scorer (flag dropped)
 
 Re-scored 2026-10-13 with the OFFICIAL probe scorer
-(`pii_redteam.probe._score_with_d0`, frozen D0 sha `0314ebe3…c43cb`), which the
-M07a scorer-sanity work verified against the D0 training eval pipeline
+(`pii_redteam.probe._score_with_detector`, frozen base detector sha `0314ebe3…c43cb`), which the
+M07a scorer-sanity work verified against the base detector training eval pipeline
 (dev 124/124, pilot 32/32 — PR #5). Cross-check on this run: the as-run local
 reference-replica and the official scorer agree to max |Δp_target| = 8.05e-07
 (mean 1.38e-08) over 667 common samples, so the as-run numbers stand. Numbers
@@ -265,10 +265,10 @@ below are the official-scorer values over the D15-valid samples:
 
 Directionally: valid P1/P2 outputs sit in a p_target band (~0.2-0.9) that
 gives much stronger within-group reward variance than P0 (live-group 0.85-0.95
-vs 0.37-0.47). Note (D13): D0 still misses ~24-39% of these short-conversational
+vs 0.37-0.47). Note (D13): base detector still misses ~24-39% of these short-conversational
 names — complete_miss is a REAL detector gap, not a scoring artifact, which is
-exactly why D13 stages D1 before any RL and why the M07b.2 data gates
-(§10) do not rely on D0.
+exactly why D13 stages target detector before any RL and why the M07b.2 data gates
+(§10) do not rely on the base detector.
 
 ### 8.4 Manual-review samples (10 random valid per variant, t=1.0)
 
@@ -287,7 +287,7 @@ P0 (all short template one-liners):
 
 P1 (varied, realistic, on-context):
 
-- 'Hi Jürg, this email forwarded by Sarah regarding the project deadline is urgent...' (note: extra name "Sarah" — D0-flag territory, still v2-valid)
+- 'Hi Jürg, this email forwarded by Sarah regarding the project deadline is urgent...' (note: extra name "Sarah" — base-detector-flag territory, still v2-valid)
 - 'Dear Mermolja, we have received your support request regarding the service issue you mentioned...'
 - "Hey, Brayn, how's your day going? Need to grab a quick coffee sometime."
 - 'Hello, this is Düriye regarding the recent issue with our billing process...'
@@ -339,7 +339,7 @@ Compliance of D15-valid outputs with the request's `name_position` hint
 Finding: the model follows `start` hints almost perfectly, but `middle`/`end`/
 `signature` hints are weakly followed — the name lands early in most outputs
 regardless (name-position start-share 0.72-0.93 across cells). Position hints
-beyond `start` should not be relied on for D1 data construction.
+beyond `start` should not be relied on for the target detector data construction.
 
 ### 8.5 Known detector issues found by this run (quantified; D15 resolved them)
 
@@ -350,14 +350,14 @@ beyond `start` should not be relied on for D1 data construction.
 - **Greeting-lexicon gap** ("having" was missing): flipped exactly one P0|t1.0
   sample. Lexicon fixed in code; the D15 re-label applies it (§8.4b).
 - P1 shows occasional extra names ("Sarah") inside otherwise valid outputs —
-  policed by the independent D1 data gate (§10), not by v2 validity.
+  policed by the independent target detector data gate (§10), not by v2 validity.
 
 ## 9. What is (still) unverified
 
 - p_target / outcome / live-group numbers (§8.3) now come from the official
   probe scorer (verified by the M07a scorer-sanity regression, PR #5); the
-  remaining caveat is D0 itself (D13: ~24-39% complete-miss on these texts) —
-  by design, D1 exists to close that gap, and the D1 gates do not rely on D0.
+  remaining caveat is base detector itself (D13: ~24-39% complete-miss on these texts) —
+  by design, target detector exists to close that gap, and the target detector gates do not rely on the base detector.
 - The person-sense judge never rejected (0/673): its discrimination is
   unvalidated — no counterexample appeared in this run or the audit.
 - The LLM judge is Qwen3.5-0.8B (owner asked for a small judge; the 2B judge
@@ -369,14 +369,14 @@ beyond `start` should not be relied on for D1 data construction.
   If the owner wants GPU numbers, `colab/M07b_prompt_compare.ipynb` runs the
   same committed config on a T4 (~20-40 min).
 - The 6th pilot sample (see §2); the complete pilot file remains on Drive.
-- Colab notebook path (Drive D0 / config overrides) is untested until the
+- Colab notebook path (Drive base detector / config overrides) is untested until the
   owner opens it — it mirrors the M07a launcher pattern exactly.
 
-## 10. M07b.2 D1 training-data gates (owner decisions, 2026-10-13)
+## 10. M07b.2 target detector training-data gates (owner decisions, 2026-10-13)
 
-Before ANY generation from this run becomes D1 training data (D13 Stage 1):
+Before ANY generation from this run becomes target detector training data (D13 Stage 1):
 
-1. **Extra-person check — independent of D0** (R08). Checker =
+1. **Extra-person check — independent of the base detector** (R08). Checker =
    spaCy `en_core_web_sm` NER (filtered: digit-strings and role titles like
    "Team Lead" are not person names) OR a small LLM judge (Qwen3.5-0.8B,
    bf16 CPU, greedy, non-thinking, 2-token yes/no). Policy: **conservative —
@@ -391,7 +391,7 @@ Executed over the 673 D15-valid samples of this run
 (`scripts/person_check_v2.py`, judge pass 10.2 min CPU; outputs:
 `samples_person_checked.jsonl`, `person_check_report.json`):
 
-| Cell | n valid | spaCy extras | LLM yes (unclear) | sense "no" | accepted for D1 |
+| Cell | n valid | spaCy extras | LLM yes (unclear) | sense "no" | accepted for the target detector |
 |---|---|---|---|---|---|
 | P0 t1.0 | 48 | 0.000 | 0.021 (0) | 0.000 | 47/48 (0.979) |
 | P0 t0.7 | 44 | 0.000 | 0.000 (0) | 0.000 | 44/44 (1.000) |
@@ -421,4 +421,4 @@ verdicts in `audit_manual_verdicts.jsonl`):**
   over P2
 
 For the adopted configuration (D14: P1 at t=0.7): **88.1% of D15-valid
-outputs would be accepted as D1 data** after the person gates.
+outputs would be accepted as target detector data** after the person gates.

@@ -1,4 +1,4 @@
-"""M08.3 RL smoke run: TRL GRPO + LoRA on the generator against the frozen D1 reward.
+"""M08.3 RL smoke run: TRL GRPO + LoRA on the attacker against the frozen target detector reward.
 
 Capped by design (step cap, wall-clock cap, checkpoints to the work dir). It measures, it
 does not claim a result: reward signal on real generations before any update (how sparse
@@ -36,11 +36,11 @@ from trl import GRPOTrainer
 from ..prompt_compare import _device_dtype, _generate
 from ..requests import load_person_name_pool
 from ..run_io import write_jsonl
-from .d1_scorer import D1Scorer
+from .detector_scorer import DetectorScorer
 from .grpo_compat import build_grpo_config
 from .rl_bank import bank_names, build_rl_requests
 from .rl_dataset import RL_PROMPT_VARIANT, rl_rows
-from .rl_reward import D1Reward
+from .rl_reward import TargetDetectorReward
 from .rl_signal import signal_summary
 
 DETECTOR_MAX_LENGTH = 512
@@ -89,7 +89,7 @@ def fix_param_name_for_multimodal_vllm(self, name: str, extra_prefixes: list[str
 
 
 def align_vllm_names_with_multimodal_checkpoint() -> None:
-    """Sync a text-only policy into vLLM, which only registers Qwen3.5 as a multimodal model."""
+    """Sync a text-only attacker into vLLM, which only registers Qwen3.5 as a multimodal model."""
     trl_vllm.VLLMGeneration._fix_param_name_to_vllm = fix_param_name_for_multimodal_vllm
 
 
@@ -161,8 +161,8 @@ def build_requests(config: dict, repo_dir: str) -> tuple[list[dict], list[dict],
     return requests[n_signal:], requests[:n_signal], provenance
 
 
-def load_policy(config: dict, dtype: torch.dtype):
-    """Qwen policy in 4-bit nf4 (QLoRA, as the M05 SFT run) or plain dtype for CPU checks."""
+def load_attacker(config: dict, dtype: torch.dtype):
+    """Qwen attacker in 4-bit nf4 (QLoRA, as the M05 SFT run) or plain dtype for CPU checks."""
     tok = AutoTokenizer.from_pretrained(config["model_id"])
     if tok.pad_token_id is None:  # ty: ignore[unresolved-attribute]
         tok.pad_token = tok.eos_token  # ty: ignore[invalid-assignment,unresolved-attribute]
@@ -183,17 +183,19 @@ def load_policy(config: dict, dtype: torch.dtype):
     return tok, model
 
 
-def load_scorer(config: dict, device: str) -> D1Scorer:
+def load_scorer(config: dict, device: str) -> DetectorScorer:
     detector = config["detector"]
     weights_sha = file_sha256(os.path.join(detector["path"], "model.safetensors"))
     if weights_sha != detector["sha256"]:
         raise SystemExit(f"detector lock mismatch: {weights_sha} != {detector['sha256']}")
     model = AutoModelForTokenClassification.from_pretrained(detector["path"]).to(device)
     tokenizer = AutoTokenizer.from_pretrained(detector["path"])
-    return D1Scorer(model, tokenizer, DETECTOR_MAX_LENGTH)
+    return DetectorScorer(model, tokenizer, DETECTOR_MAX_LENGTH)
 
 
-def sample_and_score(tok, model, requests, config: dict, reward: D1Reward, device: str, label: str):
+def sample_and_score(
+    tok, model, requests, config: dict, reward: TargetDetectorReward, device: str, label: str
+):
     """Sample G rollouts per request with the RL sampling settings and score them."""
     sampling = config["sampling"]
     samples = _generate(
@@ -296,11 +298,11 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
     report["bank"] = bank_provenance
     save_report(report, report_path)
 
-    tok, model = load_policy(config, dtype)
+    tok, model = load_attacker(config, dtype)
     if device == "cuda" and not config["model"]["quantize_4bit"]:
         model = model.to(device)
     scorer = load_scorer(config, device)
-    reward = D1Reward(scorer, tok.eos_token_id)
+    reward = TargetDetectorReward(scorer, tok.eos_token_id)
     model.eval()
     torch.manual_seed(config["seed"])
 

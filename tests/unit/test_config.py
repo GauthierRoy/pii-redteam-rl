@@ -14,7 +14,7 @@ class TestConfig(unittest.TestCase):
         cfg = config.resolve_config(
             config.load_config(os.path.join(ROOT, "configs", "smoke", "smoke.yaml"))
         )
-        self.assertEqual(cfg["model_id"], "fake-generator-001")
+        self.assertEqual(cfg["model_id"], "fake-attacker-001")
         self.assertEqual(cfg["backend"], {"precision": "fp32", "decoder": "reference"})
 
     def test_missing_model_id_rejected(self):

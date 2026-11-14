@@ -3,7 +3,7 @@
 Reads authored batch JSONL files (quota fields + text), rebuilds v2 rows with
 code-computed spans, and reports: pass rate per check, final counts per cell,
 top-10 opening share, name-at-start share, and 20 seeded random rows for
-manual review. D0 extra-name flags are merged from a flags JSON file when
+manual review. Base detector extra-name flags are merged from a flags JSON file when
 present (flag only — never a rejection); otherwise reported as pending.
 
 Usage:
@@ -72,7 +72,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--batches", nargs="+", required=True)
     parser.add_argument("--quota-dir", default="/tmp/sft_v2_batches")
-    parser.add_argument("--flags", default=None, help="d0 flags JSON (flag-only merge)")
+    parser.add_argument("--flags", default=None, help="base_detector flags JSON (flag-only merge)")
     parser.add_argument("--report", default="/tmp/sft_v2_batches/validation_report.json")
     parser.add_argument("--seed", type=int, default=20260920)
     args = parser.parse_args()
@@ -191,10 +191,10 @@ def main() -> None:
     print(f"name-at-start share: {name_at_start:.4f}")
     if flags:
         print(
-            f"D0 extra-name flags (flag-only): {flagged}/{len(built)} = {flagged / len(built):.4f}"
+            f"base detector extra-name flags (flag-only): {flagged}/{len(built)} = {flagged / len(built):.4f}"
         )
     else:
-        print("D0 extra-name flags: PENDING (no flags file)")
+        print("base detector extra-name flags: PENDING (no flags file)")
     dup_ids = sorted({r["id"] for r in built if seen_ids[r["id"]] > 1})
     print(f"duplicate ids across batch files: {len(dup_ids)}")
     for f_ in failures[:25]:
@@ -219,7 +219,7 @@ def main() -> None:
         "near_dup_pairs": dup["near"],
         "top10_opening_share": round(top10_share, 4),
         "name_at_start_share": round(name_at_start, 4),
-        "d0_flags": {"flagged": flagged, "total": len(built)} if flags else "pending",
+        "base_detector_flags": {"flagged": flagged, "total": len(built)} if flags else "pending",
         "duplicate_ids": dup_ids,
         "template_reuse_pairs": len(reuse["pairs"]),
         "template_reuse_rows_by_split": {

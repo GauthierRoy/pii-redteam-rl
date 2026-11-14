@@ -2,10 +2,10 @@
 
 Additive module for the ``feat/spark-sft-data`` branch. Frozen code — the
 scorer (``detector.py``, ``rewards.py``) and the prompt-variant code
-(``probe.py``, ``probe_metrics.py``, ``requests.py``, ``generator.py``) — is
+(``probe.py``, ``probe_metrics.py``, ``requests.py``, ``attacker.py``) — is
 never modified here. The only import from frozen code is the read-only R07
 pool filter (``is_requestable_name``); span helpers used by the *separate*
-D0-flag script are imported there, not here, so this module stays stdlib-only.
+base-detector-flag script are imported there, not here, so this module stays stdlib-only.
 
 Row format (request schema v2)::
 

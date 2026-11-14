@@ -2,10 +2,10 @@
 
 Investigation branch `fix/probe-scorer-sanity`. Question: the M07a probe reported
 complete misses on trivial short texts ("Hey Lucas, how are you doing today?") —
-is that a probe-scorer bug, or does frozen D0 genuinely fail on short messages?
+is that a probe-scorer bug, or does frozen base detector genuinely fail on short messages?
 
-**Verdict: the scorer is correct; D0 genuinely misses short conversational names.**
-The probe scorer and the D0-training eval pipeline agree on every single sample.
+**Verdict: the scorer is correct; base detector genuinely misses short conversational names.**
+The probe scorer and the base-detector-training eval pipeline agree on every single sample.
 
 ## Evidence
 
@@ -16,10 +16,10 @@ The probe scorer and the D0-training eval pipeline agree on every single sample.
 
 | Pipeline | exact_hit | partial | boundary | miss |
 |---|---|---|---|---|
-| probe scorer (`_score_with_d0`) | 96.77% | 0.81% | 0.0% | 2.42% |
+| probe scorer (`_score_with_detector`) | 96.77% | 0.81% | 0.0% | 2.42% |
 | training eval pipeline | 96.77% | 0.81% | 0.0% | 2.42% |
 
-**Outcome agreement: 124/124 spans (100%).** The probe's dev hit rate matches D0's
+**Outcome agreement: 124/124 spans (100%).** The probe's dev hit rate matches base detector's
 recorded dev span recall (0.968). p_target_mean on exact hits: median 0.9978
 (min 0.58) — a sane difficulty signal.
 
@@ -46,14 +46,14 @@ Full token/offset/label dumps for the controlled sentences (all in the run log):
 
 Argmax is O on every token; even a single clean `ĠLucas` token gets < 0.08 for
 B-PERSON. No decode, alignment, or padding artifact can produce that — the model
-itself assigns these probabilities. **Domain shift is real:** D0 was trained on
+itself assigns these probabilities. **Domain shift is real:** base detector was trained on
 long AI4Privacy form-letters ("Dear …, Social Number: …"), and short
 conversational messages are out of that distribution.
 
 ### D. Explicit checks (all clean)
 
 - **Special tokens:** CLS/SEP carry (0,0) offsets and are labeled O — identical to
-  D0 training (training labels used the same (0,0) → -100/O convention).
+  Base detector training (training labels used the same (0,0) → -100/O convention).
 - **id2label:** `{0: 'O', 1: 'B-PERSON', 2: 'I-PERSON'}` — matches training exactly.
 - **p_target semantics:** reads the per-token GOLD-label probability (B-PERSON for
   the first target token, I-PERSON after) — not the summed PERSON mass. Summing
@@ -69,13 +69,13 @@ conversational messages are out of that distribution.
 
 1. **p_target and the probe outcomes are trustworthy.** No fix applied to the
    scorer; nothing to re-score.
-2. **The 1–30% miss-rate go/no-go band is KEPT; D0 fails it on the high side
-   (D13).** The pilot miss rate (~53%) exceeds the band, meaning D0 is too weak on
+2. **The 1–30% miss-rate go/no-go band is KEPT; base detector fails it on the high side
+   (D13).** The pilot miss rate (~53%) exceeds the band, meaning base detector is too weak on
    short messages to be a meaningful RL target. The recorded response is the D13
-   two-stage structure: Stage 1 closes the domain gap without RL (D1 = D0 + plain
-   short-message augmentation), the probe is re-run against frozen D1 with the SAME
-   go/no-go table, and only then does RL (Stage 2) proceed with D1 as reward model.
-3. **D0's short-message blind spot is the experiment's target**: the augmentation
+   two-stage structure: Stage 1 closes the domain gap without RL (target detector = base detector + plain
+   short-message augmentation), the probe is re-run against the frozen target detector with the SAME
+   go/no-go table, and only then does RL (Stage 2) proceed with the target detector as reward model.
+3. **Base detector's short-message blind spot is the experiment's target**: the augmentation
    arms exist precisely to teach the detector short-conversational names.
 
 ## Regression guard
@@ -83,15 +83,15 @@ conversational messages are out of that distribution.
 `tests/integration/test_probe_scorer_regression.py` (+ fixture
 `tests/fixtures/probe_scorer_regression.json`): 5 fixed AI4Privacy dev rows that
 must score exact_hit with p_target > 0.9, and the "Hey Lucas…" REAL-SHIFT tripwire
-**pinned to frozen D0's sha** (`0314ebe3…`) — it asserts complete_miss only when
-the loaded checkpoint IS frozen D0, and skips for any other checkpoint (a future D1
-is expected to hit that text). Requires `PII_D0_PATH` env var pointing at the
+**pinned to the frozen base detector's sha** (`0314ebe3…`) — it asserts complete_miss only when
+the loaded checkpoint IS frozen base detector, and skips for any other checkpoint (a future target detector
+is expected to hit that text). Requires `PII_BASE_DETECTOR_PATH` env var pointing at the
 frozen d0-best; skipped otherwise.
 
 ## Commands run / environment
 
 - `uv run --group ml python /tmp/sanity/probe_scorer_sanity.py` (laptop CPU,
-  frozen D0 sha-verified `0314ebe3…`, transformers 5.18.0, torch 2.14.1+cpu).
+  frozen base detector sha-verified `0314ebe3…`, transformers 5.18.0, torch 2.14.1+cpu).
 - Outputs: `/tmp/sanity_results.json` (rates + pilot texts), full dumps in the log.
 
 ## Still unverified

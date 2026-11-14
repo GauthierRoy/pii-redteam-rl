@@ -23,7 +23,7 @@ generation:
   max_new_tokens: 192              # fits the 80-word v2 cap + JSON wrapper overhead
   batch_prompts: 4
 
-# Optional frozen-D0 p_target/live-group stats. Every such number is reported
+# Optional frozen base detector p_target/live-group stats. Every such number is reported
 # flagged "pending scorer verification" — the M07a scorer is under a separate
 # fix and must not be trusted until that lands. Disable to skip scoring.
 detector:

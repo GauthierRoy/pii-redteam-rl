@@ -6,7 +6,7 @@ train_side_index.jsonl,validation_index.jsonl,name_pools.json,report.json}.
 
 Policy (docs/DATA_CARD.md, "Split roles"): validation file is development/calibration
 only; a seeded carve of the train file becomes the locked final-eval partition;
-remaining train rows carry detector-training / generator-SFT / attack-development
+remaining train rows carry detector-training / attacker-SFT / attack-development
 roles. Exact-text duplicates are removed; template-skeleton reuse is measured and
 reported, not banned. Held-out names occur only in final-eval rows and never in
 train-side name pools.
@@ -224,7 +224,7 @@ def main() -> None:
                 "final_eval_sha256": final_eval_sha,
                 "created_utc": datetime.datetime.now(datetime.UTC).isoformat(),
                 "locked": True,
-                "policy": "no generator training, prompt authoring, or reward tuning from these rows",
+                "policy": "no attacker training, prompt authoring, or reward tuning from these rows",
             },
             f,
             indent=2,

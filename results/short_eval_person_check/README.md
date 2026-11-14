@@ -34,4 +34,4 @@ spaCy and the judge:
 - spaCy flagged 10 rows, all false positives: "Cheers" (6), "metadata", "Mill Lane", "Keys",
   "Volunteer".
 - The judge's 13 unclear answers come from its yes/no parsing and do not point to a real
-  mention. Do not use `accepted_for_d1` from this report as an eval-row filter.
+  mention. Do not use `accepted_for_target_detector` from this report as an eval-row filter.

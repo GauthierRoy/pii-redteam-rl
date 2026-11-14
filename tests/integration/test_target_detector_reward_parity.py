@@ -1,9 +1,9 @@
-"""RL reward parity (M08.2): `D1Reward` + `D1Scorer` reproduce the recorded probe scores.
+"""RL reward parity (M08.2): `TargetDetectorReward` + `DetectorScorer` reproduce the recorded probe scores.
 
-The five recovered M07a pilot generations (real base-2B outputs) were scored by frozen D0
+The five recovered M07a pilot generations (real base-2B outputs) were scored by the frozen base detector
 in the probe. For those that pass validity v2 the RL reward must equal `1 - p_target_mean`,
 so it matches what the go/no-go table measured; the rest must get the invalid reward. Needs torch/transformers and the frozen
-D0 checkpoint: set PII_D0_PATH to the d0-best directory (skipped otherwise).
+Base detector checkpoint: set PII_BASE_DETECTOR_PATH to the d0-best directory (skipped otherwise).
 """
 
 import hashlib
@@ -13,23 +13,25 @@ import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 FIXTURE = os.path.join(ROOT, "tests", "fixtures", "m07a_pilot_recovered.jsonl")
-FROZEN_D0_SHA = "0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb"
+FROZEN_BASE_DETECTOR_SHA = "0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb"
 RECORDED_P_PRECISION = 6e-4
 EOS = 1
 
 try:
     from transformers import AutoModelForTokenClassification, AutoTokenizer
 
-    from pii_redteam.training.d1_scorer import D1Scorer
-    from pii_redteam.training.rl_reward import D1Reward
+    from pii_redteam.training.detector_scorer import DetectorScorer
+    from pii_redteam.training.rl_reward import TargetDetectorReward
     from pii_redteam.validity_v2 import classify_sample_v2
 
     HAS_ML = True
 except ImportError:
     HAS_ML = False
 
-D0_PATH = os.environ.get("PII_D0_PATH", "")
-HAS_D0 = bool(D0_PATH) and os.path.exists(os.path.join(D0_PATH, "model.safetensors"))
+BASE_DETECTOR_PATH = os.environ.get("PII_BASE_DETECTOR_PATH", "")
+HAS_BASE_DETECTOR = bool(BASE_DETECTOR_PATH) and os.path.exists(
+    os.path.join(BASE_DETECTOR_PATH, "model.safetensors")
+)
 
 
 def sha256_of(path):
@@ -40,17 +42,19 @@ def sha256_of(path):
     return digest.hexdigest()
 
 
-@unittest.skipUnless(HAS_ML and HAS_D0, "needs torch/transformers and PII_D0_PATH")
-class TestD1RewardParity(unittest.TestCase):
+@unittest.skipUnless(
+    HAS_ML and HAS_BASE_DETECTOR, "needs torch/transformers and PII_BASE_DETECTOR_PATH"
+)
+class TestTargetDetectorRewardParity(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        sha = sha256_of(os.path.join(D0_PATH, "model.safetensors"))
-        assert sha == FROZEN_D0_SHA, f"frozen-D0 sha mismatch: {sha}"
-        scorer = D1Scorer(
-            AutoModelForTokenClassification.from_pretrained(D0_PATH),
-            AutoTokenizer.from_pretrained(D0_PATH),
+        sha = sha256_of(os.path.join(BASE_DETECTOR_PATH, "model.safetensors"))
+        assert sha == FROZEN_BASE_DETECTOR_SHA, f"frozen base detector sha mismatch: {sha}"
+        scorer = DetectorScorer(
+            AutoModelForTokenClassification.from_pretrained(BASE_DETECTOR_PATH),
+            AutoTokenizer.from_pretrained(BASE_DETECTOR_PATH),
         )
-        cls.reward = D1Reward(scorer, EOS)
+        cls.reward = TargetDetectorReward(scorer, EOS)
         with open(FIXTURE, encoding="utf-8") as f:
             cls.rows = [json.loads(line) for line in f]
 

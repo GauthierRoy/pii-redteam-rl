@@ -1,14 +1,20 @@
 {
-  "dataset": "d1-aug-v1",
+  "dataset": "target-detector-aug-v1",
+  "renamed_from": {
+    "dataset": "d1-aug-v1",
+    "path": "data/synthetic/d1_aug_v1.jsonl",
+    "sha256": "c16e037dd978c5305e510474653ac573a6dde9e560a945da6428c8f31609eb3d",
+    "change": "row id prefix d1-aug-v1- became target-detector-aug-v1-; nothing else"
+  },
   "provenance": "llm_authored_direct:deepseek-v1-flash",
-  "authoring": "each text written directly by the LLM (DeepSeek V1 Flash via opencode, 2026-10-15/16); no templates, paraphrase tools, synonym swaps, or filler padding; authored drafts preserved in data/synthetic/d1_aug_v1_batches/ (40 files x 50); batch assignments (context/position/length/name) pre-generated deterministically (seed 20261015) and each text authored around the assigned entity",
+  "authoring": "each text written directly by the LLM (DeepSeek V1 Flash via opencode, 2026-10-15/16); no templates, paraphrase tools, synonym swaps, or filler padding; authored drafts preserved in data/synthetic/target_detector_aug_v1_batches/ (40 files x 50); batch assignments (context/position/length/name) pre-generated deterministically (seed 20261015) and each text authored around the assigned entity",
   "names": "training-side names only (artifacts/splits/name_pools.json train_side_pool); 1512 distinct names across 2000 rows; zero overlap with held-out (final-eval-only) names; not evaluation data",
-  "role": "M07b.2 stage-1 augmentation data: plain short-message SFT rows used to fine-tune D0 -> D1 (same task schema / request distribution as short_eval); not to be used as evaluation data",
+  "role": "M07b.2 stage-1 augmentation data: plain short-message SFT rows used to fine-tune base detector -> target detector (same task schema / request distribution as short_eval); not to be used as evaluation data",
   "files": {
-    "d1_aug_v1": {
-      "path": "data/synthetic/d1_aug_v1.jsonl",
+    "target_detector_aug_v1": {
+      "path": "data/synthetic/target_detector_aug_v1.jsonl",
       "rows": 2000,
-      "sha256": "c16e037dd978c5305e510474653ac573a6dde9e560a945da6428c8f31609eb3d"
+      "sha256": "0d46c41f5d9257abc214ddfe190772ccee8a9069c6baff0511538aaea1c4cdf7"
     }
   },
   "counts": {

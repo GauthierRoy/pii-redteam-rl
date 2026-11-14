@@ -1,12 +1,12 @@
 # STATE — pii-redteam-rl
 
 - **Date:** 2026-11-13
-- **Milestone:** M07b done: D1 (`d1v2-20261110-075731`, epoch 2) FROZEN 2026-11-10 and the
+- **Milestone:** M07b done: target detector (`d1v2-20261110-075731`, epoch 2) FROZEN 2026-11-10 and the
   M07a probe go/no-go passes against it at temperature 1.0 (M08 gate formally open).
-  D0 frozen 2026-10-10 (dev span-F1 0.9633). M08.1 done as a recommendation (TRL
+  Base detector frozen 2026-10-10 (dev span-F1 0.9633). M08.1 done as a recommendation (TRL
   `GRPOTrainer`, CPU-smoke-tested, owner accepted; verl reviewed from docs only, kept as a
   later option). M08.2 done on a tiny model (update path, masks, groups, zero-variance,
-  controlled learning, D1 reward parity); D18 records the owner's trainer/`scale_rewards`/
+  controlled learning, target detector reward parity); D18 records the owner's trainer/`scale_rewards`/
   dependency decisions and the RL dataset adapter exists. Next: M08.3 smoke-run preparation
   (RL config, RL-scale request bank, cost estimate/cap/checkpoint/shutdown plan); M06
   baseline and the base-2B diversity check still to close.
@@ -47,13 +47,13 @@
 
 ## M08.2 update-path validation done on a tiny model (2026-11-13; trainer = TRL `GRPOTrainer`)
 
-**Code added (uncommitted):** `src/pii_redteam/training/rl_reward.py` (`D1Reward`, a TRL
+**Code added (uncommitted):** `src/pii_redteam/training/rl_reward.py` (`TargetDetectorReward`, a TRL
 reward callable: strict-JSON contract + one word-boundary name mention via the probe's
 `classify_sample`, reward `r_prob = 1 - mean detector probability over the name tokens`,
 invalid/truncated completions = -1.0, below the valid range [0, 1]; logs `valid_rate`,
 `truncated_rate`, `true_miss_rate` and per-completion `status` / `p_target_mean`) and
-`src/pii_redteam/training/d1_scorer.py` (`D1Scorer`: freezes the detector, calls the probe's
-unchanged `_score_with_d0`). Only `r_prob` is offered: the probe's `r_logit` is unbounded
+`src/pii_redteam/training/detector_scorer.py` (`DetectorScorer`: freezes the detector, calls the probe's
+unchanged `_score_with_detector`). Only `r_prob` is offered: the probe's `r_logit` is unbounded
 (+-10), so the -1.0 invalid reward could outrank valid completions.
 
 **Tests actually run (all passing):**
@@ -67,14 +67,14 @@ unchanged `_score_with_d0`). Only `r_prob` is offered: the probe's `r_logit` is 
   prompts are repeated G times contiguously and per-group advantages sum to 0; completion
   mask is 1 up to and including the first EOS and 0 / pad after it; only LoRA tensors move
   (base weights bit-identical); a constant-reward group gives advantage 0, grad_norm 0 and no
-  parameter change; an all-invalid group through `D1Reward` gives reward -1, zero std and no
-  update; with `beta > 0` KL is ~0 at step 1 and positive later (reference = initial policy,
+  parameter change; an all-invalid group through `TargetDetectorReward` gives reward -1, zero std and no
+  update; with `beta > 0` KL is ~0 at step 1 and positive later (reference = initial attacker,
   adapter disabled); with `beta = 0` no reference log-probs are computed; a frozen detector
   is untouched by scoring during training; controlled reward learning (reward = -length)
   raises the mean reward by > 2 tokens in 30 steps.
-- `PII_D0_PATH=<d0-best> ... python -m unittest tests.integration.test_d1_reward_parity` ->
-  2 tests: for the 5 recovered real base-2B pilot generations `D1Reward` + `D1Scorer` with
-  frozen D0 (sha-checked) give exactly `1 - recorded p_target_mean` (tolerance 6e-4), and a
+- `PII_BASE_DETECTOR_PATH=<d0-best> ... python -m unittest tests.integration.test_target_detector_reward_parity` ->
+  2 tests: for the 5 recovered real base-2B pilot generations `TargetDetectorReward` + `DetectorScorer` with
+  frozen base detector (sha-checked) give exactly `1 - recorded p_target_mean` (tolerance 6e-4), and a
   truncated completion of a scorable text is invalid. Skips without the checkpoint.
 - `make test`: 198+ tests OK (new integration tests skip in CI); `bash scripts/lint.sh` passes.
 
@@ -84,11 +84,11 @@ near-uniform logits, so the learning test scales the output layer 20x (an unscal
 showed essentially no learning at any learning rate).
 
 **Open risk found for M08.3 (decided in D18, to be verified in the smoke run):** TRL computes advantages as
-`(r - mean) / (std + 1e-4)`. With the continuous `r_prob` reward and a near-saturated D1
+`(r - mean) / (std + 1e-4)`. With the continuous `r_prob` reward and a near-saturated target detector
 (p ~ 0.99+), group reward differences can be ~1e-3, which TRL's default `scale_rewards="group"`
 inflates to O(1) advantages, i.e. noise amplification, while `frac_reward_zero_std` stays 0
 because std is not exactly zero. Owner decision (D18): `scale_rewards=False` for the smoke
-run, `reward_std` watched, group scaling kept as a one-flag comparison on real D1 rewards.
+run, `reward_std` watched, group scaling kept as a one-flag comparison on real target detector rewards.
 
 **M08.3 preparation done 2026-11-13:** `requires-python` is now `>=3.11` and `trl>=1.17` is in
 the locked `ml` group (the 9 GRPO tests pass in the locked env). `src/pii_redteam/training/
@@ -99,13 +99,13 @@ is still to be built.
 
 **NOT validated yet:** the same properties on Qwen3.5-2B with the real tokenizer/chat
 template; log-prob agreement between sampling and training under 4-bit QLoRA; T4 memory and
-speed; D1 rewards on real generations at scale (needs the base-2B P1 samples, which live on
+speed; target detector rewards on real generations at scale (needs the base-2B P1 samples, which live on
 Drive); end-to-end TRL run with the real reward on a GPU.
 
 ## M08.1 trainer evaluation: TRL `GRPOTrainer` smoke-tested on CPU (2026-11-12, owner accepted TRL for the pilot)
 
 **Recommendation:** use TRL's `GRPOTrainer` (critic-free GRPO) with a LoRA adapter on
-Qwen3.5-2B, with a custom reward function that calls frozen D1. It is the simplest option
+Qwen3.5-2B, with a custom reward function that calls frozen target detector. It is the simplest option
 that already has the reward-function interface, group sampling, masks, KL and the metrics
 M08.3 needs; writing a trainer from scratch is not justified by anything seen so far.
 
@@ -120,8 +120,8 @@ untouched).
   `entropy`, `clip_ratio/*`, step time.
 - **Zero-variance case behaves as expected:** with a constant reward (name-once, 4/4
   correct) `frac_reward_zero_std` = 1, loss 0, grad_norm 0, LoRA parameters unchanged
-  (abs change 0.0). This is exactly the regime ~89% of groups would be in at D1's ~1.4%
-  miss rate (see the D1 section), so group size/reward design is the real M08 risk.
+  (abs change 0.0). This is exactly the regime ~89% of groups would be in at target detector's ~1.4%
+  miss rate (see the target detector section), so group size/reward design is the real M08 risk.
 - **Real update confirmed with a varying reward** (toy: shorter is better): grad_norm 1.40,
   `frac_reward_zero_std` 0, 48 trainable LoRA tensors changed (abs change 29.5).
 
@@ -152,31 +152,31 @@ M10-scale runs on Modal/Vast need more throughput; that would be a separate deci
 QLoRA on Qwen3.5 has larger-than-usual quantization differences, which matters when
 behavior and reference log-probs must agree; prefer fp16/bf16 LoRA if the 2B fits on the T4
 and decide with a measured memory probe); T4 memory and throughput; HF `generate` speed for
-G=8–16 rollouts; completion-mask and prompt/group-id correctness (M08.2); D1 as the reward
+G=8–16 rollouts; completion-mask and prompt/group-id correctness (M08.2); target detector as the reward
 inside the trainer; `trl` is not yet in the `ml` dependency group or `uv.lock`.
 
-## D1 FROZEN (M07b.3/M07b.4 done, owner-approved 2026-11-12; freeze run d1v2-freeze-20261110-081446)
+## Target detector FROZEN (M07b.3/M07b.4 done, owner-approved 2026-11-12; freeze run d1v2-freeze-20261110-081446)
 
 Source: freeze manifest `freeze_manifest.json` from the Drive archive
 `d1-frozen-d1v2-20261110-075731`, read 2026-11-12. Repo commit `676ce54` (on
-`feat/m07b-freeze-d1`; contains `d1_aug_v1` and `short_eval_neg_v1`). Training run
+`feat/m07b-freeze-d1`; contains `target_detector_aug_v1` and `short_eval_neg_v1`). Training run
 `d1v2-20261110-075731` on Colab, ModernBERT token classifier (O / B-PERSON / I-PERSON),
-D1 = D0 + `d1_aug_v1` augmentation. Archive integrity verified locally: model,
+Target detector = base detector + `target_detector_aug_v1` augmentation. Archive integrity verified locally: model,
 config and both tokenizer files match the sha256 values in the manifest.
 
 - **Frozen checkpoint:** `d1-epoch2`, `model.safetensors` sha256
   `ebfe4c693958c84cdb093d1a55b535e51f1ba0563a702e69e3c97bf5a36a4143`.
   Epoch 3 (sha `51237386…1f21a4`) was the alternative.
 - **Selection rule (pre-registered, dev only):** `fewest_dev_neg_fp_rows` among epochs
-  within 0.01 dev F1 of D0 (0.9633). Epoch 2: dev F1 0.9605, 67 name-free dev rows with
+  within 0.01 dev F1 of the base detector (0.9633). Epoch 2: dev F1 0.9605, 67 name-free dev rows with
   a prediction. Epoch 3: dev F1 0.9636, 100 rows. Chosen epoch 2; recomputed rule matches
   the training run's own choice.
 - **Locks:** final-eval partition lock reproduces
-  (`513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c`); frozen D0
+  (`513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c`); frozen base detector
   `0314ebe3…8ec43cb`; M07a probe config unchanged (`261ec868…`).
 - **All required manifest checks pass.** Gates:
 
-| Gate | D0 | D1 | Threshold | Result |
+| Gate | Base detector | Target detector | Threshold | Result |
 |---|---|---|---|---|
 | Final-eval span-F1 | 0.9539 | 0.9530 | drop ≤ 0.01 | pass (drop 0.0009) |
 | Final-eval precision / recall drop (positive = worse) | – | – | ≤ 0.01 each | pass (precision −0.0026, recall 0.0042) |
@@ -187,42 +187,42 @@ config and both tokenizer files match the sha256 values in the manifest.
 
 
 **Caveats recorded, not hidden:**
-- **Sparse reward risk.** D1 misses only ~1.4% of base-2B generations, just above the
+- **Sparse reward risk.** target detector misses only ~1.4% of base-2B generations, just above the
   band floor. With group-relative advantages, a group of 8 contains at least one miss
   only ~10.5% of the time (16: ~20%), so ~89% of groups would have zero variance.
-- **New short-text false positives (read 2026-11-12).** D0 had 0/95 on short name-free
-  messages, D1 has 3/95 (reproduced locally with the frozen weights and the freeze's own
+- **New short-text false positives (read 2026-11-12).** base detector had 0/95 on short name-free
+  messages, target detector has 3/95 (reproduced locally with the frozen weights and the freeze's own
   `predict_spans`; counts match the manifest: place 1, org_product 2). All three are
   name-like proper nouns, not ordinary words: `Sintra` (Portuguese town, id
   `short-eval-neg-v1-0085`), `Clearline Freight` (company, `-0116`), and `bridge`, a
   sub-word fragment of the company `Ironbridge Manufacturing` (`-0051`). No
   homograph, calendar or role-only row fires. The 5% threshold is still labelled
   PROPOSED, not pre-registered.
-- **short_eval, D0 vs D1 (local CPU rescoring 2026-11-12; both checkpoints sha-verified,
+- **short_eval, base detector vs the target detector (local CPU rescoring 2026-11-12; both checkpoints sha-verified,
   freeze's own `predict_spans` at `676ce54`, data shas match the locks).** The M07b.3 gain
   gate (`short_eval_recall_gain_min` 0.10 on `short_eval_v2`) **passes: +0.5733**.
 
 | Set | Model | Precision | Recall | F1 | exact / partial / miss |
 |---|---|---|---|---|---|
-| `short_eval_v2` (150) | D0 | 0.7590 | 0.4200 | 0.5408 | 63 / 18 / 69 |
-| `short_eval_v2` (150) | D1 | 0.9868 | 0.9933 | 0.9900 | 149 / 0 / 1 |
-| `short_eval_deepseek_v1` (50, same writer as `d1_aug_v1`, D17) | D0 | 0.6875 | 0.4400 | 0.5366 | 22 / 9 / 19 |
-| `short_eval_deepseek_v1` (50) | D1 | 1.0000 | 1.0000 | 1.0000 | 50 / 0 / 0 |
+| `short_eval_v2` (150) | Base detector | 0.7590 | 0.4200 | 0.5408 | 63 / 18 / 69 |
+| `short_eval_v2` (150) | Target detector | 0.9868 | 0.9933 | 0.9900 | 149 / 0 / 1 |
+| `short_eval_deepseek_v1` (50, same writer as `target_detector_aug_v1`, D17) | Base detector | 0.6875 | 0.4400 | 0.5366 | 22 / 9 / 19 |
+| `short_eval_deepseek_v1` (50) | Target detector | 1.0000 | 1.0000 | 1.0000 | 50 / 0 / 0 |
 
-  D1 fixes 68 of D0's 69 `short_eval_v2` misses and all 19 on the deepseek slice; no row
-  D0 hit is lost by D1 (zero regressions). The only D1 miss is `short-eval-v2-0131`.
-  Short name-free rows: D0 0/95 flagged, D1 3/95 (ids above). D1 is nearly saturated on
+  Target detector fixes 68 of the base detector's 69 `short_eval_v2` misses and all 19 on the deepseek slice; no row
+  Base detector hit is lost by the target detector (zero regressions). The only target detector miss is `short-eval-v2-0131`.
+  Short name-free rows: base detector 0/95 flagged, target detector 3/95 (ids above). The target detector is nearly saturated on
   short messages, consistent with the ~1.4% probe miss rate. The two tokenizers differ
   only in `tokenizer_config.json` default keys (`tokenizer.json` is byte-identical).
 - **Temperature.** Only temperature 1.0 passes the probe (0.7 fails on duplicates);
   M08 generation stays at 1.0 unless re-justified.
 - **EXPERIMENTS.yaml:** freeze run `d1v2-freeze-20261110-081446` registered from the
-  manifest (2026-11-12), with the local D0 vs D1 rescoring attached. The training run
+  manifest (2026-11-12), with the local base detector vs the target detector rescoring attached. The training run
   `d1v2-20261110-075731` is not registered yet; it needs its own report JSON from Drive.
 
-## short_eval_neg_v1: name-free short messages for the D1 freeze (2026-11-09)
+## short_eval_neg_v1: name-free short messages for the target detector freeze (2026-11-09)
 
-D1 run `d1-20261108-145253` was only scored on short messages that each contain one
+Target detector run `d1-20261108-145253` was only scored on short messages that each contain one
 name, so its false-positive rate on name-free short text was unmeasured; on AI4Privacy
 dev its name-free false positives rose 129 → 162. New eval set
 `data/synthetic/short_eval_neg_v1.jsonl` (111 rows, sha256 `a0ffa9ec…9069f`), written
@@ -237,7 +237,7 @@ Validator: `sft_synth_v2.validate_negative_row`. Rebuild with
 `PYTHONPATH=src python3 scripts/finalize_short_eval_neg_v1.py`. The freeze config on
 `feat/m07b-freeze-d1` must pin this sha.
 
-## Interim analysis + D0 notebook prepared (2026-10-04)
+## Interim analysis + base detector notebook prepared (2026-10-04)
 
 - **Name-pool quality census + R07 implemented (owner-approved 2026-10-04)**:
   train_side_pool holds 16,403 raw values; `is_requestable_name` (R07, in
@@ -249,7 +249,7 @@ Validator: `sft_synth_v2.validate_negative_row`. Rebuild with
   hand-authored banks. Detector training texts are untouched. The gate notebook's
   sampler call now draws from the requestable subset (7 of the first 8 raw pool
   values are artifacts).
-- **`colab/M03_train_d0.ipynb` prepared (not executed)**: trains the D0 candidate on
+- **`colab/M03_train_base_detector.ipynb` prepared (not executed)**: trains the base detector candidate on
   train_side rows (positives + ~71% negatives kept), labels via the verified alignment
   seam, per-epoch selection on dev_calibration, best checkpoint by dev span-F1 saved
   to Drive with metrics/curves/errors/manifest. Pilot settings (owner-reviewable):
@@ -284,7 +284,7 @@ the notebook's install cell now upgrades torchao; re-run should confirm.
 ## M05b 2B run executed overnight (2026-10-10/11, m05-20261010-222751, owner-run)
 
 Run at repo `a2b0d0a`, T4, transformers 5.19.0, QLoRA 4-bit. All locks PASS
-(GPU fresh 15.5 GB, final-eval, bank, frozen-D0). Probe: max training tokens **512**
+(GPU fresh 15.5 GB, final-eval, bank, frozen base detector). Probe: max training tokens **512**
 (next candidate exceeded the 85% headroom rule); 1,987/2,000 pairs trained
 (13 answers > 288-token answer cap; 0 conversation skips). SFT 2h06m, losses
 1.867 → 1.667 → 1.593. Per-epoch saves worked as designed.
@@ -294,7 +294,7 @@ Run at repo `a2b0d0a`, T4, transformers 5.19.0, QLoRA 4-bit. All locks PASS
 | valid JSON | **100%** | 86.5% |
 | name exactly once | **97.5%** | 75.5% |
 | truncated | 0 | few |
-| extra names (D0 flags) | 2/200 | 4/200 |
+| extra names (base detector flags) | 2/200 | 4/200 |
 | diversity (post-SFT) | not measured | dup 0.0, distinct-1 0.679, mean 670 chars |
 
 **Failure anatomy (20 recorded post-SFT failures):** 8 finished-but-invalid JSON
@@ -311,46 +311,46 @@ budget-aligned targets). The target style (synthetic form-letter records) is the
 cause, not budgets or tokenization. Meanwhile the BASE 2B already exceeds the
 contract zero-shot (100% JSON / 97.5% once).
 
-**Recommendation (owner decision):** adopt the BASE Qwen3.5-2B as the generator —
+**Recommendation (owner decision):** adopt the BASE Qwen3.5-2B as the attacker —
 M06 ordinary-generation baseline AND the RL arm's starting state — and drop the SFT
 stage, recording this evidence as the justification (the plan accepts valid negative
 results). Caveat to close first: only the SFT'd model's diversity was measured;
 run the base-2B diversity check (sampled, temp 0.8) before freezing, since generic
 zero-shot outputs could be less varied. If diversity is acceptable, M07 proceeds
-directly: frozen D0 as reward scorer, RL from base 2B.
+directly: frozen base detector as reward scorer, RL from base 2B.
 
 ## D13 settled: two-stage reward-model structure (owner decision, 2026-10-11)
 
-M07a verdict accepted (REAL SHIFT: probe == eval pipeline everywhere; D0 misses
+M07a verdict accepted (REAL SHIFT: probe == eval pipeline everywhere; base detector misses
 ~53% of short-conversational names vs 2.4% on dev). Recorded as D13 in
 docs/DECISIONS.md and a new **M07b** milestone in PROJECT_PLAN.md — no silent
 threshold edits:
 
 - **Stage 1 (M07b, no RL):** `short_eval` (held-out names + style-independent
-  slice of ~50 human-written/other-LLM messages); D1 = D0 + plain short-message
-  augmentation (Spark SFT data and/or base-2B generations); report D0 vs D1 on
+  slice of ~50 human-written/other-LLM messages); target detector = base detector + plain short-message
+  augmentation (Spark SFT data and/or base-2B generations); report base detector vs the target detector on
   short_eval AND final-eval (no-regression check); re-run the M07a probe against
-  D1 (same go/no-go table); freeze D1.
-- **Stage 2 (M08–M10):** frozen D1 is the RL reward model; the four arms
-  (plain generation / generate-and-filter / Spark data / RL) train D2.
+  Target detector (same go/no-go table); freeze the target detector.
+- **Stage 2 (M08–M10):** frozen target detector is the RL reward model; the four arms
+  (plain generation / generate-and-filter / Spark data / RL) train the retrained detector.
 
 Next actions below updated to this structure.
 
 ## M07a scorer sanity verdict recorded (2026-10-11, PR #5)
 
 Verdict **REAL SHIFT, not a scorer bug** (docs/PROBE_SCORER_SANITY.md): probe scorer
-== D0-training eval pipeline on 124/124 dev gold spans and 32/32 pilot texts;
-controlled dumps show D0 itself assigns p(B-PERSON) 0.02–0.08 to short-message
+== base-detector-training eval pipeline on 124/124 dev gold spans and 32/32 pilot texts;
+controlled dumps show base detector itself assigns p(B-PERSON) 0.02–0.08 to short-message
 names; specials/id2label/alignment/single-token checks all clean. Regression guard:
 `tests/integration/test_probe_scorer_regression.py` (+ fixture; 5 fixed dev rows
-must exact-hit; the "Hey Lucas…" tripwire is pinned to frozen D0's sha). The 1–30%
-miss-rate band is KEPT: D0's pilot miss rate (~53%) fails it on the high side —
-D0 is too weak on short messages to be the RL target, so RL moves to frozen D1
+must exact-hit; the "Hey Lucas…" tripwire is pinned to the frozen base detector's sha). The 1–30%
+miss-rate band is KEPT: base detector's pilot miss rate (~53%) fails it on the high side —
+The base detector is too weak on short messages to be the RL target, so RL moves to the frozen target detector
 per the D13 two-stage structure above.
 
 ## Owner decision (2026-10-10): skip 0.8B re-proof; go straight to 2B, overnight-capable
 
-The notebook (`colab/M05_generator_sft.ipynb`, now "M05b") is switched to
+The notebook (`colab/M05_attacker_sft.ipynb`, now "M05b") is switched to
 **Qwen/Qwen3.5-2B** — the model the M06 baseline and the RL arm must share (D05).
 Hardened for multi-hour/overnight runs: the report and the LoRA adapter are flushed
 to Drive after every stage AND after every SFT epoch, so a Colab disconnect costs at
@@ -361,7 +361,7 @@ proof; its numbers are not comparable to 2B.
 ## M05 0.8B pipeline-proof run executed (2026-10-10, m05-20261010-211905, owner-run)
 
 Run at repo `effe2ea`, T4, torch 2.11.0+cu130, transformers 5.19.0. All locks PASS
-(final-eval, request bank, frozen-D0 sha). SFT: 1,728 items (272 dropped >256 tokens),
+(final-eval, request bank, frozen base detector sha). SFT: 1,728 items (272 dropped >256 tokens),
 LoRA 1.08M trainable, epoch losses 1.985 → 1.767 → 1.682, 36 min.
 
 **Results:**
@@ -370,14 +370,14 @@ LoRA 1.08M trainable, epoch losses 1.985 → 1.767 → 1.682, 36 min.
 |---|---|---|
 | valid JSON | 98.5% | **1.5%** |
 | name exactly once (word-boundary) | 93.5% | **1.5%** |
-| frozen-D0 extra-PERSON flags | 1 / 200 | 2 / 200 |
+| frozen base detector extra-PERSON flags | 1 / 200 | 2 / 200 |
 
 Diversity (post-SFT, temp 0.8, n=4, 50 reqs): duplicate_rate 0.0, distinct-1 0.765,
 distinct-2 0.952, mean 421 chars.
 
 **Interpretation (recorded honestly):**
 - **Headline positive:** the BASE 0.8B already follows the output contract (93.5%
-  name-exactly-once, 98.5% valid JSON). For pipeline purposes the generator does not
+  name-exactly-once, 98.5% valid JSON). For pipeline purposes the attacker does not
   need SFT to obey the contract.
 - **Headline negative — my error, not the model's:** SFT collapsed the contract rate.
   The SFT targets were FULL AI4Privacy records (any single-name-once row), so the
@@ -388,7 +388,7 @@ distinct-2 0.952, mean 421 chars.
 - **Fix implemented:** `is_short_text` (≤60 words) added to the data adapter
   (+tests); SFT pair selection in the notebook now filters on it. Pool is adequate:
   2,910 train-side rows are single-name-once AND ≤60 words (1,503 at ≤40).
-- Frozen-D0 flagging worked as a flag-only signal: outputs contain almost no
+- Frozen base detector flagging worked as a flag-only signal: outputs contain almost no
   extra person names (1-2 per 200 texts).
 - Notebook build consolidated: all fixes (tokenization BatchEncoding, memory
   batch-2/grad-acc-4/256-cap, dirty-GPU guard, allocator conf, no device_map,
@@ -409,7 +409,7 @@ Qwen3.5-0.8B as a 4-bit NF4 QLoRA base (double-quantized; ~0.4 GB instead of ~1.
 trains with `prepare_model_for_kbit_training` (gradient checkpointing on), batch 1 +
 gradient accumulation 8, and a runtime **probe** that finds the LARGEST sequence
 length surviving a real forward+backward on the actual T4 (candidates 512..8192,
-headroom rule: stop at first OOM or >85% peak VRAM; runs after D0 is resident so it
+headroom rule: stop at first OOM or >85% peak VRAM; runs after the base detector is resident so it
 measures the true budget). `SFT_MAX_TOKENS = 0` means "probed, not guessed". For the
 current short pool (max 414 tokens) the probed cap is pure headroom - it matters for
 the 2B run and later stages. The ≤60-word target filter and the measured 320-token
@@ -443,7 +443,7 @@ prefix is then 100%, label tail ends with `<|im_end|>`. The template's
 `return_assistant_tokens_mask` is unsupported (no `{% generation %}` keyword), so
 prefix masking remains the method. Notebook cell updated; re-run pending.
 
-## D0 trained and FROZEN (M03.3 done) + negative-FP audit (2026-10-10)
+## Base detector trained and FROZEN (M03.3 done) + negative-FP audit (2026-10-10)
 
 **Run `d0-20261004-142714`** (owner-run on Colab T4, repo commit `da0b7d3`,
 torch 2.11.0+cu130, transformers 5.18.0): 28,713 train-side rows (8,191 positive,
@@ -462,16 +462,16 @@ epoch 2 0.9587/0.9680/**0.9633** (best — saved), epoch 3 0.9591/0.9597/0.9594.
   name-like strings (`Yuto Druga`, `Druga`, `Danusa`); only ~6% hard artifacts
   (4 single/empty, 2 separator fragments). Conclusion: negative-row FPs are
   gold/policy noise, not detector hallucination — freeze justified.
-- **D0 FROZEN (owner-approved 2026-10-10):** `d0-best` (epoch 2), Drive path
+- **Base detector FROZEN (owner-approved 2026-10-10):** `d0-best` (epoch 2), Drive path
   `pii-redteam-rl/d0-20261004-142714/d0-best`, `model.safetensors` sha256
   `0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb`.
-  No further detector tuning; D0 is the frozen scorer for M07+.
+  No further detector tuning; base detector is the frozen scorer for M07+.
 - Audit execution: future audits run on **Colab GPU** (checkpoint + cache already on
   Drive) — ONNX export deferred, not worth local investment now.
 
-## M05 generator run = 0.8B PIPELINE PROOF (M06 must match the RL arm)
+## M05 attacker run = 0.8B PIPELINE PROOF (M06 must match the RL arm)
 
-The `colab/M05_generator_sft.ipynb` run is a plumbing/proof run on Qwen3.5-0.8B.
+The `colab/M05_attacker_sft.ipynb` run is a plumbing/proof run on Qwen3.5-0.8B.
 Per D05, the M06 ordinary-generation baseline and the RL arm must use the SAME
 model — Qwen3.5-2B. Zero-shot/SFT numbers from the 0.8B run are not comparable
 across model sizes and feed no method comparison.
@@ -499,7 +499,7 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
     `trim_span_whitespace` in `src/pii_redteam/detector.py` (+2 tests) applied to
     recovered spans before comparison. After the fix: **50/50 exact**.
   - Training step (batch 4 × 128 tokens): loss finite (1.55, random head), grad_sum
-    8.6e4 > 0, ~2.2 s/step, peak RSS ~3.3 GB on 16-core CPU. Full D0 training stays
+    8.6e4 > 0, ~2.2 s/step, peak RSS ~3.3 GB on 16-core CPU. Full base detector training stays
     planned for Colab; per-step cost makes laptop-only training slow but possible.
 - `PYTHONPATH=src uv run python -m unittest discover -s tests -t .` → 66 tests
   (64 + 2 trim tests), OK. `bash scripts/lint.sh` → all pass.
@@ -520,7 +520,7 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
   Round-trip, Unicode, subword, special-token, orphan-I, mid-boundary, and truncation
   behavior all covered by `tests/unit/test_alignment.py` with stub offsets. The real
   ModernBERT tokenizer still needs verification on Colab (M03.1) — mBERT arrays remain
-  unused. D0 training (M03.3) not started.
+  unused. Base detector training (M03.3) not started.
 - M05.2: `src/pii_redteam/requests.py` enforces R06 — `load_person_name_pool`,
   `validate_request(..., person_name_pool=...)` (rejects held-out/final-eval names),
   `load_bank(..., person_name_pool=...)` (records pool sha256/size in the manifest),
@@ -566,7 +566,7 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
 - **Method note**: seeded quotas (20260920, regenerated bit-identically after
   a /tmp wipe destroyed all staging) + committed template-bank generator
   (`scripts/sft_v2_gen/`, texts seed 777001) with synonym paraphrase and
-  Jaccard acceptance rewrite. D0 extra-name flags **pending** (frozen
+  Jaccard acceptance rewrite. Base detector extra-name flags **pending** (frozen
   checkpoint unavailable at finalize time; flag script ready).
 - **Tests**: 94 unit tests OK. `ruff check` + `ruff format` pass; `ty` clean
   in new files (6 remaining warnings pre-exist in untouched main files).
@@ -663,13 +663,13 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
   Thanks/Cheers/--). Proposed fix recorded for a future decision; no
   pre-committed threshold changed.
 
-## d1_aug_v1 authored (2026-10-15/16, data/d1-aug-deepseek-v1, M07b.2)
+## target_detector_aug_v1 authored (2026-10-15/16, data/d1-aug-deepseek-v1, M07b.2)
 
 - **2000 rows, all texts written directly by the LLM, one by one** (provenance
   `llm_authored_direct:deepseek-v1-flash`) — stage-1 augmentation training data
-  for D1, split `sft_train`; no templates, paraphrase/synonym tools, or filler.
-  Authored drafts preserved in `data/synthetic/d1_aug_v1_batches/` (40 files x
-  50); finalized by `scripts/finalize_d1_aug_v1.py` with code-computed spans.
+  for the target detector, split `sft_train`; no templates, paraphrase/synonym tools, or filler.
+  Authored drafts preserved in `data/synthetic/target_detector_aug_v1_batches/` (40 files x
+  50); finalized by `scripts/finalize_target_detector_aug_v1.py` with code-computed spans.
 - **Authoring plan**: batch assignments (context/position/length bucket/name)
   pre-generated deterministically (seed 20261015); each text authored around
   the assigned entity, then validated per batch before acceptance.
@@ -686,9 +686,11 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
   `short_eval_v2`, `short_eval_deepseek_v1` (PR #11 draft), the deprecated
   short_eval_v1, and `spark_sft_v1` train/dev**. top-10 opening share 0.0280;
   name-at-start 0.2500.
-- **Artifacts**: `data/synthetic/d1_aug_v1.jsonl` (sha256
-  `c16e037dd978c5305e510474653ac573a6dde9e560a945da6428c8f31609eb3d`) +
-  `data/synthetic/d1_aug_v1_manifest.json`. PR on `data/d1-aug-deepseek-v1`,
+- **Artifacts**: `data/synthetic/target_detector_aug_v1.jsonl` (sha256
+  `0d46c41f5d9257abc214ddfe190772ccee8a9069c6baff0511538aaea1c4cdf7`; was
+  `d1_aug_v1.jsonl`, sha256 `c16e037dd978c5305e510474653ac573a6dde9e560a945da6428c8f31609eb3d`,
+  before the 2026-11-14 rename changed the row-id prefix) +
+  `data/synthetic/target_detector_aug_v1_manifest.json`. PR on `data/d1-aug-deepseek-v1`,
   **stacked on `feat/short-eval-v2`** (the `llm_authored_direct:<writer>`
   provenance validator support lands there).
   PR #13 therefore merged into `feat/short-eval-v2`, not main (its base was never
@@ -719,20 +721,20 @@ Report/checkpoints on Drive under `run-20261004-142042/`.
 
 - CPU only. No GPU, no downloads, no paid services. Spend: €0.
 
-## Next three actions (post-D1 freeze)
+## Next three actions (post target detector freeze)
 
-Previous list (M07b.1, M07b.2, M07b.4) is done: `short_eval_v2`, `d1_aug_v1`, D1 freeze
+Previous list (M07b.1, M07b.2, M07b.4) is done: `short_eval_v2`, `target_detector_aug_v1`, target detector freeze
 and re-probe.
 
 1. **M07b paperwork (done 2026-11-12 except one item):** false-positive rows read, freeze
-   run registered, D0 vs D1 `short_eval` gate computed locally (+0.5733, pass). Only the
+   run registered, base detector vs the target detector `short_eval` gate computed locally (+0.5733, pass). Only the
    training run's `EXPERIMENTS.yaml` entry remains (needs its report JSON from Drive);
    it does not block M08.
 2. **M08.3 preparation:** done: `scale_rewards` decision (D18), request-bank -> TRL dataset
    adapter, `trl` in the locked `ml` group. Still to do: RL config, RL-scale request bank,
    then a capped Colab smoke run with the cost estimate, hard cap, checkpoint path and
    shutdown plan the handoff file requires. The smoke run must report, per group, how many
-   rollouts D1 misses (sparse-reward check) before the options below are chosen.
+   rollouts target detector misses (sparse-reward check) before the options below are chosen.
 3. **Close the M06 prerequisites:** base-2B diversity check (sampled, temperature 0.8)
    and the ordinary-generation baseline on the frozen request bank, so M08.4 has
    its comparison arms.
@@ -744,15 +746,15 @@ Fixed on the way (each found by running on the GPU, not locally): summary read a
 sampled rows lack; TRL casts QLoRA adapters to bf16 which the fp16 grad scaler cannot unscale
 (trainable params now cast to fp32 on fp16 runs); Colab hides subprocess output (now streamed).
 
-Findings (read-only analysis of the saved samples, D1 rescoring matched stored p within 3e-6):
+Findings (read-only analysis of the saved samples, target detector rescoring matched stored p within 3e-6):
 - Valid rate 0.64 -> 0.90 (json 49 -> 2, truncated 5 -> 0, too_short 12 -> 3, name_missing 23 -> 12,
   name_dup 1 -> 7). About 93% of the reward gain is validity; detector misses 2 -> 1 of 256.
 - The 0.64 baseline is far below M07b (0.92): pre-RL had fences (19), think-tag leaks (6), `{}` (5),
   truncations (5) that M07b almost never saw. Cause not isolated: top_p 1.0 vs 0.95, 4-bit fp16 vs
   fp32 CPU, different request set.
-- Style drift toward "Dear Name," openers (19% -> 35% of valid texts), where D1 is weakest
-  (mean p 0.83 vs 0.97 for other openings). Persistent D1 weak requests: Jabar, Swetha, Cirilla.
-- Extra person names (sign-offs, "Dr. X") in 5.5% -> 8.7% of valid texts (not significant); D1 sees
+- Style drift toward "Dear Name," openers (19% -> 35% of valid texts), where target detector is weakest
+  (mean p 0.83 vs 0.97 for other openings). Persistent target detector weak requests: Jabar, Swetha, Cirilla.
+- Extra person names (sign-offs, "Dr. X") in 5.5% -> 8.7% of valid texts (not significant); target detector sees
   only about a third of them. Validity v2 does not reject them: they must be filtered before
   any generated text is labelled (the extra name would be labelled O) in M09.
 - grad_norm NaN on steps 1-4 and 15 with finite loss, KL ~0 until step 6: consistent with fp16
@@ -764,17 +766,17 @@ Findings (read-only analysis of the saved samples, D1 rescoring matched stored p
 
 ## M08.3 smoke run prepared (2026-11-13, before the run)
 
-- **Reward validity fixed before any GPU run:** `D1Reward` first used the v1 classifier, under
-  which a 2-word text such as "Hi Lucas" is valid and could earn reward ~1 if D1 missed it
+- **Reward validity fixed before any GPU run:** `TargetDetectorReward` first used the v1 classifier, under
+  which a 2-word text such as "Hi Lucas" is valid and could earn reward ~1 if the target detector missed it
   (reward hacking toward degenerate text). It now uses `validity_v2.classify_sample_v2`, the
   rules P1 passed under in M07b (D15). The parity test was updated: v2-valid pilot rows still
-  equal `1 - recorded p` (real D0, passes), the 2 of 5 pilot rows that are too short now get -1.
+  equal `1 - recorded p` (real base detector, passes), the 2 of 5 pilot rows that are too short now get -1.
 - **Code:** `training/rl_bank.py` (seeded RL request bank: train-side names only, disjoint from
   the listed comparison banks, balanced context types; 7 unit tests), `training/rl_smoke.py`
   (pre-RL signal sampling, capped GRPO with wall-clock stop and checkpoints, post-RL sampling,
   health checks, every raw sample saved), CLI `rl-smoke`, `configs/m08_rl_smoke.yaml`,
   `colab/M08_rl_smoke.ipynb` (thin launcher; last cell releases the runtime).
-- **Executed locally (CPU):** the whole runner end to end on SmolLM2-135M-Instruct with D0 as a
+- **Executed locally (CPU):** the whole runner end to end on SmolLM2-135M-Instruct with the base detector as a
   stand-in detector, a fake name pool and 2 steps, plus the wall-clock stop (1 of 3 steps).
   The 135M model never produced valid JSON, so reward was constant -1: this proves wiring and
   that the health checks flag a dead run (they FAILED as they should), not learning.
@@ -785,15 +787,15 @@ Findings (read-only analysis of the saved samples, D1 rescoring matched stored p
   LoRA r16, sampling T=1.0 / top_p=1.0 (on-policy; the M07b pass was at top_p 0.95), 60-minute
   training cap, 128 train + 32 held-out requests. Cost/cap must be confirmed before running.
 - **To run:** commit and push the code to the branch named in the notebook (`REF`), upload the
-  frozen D1 folder to Drive, and have the AI4Privacy cache on Drive.
+  frozen target detector folder to Drive, and have the AI4Privacy cache on Drive.
 
 ## Owner ideas for RL signal and control (2026-11-13, not decided, none implemented)
 
-1. **Small SFT warm start on detector errors** so RL starts with signal: D1 misses ~1.4% of
+1. **Small SFT warm start on detector errors** so RL starts with signal: target detector misses ~1.4% of
    base-2B generations, so a G=8 group contains a miss only ~10% of the time. Constraints if
    done: the SFT texts must come from train-side data (never `short_eval_*`, `short_eval_neg_v1`
-   or any comparison/dev request, whose D0/D1 misses are evaluation data); the unmodified
-   `G_sft` stays separate (plan M05 keeps it as an optional comparison arm); same prompt,
+   or any comparison/dev request, whose base/target detector misses are evaluation data); the unmodified
+   `SFT attacker` stays separate (plan M05 keeps it as an optional comparison arm); same prompt,
    schema and non-thinking config as RL. Decide after the smoke run measures the real
    miss rate per group; it is the fallback if the signal is too sparse.
 2. **Fluency control** (readable English; RL could drift to odd text, or the detector must be

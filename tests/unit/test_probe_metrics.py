@@ -122,7 +122,7 @@ class TestRewardsAndThresholds(unittest.TestCase):
             "live_group_share_r_prob": 0.4,
             "live_group_share_r_logit": 0.5,
             "outcome_rates": {"complete_miss": 0.1},
-            "target_spans_lost_to_d0_truncation": 0,
+            "target_spans_lost_to_base_detector_truncation": 0,
         }
         thresholds = {
             "format_valid_min": 0.9,

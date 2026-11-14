@@ -1,6 +1,6 @@
 """Detector interface (plan section 7) with a deterministic CPU fake for M01 smoke.
 
-`predict_spans` / `score_target` are the stable seams the real ModernBERT-based D0
+`predict_spans` / `score_target` are the stable seams the real ModernBERT-based base detector
 (M03) will plug into. The fake predicts nothing; all its outputs are labeled MOCK
 in run reports and must never appear in scientific results.
 

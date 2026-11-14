@@ -49,12 +49,12 @@ Carved by `scripts/carve_splits.py` at the pinned revision; manifests in `artifa
 | Role | Rows | Source |
 |---|---|---|
 | `final_eval` (locked) | 1,000 | seeded carve of train file, exact-text-unique, no text in validation file |
-| `train_side` (detector training, generator SFT, attack development) | 28,713 | train file minus final_eval |
+| `train_side` (detector training, attacker SFT, attack development) | 28,713 | train file minus final_eval |
 | `dev_calibration` | 7,923 | validation file, minus quarantined |
 
 - **Final-eval lock:** `artifacts/splits/final_eval.jsonl` sha256
   `513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c`, row ids+hashes in
-  `final_eval_manifest.json`. No generator training, prompt authoring, sample selection, or
+  `final_eval_manifest.json`. No attacker training, prompt authoring, sample selection, or
   reward tuning from these rows.
 - **Row-level quarantine:** 195 train / 23 validation rows have ≥1 offset mismatch (the earlier
   census counted 909/113 mismatching masks; same criterion, different unit).

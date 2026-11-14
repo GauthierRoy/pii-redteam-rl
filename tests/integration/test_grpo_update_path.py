@@ -6,11 +6,11 @@ Run: uv run --no-project --with torch --with transformers --with trl --with peft
   https://download.pytorch.org/whl/cpu --index https://pypi.org/simple
   python -m unittest tests.integration.test_grpo_update_path
 Checks the properties the plan lists for M08.2: completion masks, prompt/group layout,
-reference vs behavior log-probs, trainable vs frozen parameters (policy base, reference,
+reference vs behavior log-probs, trainable vs frozen parameters (attacker base, reference,
 detector), zero-variance and all-invalid groups, and a controlled reward-learning run.
 The tiny random Llama never emits EOS on its own, so its output layer gets an EOS bias
 (completions then end at varied lengths); the learning test also scales the output layer
-so the policy actually responds to small hidden-state changes.
+so the attacker actually responds to small hidden-state changes.
 """
 
 import importlib.util
@@ -42,8 +42,8 @@ if HAS_STACK:
     )
     from trl import GRPOConfig, GRPOTrainer
 
-    from pii_redteam.training.d1_scorer import D1Scorer
-    from pii_redteam.training.rl_reward import INVALID_REWARD, D1Reward
+    from pii_redteam.training.detector_scorer import DetectorScorer
+    from pii_redteam.training.rl_reward import INVALID_REWARD, TargetDetectorReward
     from pii_redteam.training.rl_smoke import (
         TimedGRPOTrainer,
         align_vllm_names_with_multimodal_checkpoint,
@@ -221,7 +221,7 @@ class TestGrpoUpdatePath(unittest.TestCase):
         self.assertTrue(bool((trainer.recorded[0]["advantages"] == 0).all()))
 
     def test_all_invalid_completions_give_zero_variance_and_no_update(self):
-        reward = D1Reward(RaiseIfValidSampleScored(), self.tokenizer.eos_token_id)
+        reward = TargetDetectorReward(RaiseIfValidSampleScored(), self.tokenizer.eos_token_id)
         trainer = self.trainer(reward)
         lora_before = snapshot(trainer.model, lora=True)
         trainer.train()
@@ -252,7 +252,9 @@ class TestGrpoUpdatePath(unittest.TestCase):
             label2id={label: i for i, label in BIO_LABELS.items()},
             ignore_mismatched_sizes=True,
         )
-        scorer = D1Scorer(detector, AutoTokenizer.from_pretrained(TINY_DETECTOR), max_length=64)
+        scorer = DetectorScorer(
+            detector, AutoTokenizer.from_pretrained(TINY_DETECTOR), max_length=64
+        )
         self.assertFalse(detector.training)
         self.assertFalse(any(p.requires_grad for p in detector.parameters()))
         before = {n: p.detach().clone() for n, p in detector.named_parameters()}

@@ -1,8 +1,8 @@
-"""M07a base-sampling probe: generation + frozen-D0 reward signal (thin CLI target).
+"""M07a base-sampling probe: generation + frozen base detector reward signal (thin CLI target).
 
 Implements the M07a notebook spec: sample the BASE Qwen3.5-2B over the frozen request
 bank at two temperatures plus a greedy reference, validate each sample against the
-output contract, score every valid sample with frozen D0 (spans + p_target), and
+output contract, score every valid sample with the frozen base detector (spans + p_target), and
 report diversity + reward-signal metrics against pre-committed go/no-go thresholds.
 
 GPU work lives here; pure metric math lives in `probe_metrics.py`.
@@ -191,27 +191,27 @@ config_seed_holder = [20260920]
 
 
 @torch.no_grad()
-def _score_with_d0(d0, d0_tok, samples: list[dict], max_length: int) -> dict:
-    """Per-sample D0 spans + p_target over target tokens; batched."""
+def _score_with_detector(detector, detector_tok, samples: list[dict], max_length: int) -> dict:
+    """Per-sample base detector spans + p_target over target tokens; batched."""
     to_score = [s for s in samples if s["status"] == "valid"]
     spans_all = [None] * len(samples)
     index = {id(s): i for i, s in enumerate(samples)}
     for i in range(0, len(to_score), 32):
         chunk = to_score[i : i + 32]
-        enc = d0_tok(
+        enc = detector_tok(
             [s["text"] for s in chunk],
             return_offsets_mapping=True,
             truncation=True,
             max_length=max_length,
             padding=True,
         )
-        input_ids = torch.tensor(enc["input_ids"]).to(d0.device)
-        attn = torch.tensor(enc["attention_mask"]).to(d0.device)
-        logits = d0(input_ids=input_ids, attention_mask=attn).logits.float()
+        input_ids = torch.tensor(enc["input_ids"]).to(detector.device)
+        attn = torch.tensor(enc["attention_mask"]).to(detector.device)
+        logits = detector(input_ids=input_ids, attention_mask=attn).logits.float()
         probs = torch.softmax(logits, dim=-1)
         for j, s in enumerate(chunk):
             offsets = enc["offset_mapping"][j]
-            labels = [d0.config.id2label[p] for p in logits[j].argmax(-1).tolist()]
+            labels = [detector.config.id2label[p] for p in logits[j].argmax(-1).tolist()]
             pred = [
                 (sp["start"], sp["end"])
                 for sp in trim_span_whitespace(s["text"], spans_from_bio_labels(offsets, labels))
@@ -222,16 +222,16 @@ def _score_with_d0(d0, d0_tok, samples: list[dict], max_length: int) -> dict:
             )
             target_idx = [t for t, lab in enumerate(gold_labels) if lab != "O"]
             if not target_idx:
-                s["d0_truncated_target"] = True
-                s["outcome"] = "d0_truncated"
+                s["detector_truncated_target"] = True
+                s["outcome"] = "detector_truncated"
                 s["p_target_mean"] = None
                 s["p_target_min"] = None
                 s["pred_spans"] = pred
                 spans_all[index[id(s)]] = s
                 continue
-            label2id = {lab: i for i, lab in d0.config.id2label.items()}
+            label2id = {lab: i for i, lab in detector.config.id2label.items()}
             p_vals = [float(probs[j, t, label2id[gold_labels[t]]]) for t in target_idx]
-            s["d0_truncated_target"] = False
+            s["detector_truncated_target"] = False
             s["pred_spans"] = pred
             s["p_target_mean"] = sum(p_vals) / len(p_vals)
             s["p_target_min"] = min(p_vals)
@@ -359,10 +359,14 @@ def run_probe(config: dict, repo_dir: str) -> dict:
         print(f"SMOKE: limited to {len(requests_bank)} requests")
     check("bank + final-eval locks reproduce", True, f"bank sha {config['bank']['sha256'][:12]}…")
 
-    d0_sha = _sha256(os.path.join(config["detector"]["path"], "model.safetensors"))
-    check("frozen D0 verified", d0_sha == config["detector"]["sha256"], d0_sha[:16])
-    if d0_sha != config["detector"]["sha256"]:
-        raise SystemExit("D0 lock mismatch.")
+    detector_sha = _sha256(os.path.join(config["detector"]["path"], "model.safetensors"))
+    check(
+        "frozen base detector verified",
+        detector_sha == config["detector"]["sha256"],
+        detector_sha[:16],
+    )
+    if detector_sha != config["detector"]["sha256"]:
+        raise SystemExit("base detector lock mismatch.")
 
     # ---- models
     tok = AutoTokenizer.from_pretrained(config["model_id"])
@@ -371,10 +375,16 @@ def run_probe(config: dict, repo_dir: str) -> dict:
         tok.pad_token = tok.eos_token  # ty: ignore[invalid-assignment,unresolved-attribute]
     model = AutoModelForCausalLM.from_pretrained(config["model_id"], dtype=dtype).to(device)  # ty: ignore[invalid-argument-type]  # stub union
     model.eval()
-    d0_tok = AutoTokenizer.from_pretrained(config["detector"]["path"])
-    d0 = AutoModelForTokenClassification.from_pretrained(config["detector"]["path"]).to(device)
-    d0.eval()
-    check("models loaded (base 2B, no adapter; frozen D0 eval-mode)", True, f"{gpu} dtype={dtype}")
+    detector_tok = AutoTokenizer.from_pretrained(config["detector"]["path"])
+    detector = AutoModelForTokenClassification.from_pretrained(config["detector"]["path"]).to(
+        device
+    )
+    detector.eval()
+    check(
+        "models loaded (base 2B, no adapter; frozen base detector eval-mode)",
+        True,
+        f"{gpu} dtype={dtype}",
+    )
     env = {
         "gpu": gpu,
         "dtype": str(dtype),
@@ -451,25 +461,25 @@ def run_probe(config: dict, repo_dir: str) -> dict:
     # ---- leakage + wrapper asserts (spec 5)
     violations = sum(1 for s in samples + greedy if s["text"] and PROMPT_MARKER in s["text"])
     check(
-        "D0-input hygiene: prompt marker absent from message texts",
+        "base-detector-input hygiene: prompt marker absent from message texts",
         violations == 0,
         f"violations={violations}",
     )
 
-    # ---- D0 scoring (spec 5)
-    _score_with_d0(
-        d0,
-        d0_tok,
+    # ---- Base detector scoring (spec 5)
+    _score_with_detector(
+        detector,
+        detector_tok,
         [s for s in samples + greedy if s["status"] == "valid"],
         config["detector"]["max_length"],
     )
-    lost = sum(1 for s in samples + greedy if s.get("d0_truncated_target"))
-    check("target spans inside D0 max length", lost == 0, f"lost={lost}")
+    lost = sum(1 for s in samples + greedy if s.get("detector_truncated_target"))
+    check("target spans inside base detector max length", lost == 0, f"lost={lost}")
 
     _finalize_samples(samples + greedy, config["rewards"]["logit_clip"])
     for s in samples + greedy:
         s.pop("pred_spans", None)
-        s.pop("d0_truncated_target", None)
+        s.pop("detector_truncated_target", None)
 
     # Scores are expensive too: save them before any metric code can fail.
     write_jsonl(samples_path, samples + greedy)
@@ -482,7 +492,7 @@ def run_probe(config: dict, repo_dir: str) -> dict:
             {"text": s["text"], "target_span": s["target_span"], "status": "valid"}
             for s in originals
         ]
-        _score_with_d0(d0, d0_tok, copies, config["detector"]["max_length"])
+        _score_with_detector(detector, detector_tok, copies, config["detector"]["max_length"])
         same = all(
             math.isclose(
                 float(a["p_target_mean"] or 0.0), float(b["p_target_mean"] or 0.0), abs_tol=1e-5
@@ -490,14 +500,14 @@ def run_probe(config: dict, repo_dir: str) -> dict:
             and a["outcome"] == b["outcome"]
             for a, b in zip(originals, copies, strict=True)
         )
-        check("D0 scoring deterministic (50 texts rescored)", same)
+        check("base detector scoring deterministic (50 texts rescored)", same)
 
     # ---- metrics (spec 4 + 5)
     report: dict = {
         "kind": "base-sampling-probe",
         "role": (
             "M07a: diversity + reward-signal probe of BASE Qwen3.5-2B before RL "
-            "(M06 baseline candidate / RL starting policy / KL reference)"
+            "(M06 baseline candidate / RL starting attacker / KL reference)"
         ),
         "started_utc": started.isoformat(),
         "environment": env,
@@ -510,7 +520,7 @@ def run_probe(config: dict, repo_dir: str) -> dict:
         subset = [s for s in samples if s["temperature"] == temp]
         dm = diversity_metrics(subset)
         rm = reward_metrics(subset, config["rewards"]["logit_clip"])
-        rm["target_spans_lost_to_d0_truncation"] = lost
+        rm["target_spans_lost_to_detector_truncation"] = lost
         dm["json_tolerant_rate"] = round(
             sum(1 for s in subset if s["json_tolerant_ok"]) / len(subset), 4
         )

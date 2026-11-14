@@ -7,8 +7,8 @@ Usage (needs the ml group):
       --detector-sha 0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb
 
 Applies the tightened (D15) validity-v2 rules to every saved raw sample, scores
-all valid ones with the OFFICIAL probe scorer (`pii_redteam.probe._score_with_d0`
-— verified against the D0 training eval pipeline by the M07a scorer-sanity
+all valid ones with the OFFICIAL probe scorer (`pii_redteam.probe._score_with_detector`
+— verified against the base detector training eval pipeline by the M07a scorer-sanity
 regression, PR #5), computes per-hint name-position compliance, and reports
 per-cell reward metrics. Also cross-checks the run's local reference-replica
 p_target values against the official scorer on the common samples.
@@ -29,7 +29,7 @@ from typing import Any, cast
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-from pii_redteam.probe import _score_with_d0
+from pii_redteam.probe import _score_with_detector
 from pii_redteam.probe_metrics import reward_metrics
 from pii_redteam.prompt_v2 import hint_compliance, name_position_bin, opens_with_name
 from pii_redteam.validity_v2 import classify_sample_v2
@@ -61,12 +61,12 @@ def main() -> None:
 
     actual_sha = _sha256(os.path.join(args.detector, "model.safetensors"))
     if actual_sha != args.detector_sha:
-        raise SystemExit(f"D0 lock mismatch: {actual_sha} != {args.detector_sha}")
+        raise SystemExit(f"base detector lock mismatch: {actual_sha} != {args.detector_sha}")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    d0_tok = AutoTokenizer.from_pretrained(args.detector)
-    d0 = AutoModelForTokenClassification.from_pretrained(args.detector).to(device)
-    d0.eval()
-    print(f"official probe scorer ready (frozen D0 sha {actual_sha[:12]}…, {device})")
+    detector_tok = AutoTokenizer.from_pretrained(args.detector)
+    detector = AutoModelForTokenClassification.from_pretrained(args.detector).to(device)
+    detector.eval()
+    print(f"official probe scorer ready (frozen base detector sha {actual_sha[:12]}…, {device})")
 
     with open(args.samples, encoding="utf-8") as f:
         samples = [json.loads(line) for line in f if line.strip()]
@@ -86,7 +86,7 @@ def main() -> None:
         for s in samples
         if s["status"] == "valid"
     ]
-    _score_with_d0(d0, d0_tok, to_score, args.max_length)
+    _score_with_detector(detector, detector_tok, to_score, args.max_length)
     scored = {id(s): s for s in to_score}
     i = 0
     replica_diffs = []
@@ -182,7 +182,7 @@ def main() -> None:
                     "live_group_share_r_prob": reward.get("live_group_share_r_prob"),
                     "live_group_share_r_logit": reward.get("live_group_share_r_logit"),
                     "dead_group_share": reward.get("dead_group_share"),
-                    "note": "official probe scorer (probe._score_with_d0), scorer verified by PR #5",
+                    "note": "official probe scorer (probe._score_with_detector), scorer verified by PR #5",
                 }
             per_cell[f"{variant}|t{temp}"] = entry
 

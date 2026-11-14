@@ -97,7 +97,7 @@ def is_single_person_once(canonical: dict) -> bool:
 def is_short_text(canonical: dict, max_words: int = 60) -> bool:
     """True when the text is short enough to be an SFT target (plan §4.2).
 
-    M05 lesson (2026-10-10): training on full AI4Privacy records taught the generator
+    M05 lesson (2026-10-10): training on full AI4Privacy records taught the attacker
     to emit long PII-stuffed documents; generation then could not close the JSON
     output contract. SFT targets must be short records (or extracted snippets).
     """

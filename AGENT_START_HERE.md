@@ -15,7 +15,7 @@ Do not re-scaffold the repository, create another project, rename packages, repl
 
 ## Updated project decisions
 
-**Dataset:** Start WITH ai4privacy/pii-masking-300k. Use it for baseline detector training and construct generator SFT pairs from its training portion. Generated data augments this foundation rather than replacing it. The owner personally knows the AI4Privacy team and reports their approval. Record that once and proceed; do not reopen licensing as a blocker or switch to Gretel.
+**Dataset:** Start WITH ai4privacy/pii-masking-300k. Use it for baseline detector training and construct attacker SFT pairs from its training portion. Generated data augments this foundation rather than replacing it. The owner personally knows the AI4Privacy team and reports their approval. Record that once and proceed; do not reopen licensing as a blocker or switch to Gretel.
 
 **Scope:** One language, PERSON names, short texts, one frozen attack detector, one retraining round. Keep an already recorded language/domain choice; otherwise English is the pilot default. Audit actual dataset rows and label mapping rather than trusting advertised counts. Additional languages and PII types can wait.
 
@@ -39,7 +39,7 @@ Keep a lightweight seeded sampler as the second option. It combines training-sid
 
 ### Shared rules
 
-Both sources feed one request loader, validator, prompt/output contract, generator, and reward pipeline. Keep request_source in provenance. Save the actual rendered prompt. If a Spark-written prompt contradicts its structured entities/constraints, reject or repair the record explicitly.
+Both sources feed one request loader, validator, prompt/output contract, attacker, and reward pipeline. Keep request_source in provenance. Save the actual rendered prompt. If a Spark-written prompt contradicts its structured entities/constraints, reject or repair the record explicitly.
 
 Select the request source per run later; the owner has not chosen a permanent winner. Use the same frozen request bank or a matched distribution across ordinary generation, generate-and-filter, and RL. Spark-authored better prompts must not become an unacknowledged advantage for only one method.
 

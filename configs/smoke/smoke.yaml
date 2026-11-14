@@ -1,6 +1,6 @@
 # M01 CPU smoke: fake models only. No downloads, no GPU, no network.
 run_name: smoke-cpu
-model_id: fake-generator-001
+model_id: fake-attacker-001
 seed: 0
 resume: false
 backend:

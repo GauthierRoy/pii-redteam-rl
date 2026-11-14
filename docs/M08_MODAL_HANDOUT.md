@@ -4,8 +4,8 @@ Branch `feat/m08-rl-smoke`. All changes below are uncommitted.
 
 ## 1. Bottom line
 
-- The RL pipeline works end to end on Modal: TRL GRPO + LoRA on Qwen3.5-2B against the frozen D1 reward, colocated vLLM generation, checkpoint resume, 840 steps in 138 minutes on one L4.
-- The 840-step policy is **not usable as adversarial data**. It collapsed onto a single letter template (`Dear <name>, … Sincerely, <signer>`) for every requested context type. D1 does miss names in that template, but the data would cover one weakness out of ten context types.
+- The RL pipeline works end to end on Modal: TRL GRPO + LoRA on Qwen3.5-2B against the frozen target detector reward, colocated vLLM generation, checkpoint resume, 840 steps in 138 minutes on one L4.
+- The 840-step RL attacker is **not usable as adversarial data**. It collapsed onto a single letter template (`Dear <name>, … Sincerely, <signer>`) for every requested context type. The target detector does miss names in that template, but the data would cover one weakness out of ten context types.
 - Cause: the D18 reward (`r_prob = 1 − mean gold-label probability`, invalid = −1) has no term for context adherence or diversity, and validity v2 does not check either. The reward saturated near 0.9, so later steps gave little signal.
 - Decision needed from the owner: whether to amend D18 (see section 7). I made no reward change.
 
@@ -18,7 +18,7 @@ Branch `feat/m08-rl-smoke`. All changes below are uncommitted.
 | GPU | L4, about $0.80/h; container with 4 CPU + 16 GiB about $1.12/h |
 | Model | `Qwen/Qwen3.5-2B`, bf16 LoRA (r 16, alpha 32, all-linear), no 4-bit |
 | Reward | D18 unchanged; sampling temperature 1.0, top_p 1.0 |
-| Detector | frozen D1 `d1-frozen-d1v2-20261110-075731`, sha256 verified on the volume |
+| Detector | frozen target detector `d1-frozen-d1v2-20261110-075731`, sha256 verified on the volume |
 | Configs | `configs/m08_rl_bench.yaml`, `configs/m08_rl_long.yaml` (new) |
 
 Runs must use `modal run --detach` (under `caffeinate -i`). Without `--detach`, the first benchmark died on a local client disconnect and cost about $0.115 for nothing.
@@ -60,7 +60,7 @@ Config: `configs/m08_rl_long.yaml`; lr 2e-5, beta 0.02, 8 rollouts x 4 prompts p
 
 Result: stopped by the 135-minute cap at step 840 (planned 1000). Median step 9.05 s (about 9.5 s all-in), median generation 3.76 s, peak GPU 11.1 of 23.7 GB, wall 8281 s, about $2.58. All final checks pass except "training reached the step cap", which fails by design here.
 
-Training curves: reward rose from −0.19 to about 0.8–0.9; D1 miss rate rose to 0.78–1.0; KL rose from 0.22 to 0.39 on average (0.71 at step 713); entropy about 1.0–1.2; grad norm shrank to 0.07–0.16.
+Training curves: reward rose from −0.19 to about 0.8–0.9; target detector miss rate rose to 0.78–1.0; KL rose from 0.22 to 0.39 on average (0.71 at step 713); entropy about 1.0–1.2; grad norm shrank to 0.07–0.16.
 
 ### Samples: 256 per side, 32 held-out requests
 
@@ -68,7 +68,7 @@ Training curves: reward rose from −0.19 to about 0.8–0.9; D1 miss rate rose 
 |---|---|---|
 | valid | 216/256 | 254/256 |
 | mean reward | −0.06 | 0.86 |
-| D1 detects the name (p_gold > 0.5) | 203/216 | 5/254 |
+| Target detector detects the name (p_gold > 0.5) | 203/216 | 5/254 |
 | text starts with "Dear" | 33/216 | 253/254 |
 | mean words | 20.5 | 43.8 |
 | unique texts | 216 | 254 |
@@ -76,7 +76,7 @@ Training curves: reward rose from −0.19 to about 0.8–0.9; D1 miss rate rose 
 - Legitimate: fluent English, the requested name always present, no gibberish, no repeated text.
 - Degenerate: every request becomes a formal letter, including `form_record_line`, `list_or_table_row`, `chat_message` and `third_person_report`. 244/254 contain a closing such as "Sincerely". The `context_type` is ignored.
 - Before RL, 15% of samples already opened with "Dear"; RL amplified an existing mode.
-- The 5 texts D1 still detects are mixed (two appointment reminders, one "Hello <name>" greeting, two other "Dear" letters), so five samples are too few to say more than that D1 misses names in this letter format.
+- The 5 texts target detector still detects are mixed (two appointment reminders, one "Hello <name>" greeting, two other "Dear" letters), so five samples are too few to say more than that the target detector misses names in this letter format.
 - Validity v2 does not reject extra person names, and nothing checks context adherence.
 
 ## 8. Spend

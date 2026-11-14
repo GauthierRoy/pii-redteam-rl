@@ -776,7 +776,7 @@
   "run_id": "m07b-20261012-224819",
   "finished_utc": "2026-10-12T22:48:19.994818+00:00",
   "samples_raw_path": "/home/gauthier/.vibe/worktrees/pii-redteam-rl-e35b3d1393f1/request-v2-prompting/artifacts/m07b/m07b-20261012-224819/samples_raw.jsonl",
-  "d0_scored_samples": 668,
+  "base_detector_scored_samples": 668,
   "experiments_entry": {
     "run_id": "m07b-20261012-224819",
     "kind": "prompt-variant-comparison",

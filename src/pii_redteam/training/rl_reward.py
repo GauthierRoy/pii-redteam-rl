@@ -32,10 +32,10 @@ def completion_text(completion: str | list[dict]) -> str:
     return completion[-1]["content"]
 
 
-class D1Reward:
-    """TRL reward function: `reward = D1Reward(scorer, eos_token_id)`, pass to GRPOTrainer."""
+class TargetDetectorReward:
+    """TRL reward function: `reward = TargetDetectorReward(scorer, eos_token_id)`, pass to GRPOTrainer."""
 
-    __name__ = "d1_reward"
+    __name__ = "target_detector_reward"
 
     def __init__(self, scorer: Scorer, eos_token_id: int) -> None:
         self.scorer = scorer

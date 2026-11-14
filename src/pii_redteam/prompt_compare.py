@@ -2,7 +2,7 @@
 
 GPU/CPU work lives here; pure functions live in `validity_v2.py` (strict v2
 validity) and `prompt_v2.py` (variants + metrics). The M07a probe scorer is
-deliberately NOT imported: D0 p_target/live-group stats are computed with a
+deliberately NOT imported: base detector p_target/live-group stats are computed with a
 local reference-pipeline replica and every such number is flagged
 "pending_scorer_verification" until the scorer fix lands.
 
@@ -25,7 +25,7 @@ import time
 import torch
 from transformers import AutoModelForCausalLM, AutoModelForTokenClassification, AutoTokenizer
 
-from pii_redteam.probe import _score_with_d0
+from pii_redteam.probe import _score_with_detector
 from pii_redteam.probe_metrics import reward_metrics
 from pii_redteam.prompt_v2 import (
     PROMPT_VARIANTS,
@@ -37,7 +37,7 @@ from pii_redteam.prompt_v2 import variant_threshold_report as threshold_report
 from pii_redteam.run_io import append_jsonl, write_jsonl
 from pii_redteam.validity_v2 import classify_sample_v2
 
-SCORER_NOTE = "official probe scorer (probe._score_with_d0), verified vs the D0 eval pipeline by the M07a scorer-sanity regression (PR #5)"
+SCORER_NOTE = "official probe scorer (probe._score_with_detector), verified vs the base detector eval pipeline by the M07a scorer-sanity regression (PR #5)"
 
 
 def _sha256(path: str) -> str:
@@ -203,15 +203,19 @@ def run_compare(config: dict, repo_dir: str) -> dict:
     print(f"model loaded: {config['model_id']} on {gpu} dtype={dtype}")
 
     detector_cfg = config.get("detector", {})
-    d0 = d0_tok = None
+    detector = detector_tok = None
     if detector_cfg.get("enabled", False):
-        d0_sha = _sha256(os.path.join(detector_cfg["path"], "model.safetensors"))
-        if d0_sha != detector_cfg["sha256"]:
-            raise SystemExit(f"D0 lock mismatch: {d0_sha} != {detector_cfg['sha256']}")
-        d0_tok = AutoTokenizer.from_pretrained(detector_cfg["path"])
-        d0 = AutoModelForTokenClassification.from_pretrained(detector_cfg["path"]).to(device)
-        d0.eval()
-        print(f"frozen D0 loaded (sha {d0_sha[:12]}…) - scoring with {SCORER_NOTE}")
+        detector_sha = _sha256(os.path.join(detector_cfg["path"], "model.safetensors"))
+        if detector_sha != detector_cfg["sha256"]:
+            raise SystemExit(
+                f"base detector lock mismatch: {detector_sha} != {detector_cfg['sha256']}"
+            )
+        detector_tok = AutoTokenizer.from_pretrained(detector_cfg["path"])
+        detector = AutoModelForTokenClassification.from_pretrained(detector_cfg["path"]).to(device)
+        detector.eval()
+        print(
+            f"frozen base detector loaded (sha {detector_sha[:12]}…) - scoring with {SCORER_NOTE}"
+        )
     env = {
         "device": device,
         "gpu": gpu,
@@ -259,10 +263,10 @@ def run_compare(config: dict, repo_dir: str) -> dict:
         v2 = classify_sample_v2(s["raw_text"], s["name"], s["truncated"])
         s.update(v2)  # status, text, target_span (v2 definitions)
 
-    # ---- D0 scoring (flagged; every raw output is kept regardless)
+    # ---- Base detector scoring (flagged; every raw output is kept regardless)
     scored = 0
-    if d0 is not None:
-        _score_with_d0(d0, d0_tok, samples, detector_cfg["max_length"])
+    if detector is not None:
+        _score_with_detector(detector, detector_tok, samples, detector_cfg["max_length"])
         scored = sum(1 for s in samples if s.get("p_target_mean") is not None)
         for s in samples:
             if s["status"] == "valid":
@@ -301,7 +305,7 @@ def run_compare(config: dict, repo_dir: str) -> dict:
             ]
             metrics = comparison_metrics(cell_samples, group_size=gen_cfg["n"])
             metrics["thresholds"] = threshold_report(metrics, config["thresholds"])
-            if d0 is not None:
+            if detector is not None:
                 clip = config.get("rewards", {}).get("logit_clip", 10.0)
                 valid_for_reward = [
                     s
@@ -369,7 +373,7 @@ def run_compare(config: dict, repo_dir: str) -> dict:
     report["run_id"] = run_id
     report["finished_utc"] = datetime.datetime.now(datetime.UTC).isoformat()
     report["samples_raw_path"] = samples_path
-    report["d0_scored_samples"] = scored
+    report["detector_scored_samples"] = scored
     report["experiments_entry"] = {
         "run_id": run_id,
         "kind": "prompt-variant-comparison",

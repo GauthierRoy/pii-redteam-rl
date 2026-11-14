@@ -1,4 +1,4 @@
-"""Person checks over saved comparison samples (M07b.2 D1 training-data gate).
+"""Person checks over saved comparison samples (M07b.2 target detector training-data gate).
 
 Usage (needs the ml group):
   PYTHONPATH=src uv run --group ml python scripts/person_check_v2.py \
@@ -10,7 +10,7 @@ For every D15-valid sample:
   2. LLM judge (base Qwen3.5-2B, non-thinking, greedy): extra-person yes/no +
      person-sense yes/no.
 
-Row rejected for D1 training data if any extra person (spaCy OR LLM yes) or the
+Row rejected for the target detector training data if any extra person (spaCy OR LLM yes) or the
 person-sense answer is not "yes". Writes samples_person_checked.jsonl,
 person_check_report.json, and audit_sample_50.jsonl (stratified 25 flagged /
 25 clean, for the manual audit).
@@ -151,7 +151,9 @@ def main() -> None:
             bool(s["spacy_extra_persons"]) or s["llm_extra_person"] is True
         )
         s["reject_person_sense"] = s["llm_person_sense"] is not True
-        s["accepted_for_d1"] = not (s["reject_extra_person"] or s["reject_person_sense"])
+        s["accepted_for_target_detector"] = not (
+            s["reject_extra_person"] or s["reject_person_sense"]
+        )
 
     # ---- report
     def rate(rows: list[dict], key: str) -> float:
@@ -179,8 +181,10 @@ def main() -> None:
                 "reject_extra_person_rate": rate(rows, "reject_extra_person"),
                 "reject_extra_person_lenient_rate": rate(rows, "reject_extra_person_lenient"),
                 "reject_person_sense_rate": rate(rows, "reject_person_sense"),
-                "accepted_for_d1_rate": rate(rows, "accepted_for_d1"),
-                "accepted_for_d1_n": sum(1 for r in rows if r["accepted_for_d1"]),
+                "accepted_for_target_detector_rate": rate(rows, "accepted_for_target_detector"),
+                "accepted_for_target_detector_n": sum(
+                    1 for r in rows if r["accepted_for_target_detector"]
+                ),
             }
 
     report = {
@@ -188,7 +192,7 @@ def main() -> None:
         "samples": args.samples,
         "n_valid_checked": len(valid),
         "checkers": {
-            "extra_person": "spaCy en_core_web_sm NER OR Qwen3.5-2B LLM judge (independent of D0)",
+            "extra_person": "spaCy en_core_web_sm NER OR Qwen3.5-2B LLM judge (independent of the base detector)",
             "person_sense": "Qwen3.5-2B LLM judge",
         },
         "per_cell": per_cell,
@@ -196,8 +200,10 @@ def main() -> None:
             "reject_extra_person_rate": rate(valid, "reject_extra_person"),
             "reject_extra_person_lenient_rate": rate(valid, "reject_extra_person_lenient"),
             "reject_person_sense_rate": rate(valid, "reject_person_sense"),
-            "accepted_for_d1_rate": rate(valid, "accepted_for_d1"),
-            "accepted_for_d1_n": sum(1 for r in valid if r["accepted_for_d1"]),
+            "accepted_for_target_detector_rate": rate(valid, "accepted_for_target_detector"),
+            "accepted_for_target_detector_n": sum(
+                1 for r in valid if r["accepted_for_target_detector"]
+            ),
         },
     }
 
@@ -212,8 +218,8 @@ def main() -> None:
 
     # ---- stratified 50-row manual-audit sample (25 flagged, 25 clean)
     rng = random.Random(args.seed)
-    flagged = [s for s in valid if not s["accepted_for_d1"]]
-    clean = [s for s in valid if s["accepted_for_d1"]]
+    flagged = [s for s in valid if not s["accepted_for_target_detector"]]
+    clean = [s for s in valid if s["accepted_for_target_detector"]]
     audit = rng.sample(flagged, min(25, len(flagged))) + rng.sample(clean, min(25, len(clean)))
     rng.shuffle(audit)
     with open(os.path.join(args.out_dir, "audit_sample_50.jsonl"), "w", encoding="utf-8") as f:
@@ -230,7 +236,9 @@ def main() -> None:
                         "spacy_extra_persons": s["spacy_extra_persons"],
                         "llm_extra_person": s["llm_extra_person"],
                         "llm_person_sense": s["llm_person_sense"],
-                        "verdict": "rejected" if not s["accepted_for_d1"] else "accepted",
+                        "verdict": "rejected"
+                        if not s["accepted_for_target_detector"]
+                        else "accepted",
                     },
                     ensure_ascii=False,
                 )
@@ -243,11 +251,11 @@ def main() -> None:
             f"  {k}: n={m['n_valid']} spacy_extras={m['spacy_extra_rate']} "
             f"llm_extra_yes={m['llm_extra_yes_rate']} (unclear {m['llm_extra_unclear']}) "
             f"sense_no={m['llm_sense_no_rate']} (unclear {m['llm_sense_unclear']}) "
-            f"accepted={m['accepted_for_d1_n']}/{m['n_valid']} ({m['accepted_for_d1_rate']})"
+            f"accepted={m['accepted_for_target_detector_n']}/{m['n_valid']} ({m['accepted_for_target_detector_rate']})"
         )
     print(
-        f"\noverall: accepted_for_d1 {report['overall']['accepted_for_d1_n']}/{len(valid)} "
-        f"({report['overall']['accepted_for_d1_rate']})"
+        f"\noverall: accepted_for_target_detector {report['overall']['accepted_for_target_detector_n']}/{len(valid)} "
+        f"({report['overall']['accepted_for_target_detector_rate']})"
     )
     print(f"outputs -> {args.out_dir}")
 

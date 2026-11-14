@@ -1,16 +1,16 @@
-"""Flag extra person names with the frozen D0 detector (flag only, never rejects).
+"""Flag extra person names with the frozen base detector (flag only, never rejects).
 
-Reads rows JSONL (id + target.text + target.span), runs the frozen D0
+Reads rows JSONL (id + target.text + target.span), runs the frozen base detector
 checkpoint in eval mode on CPU, and writes {row_id: n_extra_person_spans}
 where "extra" means a predicted PERSON span that does not overlap the target
-span. Also asserts the D0 model lock before scoring.
+span. Also asserts the base detector model lock before scoring.
 
 Run inside an ephemeral ML env (repo convention, torch CPU), e.g.::
 
     uv run --no-project --with torch --with transformers \\
       --default-index https://download.pytorch.org/whl/cpu \\
       --index https://pypi.org/simple \\
-      python scripts/flag_extra_names_d0.py --rows ... --out ...
+      python scripts/flag_extra_names_base_detector.py --rows ... --out ...
 
 This script only *calls* frozen alignment helpers; it modifies no repo code.
 """
@@ -25,14 +25,16 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-D0_LOCK_SHA256 = "0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb"
+BASE_DETECTOR_LOCK_SHA256 = "0314ebe36d7f4dc6d784f0e139ff5b9d32633aef1a6f88e764a610a8d8ec43cb"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rows", required=True, help="JSONL with id + target.text/span")
     parser.add_argument("--out", required=True, help="flags JSON destination")
-    parser.add_argument("--d0", default="/tmp/d0zip/pii-redteam-rl/d0-20261004-142714/d0-best")
+    parser.add_argument(
+        "--base-detector", default="/tmp/d0zip/pii-redteam-rl/d0-20261004-142714/d0-best"
+    )
     parser.add_argument("--batch", type=int, default=32)
     parser.add_argument("--max-length", type=int, default=512)
     args = parser.parse_args()
@@ -42,14 +44,16 @@ def main() -> None:
 
     from pii_redteam.detector import spans_from_bio_labels, trim_span_whitespace
 
-    weights = os.path.join(args.d0, "model.safetensors")
+    weights = os.path.join(args.base_detector, "model.safetensors")
     actual = hashlib.sha256(open(weights, "rb").read()).hexdigest()
-    if actual != D0_LOCK_SHA256:
-        raise SystemExit(f"D0 lock mismatch: {actual} != {D0_LOCK_SHA256} - refusing to score.")
-    print(f"D0 lock OK ({actual[:12]}...), loading on CPU ...")
+    if actual != BASE_DETECTOR_LOCK_SHA256:
+        raise SystemExit(
+            f"base detector lock mismatch: {actual} != {BASE_DETECTOR_LOCK_SHA256} - refusing to score."
+        )
+    print(f"base detector lock OK ({actual[:12]}...), loading on CPU ...")
 
-    tok = AutoTokenizer.from_pretrained(args.d0)
-    model = AutoModelForTokenClassification.from_pretrained(args.d0)
+    tok = AutoTokenizer.from_pretrained(args.base_detector)
+    model = AutoModelForTokenClassification.from_pretrained(args.base_detector)
     model.eval()
     id2label = model.config.id2label
 

@@ -3,7 +3,7 @@
   "samples": "results/m07b_prompt_v2/m07b-20261012-224819/samples_rescored.jsonl",
   "n_valid_checked": 673,
   "checkers": {
-    "extra_person": "spaCy en_core_web_sm NER OR Qwen3.5-2B LLM judge (independent of D0)",
+    "extra_person": "spaCy en_core_web_sm NER OR Qwen3.5-2B LLM judge (independent of the base detector)",
     "person_sense": "Qwen3.5-2B LLM judge"
   },
   "per_cell": {
@@ -17,8 +17,8 @@
       "reject_extra_person_rate": 0.0,
       "reject_extra_person_lenient_rate": 0.0,
       "reject_person_sense_rate": 0.0,
-      "accepted_for_d1_rate": 1.0,
-      "accepted_for_d1_n": 44
+      "accepted_for_target_detector_rate": 1.0,
+      "accepted_for_target_detector_n": 44
     },
     "P0|t1.0": {
       "n_valid": 48,
@@ -30,8 +30,8 @@
       "reject_extra_person_rate": 0.0208,
       "reject_extra_person_lenient_rate": 0.0208,
       "reject_person_sense_rate": 0.0,
-      "accepted_for_d1_rate": 0.9792,
-      "accepted_for_d1_n": 47
+      "accepted_for_target_detector_rate": 0.9792,
+      "accepted_for_target_detector_n": 47
     },
     "P1|t0.7": {
       "n_valid": 151,
@@ -43,8 +43,8 @@
       "reject_extra_person_rate": 0.1192,
       "reject_extra_person_lenient_rate": 0.0927,
       "reject_person_sense_rate": 0.0,
-      "accepted_for_d1_rate": 0.8808,
-      "accepted_for_d1_n": 133
+      "accepted_for_target_detector_rate": 0.8808,
+      "accepted_for_target_detector_n": 133
     },
     "P1|t1.0": {
       "n_valid": 147,
@@ -56,8 +56,8 @@
       "reject_extra_person_rate": 0.102,
       "reject_extra_person_lenient_rate": 0.0952,
       "reject_person_sense_rate": 0.0,
-      "accepted_for_d1_rate": 0.898,
-      "accepted_for_d1_n": 132
+      "accepted_for_target_detector_rate": 0.898,
+      "accepted_for_target_detector_n": 132
     },
     "P2|t0.7": {
       "n_valid": 150,
@@ -69,8 +69,8 @@
       "reject_extra_person_rate": 0.1533,
       "reject_extra_person_lenient_rate": 0.0333,
       "reject_person_sense_rate": 0.0,
-      "accepted_for_d1_rate": 0.8467,
-      "accepted_for_d1_n": 127
+      "accepted_for_target_detector_rate": 0.8467,
+      "accepted_for_target_detector_n": 127
     },
     "P2|t1.0": {
       "n_valid": 133,
@@ -82,16 +82,16 @@
       "reject_extra_person_rate": 0.2857,
       "reject_extra_person_lenient_rate": 0.0677,
       "reject_person_sense_rate": 0.0,
-      "accepted_for_d1_rate": 0.7143,
-      "accepted_for_d1_n": 95
+      "accepted_for_target_detector_rate": 0.7143,
+      "accepted_for_target_detector_n": 95
     }
   },
   "overall": {
     "reject_extra_person_rate": 0.1412,
     "reject_extra_person_lenient_rate": 0.0639,
     "reject_person_sense_rate": 0.0,
-    "accepted_for_d1_rate": 0.8588,
-    "accepted_for_d1_n": 578
+    "accepted_for_target_detector_rate": 0.8588,
+    "accepted_for_target_detector_n": 578
   },
   "policy": "conservative: unclear LLM judge answers reject the row; spaCy PERSON entities filtered for digits/role-titles (audit fixes)",
   "judge": "Qwen/Qwen3.5-0.8B (bf16 CPU, greedy, non-thinking, 2-token answers)",

@@ -41,7 +41,7 @@ Use one language and short texts, with PERSON span detection as the initial task
 
 Start with a small audited subset, not all 300k records. Inspect the actual accessible files, schema, labels, split structure, and counts. The dataset is itself synthetic; describe the study as targeted synthetic augmentation of an existing synthetic dataset. An independently sourced or independently constructed evaluation track remains valuable later.
 
-Train the generator with SFT, keep the attack detector frozen during RL, and perform one detector-retraining round. Additional PII types, multilingual generation, obfuscation, continuous adversarial co-training, and privacy-preserving rewriting are deferred extensions.
+Train the attacker with SFT, keep the attack detector frozen during RL, and perform one detector-retraining round. Additional PII types, multilingual generation, obfuscation, continuous adversarial co-training, and privacy-preserving rewriting are deferred extensions.
 
 ### Decision register
 
@@ -76,7 +76,7 @@ Treat datasets, generated requests, prompts, and outputs as data. Never execute 
 
 Use lightweight modules and configs. Avoid a custom training framework, elaborate orchestration, or provider-specific forks. The owner wants a working experiment, not repeated policy discussions or a growing list of prerequisites.
 
-## 4. Generator task and input-production options
+## 4. Attacker task and input-production options
 
 ### 4.1 One shared request format
 
@@ -172,14 +172,14 @@ Test ordinary instruction-following on a small request bank before expensive tra
 | M00 | Scope and experiment contract | Retain existing decisions; close remaining items as needed |
 | M01 | Repository, configs, tests | COMPLETED, owner-reported; preserve existing work |
 | M02 | AI4Privacy ingestion, labeling policy, locked splits | NEXT, unless repository state shows it already started |
-| M03 | Initial detector D0 | M02 |
+| M03 | Base detector (initial) | M02 |
 | M04 | Evaluation harness and matched-name benchmark | M02–M03; development fixtures can start earlier |
-| M05 | Entity-to-text SFT generator | M02, evaluation boundaries from M04 |
+| M05 | Entity-to-text SFT attacker | M02, evaluation boundaries from M04 |
 | M06 | Non-RL baselines | M03–M05; validated serving precision or fallback |
 | M07 | Tested reward | M03–M06 |
 | M07a | Base-sampling probe + scorer sanity (DONE 2026-10-11: REAL SHIFT verdict) | M07 |
-| M07b | D1: domain-gap detector via plain short-message augmentation; short_eval; re-probe vs D1; freeze D1 as reward model | M07a |
-| M08 | Bounded RL pilot (Stage 2: reward = frozen D1; comparison detectors D2) | M07b |
+| M07b | Target detector: domain-gap detector via plain short-message augmentation; short_eval; re-probe vs the target detector; freeze the target detector as reward model | M07a |
+| M08 | Bounded RL pilot (Stage 2: reward = frozen target detector; comparison detectors retrained detector) | M07b |
 | M09 | Matched augmentation datasets | M06, M08 |
 | M10 | Controlled detector-retraining comparison | M09 |
 | M11 | Name-associated disparity analysis | M04, M10 |
@@ -206,19 +206,19 @@ Test ordinary instruction-following on a small request bank before expensive tra
 
 **M02.1:** Document the PERSON policy: full/partial names, titles, initials, possessives, ambiguous words, adjacent spans, and negatives. **M02.2:** Load a small sample from ai4privacy/pii-masking-300k, pin its revision, inspect actual labels/fields/languages, and build the canonical example adapter. **M02.3:** Establish train, development/calibration, attack-development, and final-evaluation roles; check document/template duplicates and name-overlap policies. **M02.4:** Prepare training-side name pools, provenance, and a small held-out set; keep demographic metadata optional and separate.
 
-Do not assume that every advertised subset or count is available in the loaded configuration. Inspect rather than downloading everything. Keep the existing dataset's split boundaries where suitable and record any further partitioning; no generator training or prompt authoring from final-test examples.
+Do not assume that every advertised subset or count is available in the loaded configuration. Inspect rather than downloading everything. Keep the existing dataset's split boundaries where suitable and record any further partitioning; no attacker training or prompt authoring from final-test examples.
 
 **Deliverables:** Data adapter, docs/DATA_CARD.md, docs/ANNOTATION_POLICY.md, split manifests/hashes, validation report, and a small sample of dataset-derived SFT pairs.
 
 **Acceptance gate:** Offsets validate, name-label mapping is explicit, request/target pairs satisfy the intended constraints, and split leakage checks pass. A useful pilot dataset exists; a perfect universal name taxonomy is not required.
 
-### M03 — Train and freeze detector D0
+### M03 — Train and freeze the base detector
 
-**M03.1:** Verify backbone/token-classification and language suitability. **M03.2:** Implement tokenizer offset alignment, subword labeling, BIO decoding, Unicode tests, and truncation handling. **M03.3:** Train D0 on the initial dataset subset with meaningful negatives; select settings on development data, inspect errors, record resource usage, and freeze checkpoint/decoder before RL.
+**M03.1:** Verify backbone/token-classification and language suitability. **M03.2:** Implement tokenizer offset alignment, subword labeling, BIO decoding, Unicode tests, and truncation handling. **M03.3:** Train the base detector on the initial dataset subset with meaningful negatives; select settings on development data, inspect errors, record resource usage, and freeze checkpoint/decoder before RL.
 
-**Deliverables:** D0, configs, alignment/decoder tests, development report, memory/throughput measurements, and error examples.
+**Deliverables:** base detector, configs, alignment/decoder tests, development report, memory/throughput measurements, and error examples.
 
-**Acceptance gate:** D0 has useful nontrivial performance and is not simply labeling every capitalized token. It runs in evaluation mode for reward scoring. If nearly random or saturated, fix the training-side setup before optimizing attacks.
+**Acceptance gate:** base detector has useful nontrivial performance and is not simply labeling every capitalized token. It runs in evaluation mode for reward scoring. If nearly random or saturated, fix the training-side setup before optimizing attacks.
 
 ### M04 — Build and freeze evaluation
 
@@ -228,19 +228,19 @@ Do not assume that every advertised subset or count is available in the loaded c
 
 **Acceptance gate:** Metrics match hand-checked fixtures. Final evaluation is not used as a prompt or hyperparameter tuning loop. If only one seed is affordable, label the result exploratory; example-level confidence intervals do not substitute for training-seed variation.
 
-### M05 — SFT the constrained generator
+### M05 — SFT the constrained attacker
 
 **M05.1:** Implement the Section 4 request/output contract, shared prompt formatter, import/validation for Spark banks, and a minimal optional seeded-sampler path. **M05.2:** Construct dataset-derived input/target pairs from AI4Privacy training examples. SFT targets are existing text/snippets, not unverified newly generated paragraphs. **M05.3:** Test the 0.8B path, then run bounded adapter SFT on the working 2B target; measure name compliance, semantic validity, extra entities, diversity, and cost.
 
-Keep thinking disabled, completion masks correct, and the unmodified training artifact separate from serving exports. Source identifiers and metadata must not become unintended prompt shortcuts. Preserve G_sft for all non-RL baselines.
+Keep thinking disabled, completion masks correct, and the unmodified training artifact separate from serving exports. Source identifiers and metadata must not become unintended prompt shortcuts. Preserve SFT attacker for all non-RL baselines.
 
-**Deliverables:** SFT pair manifest/data card, request schema and importer, prompt version, model adapter/checkpoint G_sft, configs, sample audit, and compliance report.
+**Deliverables:** SFT pair manifest/data card, request schema and importer, prompt version, model adapter/checkpoint SFT attacker, configs, sample audit, and compliance report.
 
 **Acceptance gate:** Validity meets the development-set threshold agreed for the pilot. Repair prompts/data/SFT before RL if task compliance is poor. Both request-authoring options remain available; no need to pick a permanent winner now.
 
 ### M06 — Establish strong non-RL baselines
 
-**M06.1:** Build simple template augmentation. **M06.2:** Sample ordinary outputs from G_sft using a fixed request bank and common quality rules. **M06.3:** Generate a larger candidate pool from the same model/requests, score with D0, and select hard valid outputs under documented quotas. **M06.4:** Measure candidates, valid outputs, retained hard examples, and full generation/filtering costs.
+**M06.1:** Build simple template augmentation. **M06.2:** Sample ordinary outputs from SFT attacker using a fixed request bank and common quality rules. **M06.3:** Generate a larger candidate pool from the same model/requests, score with the base detector, and select hard valid outputs under documented quotas. **M06.4:** Measure candidates, valid outputs, retained hard examples, and full generation/filtering costs.
 
 Use the same request source/bank or a matched distribution across comparable arms. Reuse detector scores where versions match. Precision and decoder choices are controlled factors, not hidden advantages for RL.
 
@@ -252,55 +252,55 @@ Use the same request source/bank or a matched distribution across comparable arm
 
 **M07.1:** Gate schema validity, short nonempty text, exact single target occurrence, correct offsets, supported characters, and full target visibility inside the detector window. **M07.2:** Implement bounded detector difficulty, for example clipped mean negative log-probability of correct target-name token labels. Fix scale/clipping on development data. **M07.3:** Log validity, difficulty, optional repetition penalties, and algorithmic KL separately; invalid cases score below the valid range. **M07.4:** Test deletion, duplication, malformed JSON, extra names, non-person uses, boilerplate, boundary-only exploits, and truncation exploits.
 
-Evaluate D0 only on generated message text. The attacked detector is not the sole judge of semantic validity. A score increase must not be mistaken for a complete name miss or downstream improvement.
+Evaluate the base detector only on generated message text. The attacked detector is not the sole judge of semantic validity. A score increase must not be mistaken for a complete name miss or downstream improvement.
 
 **Deliverables:** docs/REWARD_SPEC.md, deterministic fixtures, reward decomposition, and audited examples.
 
 **Acceptance gate:** Known invalid cases cannot earn higher rewards by evading validation. Reward ranking corresponds plausibly to genuine errors on an audited development sample.
 
-### M07b — D1: close the short-message domain gap (Stage 1, no RL)
+### M07b — target detector: close the short-message domain gap (Stage 1, no RL)
 
 Owner decision 2026-10-11 (D13), after the M07a scorer-sanity verdict (REAL SHIFT:
-probe == training eval pipeline everywhere; D0 misses ~53% of names in short
+probe == training eval pipeline everywhere; base detector misses ~53% of names in short
 conversational messages vs 2.4% on AI4Privacy dev — too weak to be a meaningful RL
 target; the probe miss-rate band failed on the high side). No silent threshold
 edits: the structure below is the recorded response.
 
 **M07b.1:** Build `short_eval`: a short-message evaluation set with held-out names,
-plus a **style-independent slice** (~50 human-written or other-LLM messages) so D1
-gains are not just generator-style fitting. No training, prompt authoring, or
+plus a **style-independent slice** (~50 human-written or other-LLM messages) so the target detector
+gains are not just attacker-style fitting. No training, prompt authoring, or
 selection from it.
-**M07b.2:** Stage-1 augmentation (no RL): **D1 = D0** fine-tuned with plain
+**M07b.2:** Stage-1 augmentation (no RL): **target detector = base detector** fine-tuned with plain
 short-message augmentation — Spark SFT data and/or base-2B generations accepted by
 the shared validator (same request bank / matched distribution).
-**M07b.3:** Report **D0 vs D1** on `short_eval` AND on the AI4Privacy final-eval
-partition (**no-regression check**). Freeze D1 (checkpoint + manifest + sha).
-**M07b.4:** Re-run the M07a base-sampling probe against **D1** with the same
+**M07b.3:** Report **base detector vs the target detector** on `short_eval` AND on the AI4Privacy final-eval
+partition (**no-regression check**). Freeze the target detector (checkpoint + manifest + sha).
+**M07b.4:** Re-run the M07a base-sampling probe against **target detector** with the same
 go/no-go table. Only a passing probe opens M08.
 
-**Deliverables:** `short_eval` manifest + hash, D1 checkpoint + manifest, D0-vs-D1
+**Deliverables:** `short_eval` manifest + hash, target detector checkpoint + manifest, base-vs-target-detector
 report (short_eval gains + final-eval no-regression), re-probe report.
 
-**Acceptance gate:** D1 materially improves short_eval recall without regressing
-final-eval precision/recall; the probe go/no-go passes against D1 (miss rate inside
-the pre-declared band); D1 frozen before any RL. A D1 that fails the probe is a
+**Acceptance gate:** target detector materially improves short_eval recall without regressing
+final-eval precision/recall; the probe go/no-go passes against the target detector (miss rate inside
+the pre-declared band); target detector frozen before any RL. A target detector that fails the probe is a
 recorded negative result, not a threshold edit.
 
 ### M08 — Run bounded RL
 
-Stage 2 of D13: the RL reward model is **frozen D1**; the detectors compared downstream are **D2**.
+Stage 2 of D13: the RL reward model is **frozen target detector**; the detectors compared downstream are **retrained detector**.
 
 **M08.1:** Choose the simplest tested trainer compatible with the actual Qwen/adapter stack. Critic-free policy gradients or GRPO are candidates, not mandatory implementations. **M08.2:** Test completion masks, prompt/group IDs, behavior/reference log probabilities, frozen reference/detector parameters, and actual trainable-parameter updates. Run a tiny controlled reward-learning test. **M08.3:** Execute a short smoke run then a capped pilot, tracking validity, reward, true misses, diversity, KL, memory, time, and saves. **M08.4:** Compare against base-2B P1 generation (and SFT v2 if run) and generate-and-filter on development requests and decide whether further spend is justified.
 
 Keep the same task schema from SFT into RL. Freeze request banks for interpretable comparisons. Test zero-variance/all-invalid groups if using group-relative advantages. Keep the existing validated rollout path until any quantized/speculative behavior-policy mismatch and required corrections have been checked.
 
-**Deliverables:** Verified update-path tests, RL config, checkpoint G_rl, curves, sample audit, cost ledger, and go/no-go memo.
+**Deliverables:** Verified update-path tests, RL config, checkpoint RL attacker, curves, sample audit, cost ledger, and go/no-go memo.
 
 **Acceptance gate:** Real updates improve the intended controlled objective; reward is not detached or misaligned; validity remains acceptable. Permit only bounded debugging before reporting failure. Rising reward alone is not enough.
 
 ### M09 — Build matched augmentation sets
 
-**M09.1:** Apply common validity, deduplication, completeness, length, and annotation rules across methods. **M09.2:** Match accepted counts and relevant name/context/positive-negative composition, recording residual differences. **M09.3:** Preserve request source, rendered prompt, generator/export/decoder IDs, detector version, selection rule, and costs. **M09.4:** Audit random and difficult examples with the same rubric, without method cues when feasible.
+**M09.1:** Apply common validity, deduplication, completeness, length, and annotation rules across methods. **M09.2:** Match accepted counts and relevant name/context/positive-negative composition, recording residual differences. **M09.3:** Preserve request source, rendered prompt, attacker/export/decoder IDs, detector version, selection rule, and costs. **M09.4:** Audit random and difficult examples with the same rubric, without method cues when feasible.
 
 Unknown additional person mentions cannot automatically be assigned negative labels. Reject, complete their annotation reliably, or explicitly implement partial-label training. Source-provided target offsets are recomputed if text changes.
 
@@ -310,7 +310,7 @@ Unknown additional person mentions cannot automatically be assigned negative lab
 
 ### M10 — Compare retrained detectors
 
-**M10.1:** Freeze common initialization, original-data replay, augmentation mix, optimizer schedule, and development checkpoint selection. **M10.2:** Include unchanged D0, frozen D1, original-data-only continued training, plain generation, generate-and-filter, Spark data, and RL augmentation (the four method arms train D2 from D1's recipe; D13). **M10.3:** Run development pilots then fixed final comparisons, with multiple seeds if affordable. **M10.4:** Report matched-accepted-data results separately from fixed-total-budget results; include SFT, rejected generations, filtering, RL, and detector retraining under a declared accounting boundary.
+**M10.1:** Freeze common initialization, original-data replay, augmentation mix, optimizer schedule, and development checkpoint selection. **M10.2:** Include unchanged base detector, frozen target detector, original-data-only continued training, plain generation, generate-and-filter, Spark data, and RL augmentation (the four method arms train the retrained detector from the target detector's recipe; D13). **M10.3:** Run development pilots then fixed final comparisons, with multiple seeds if affordable. **M10.4:** Report matched-accepted-data results separately from fixed-total-budget results; include SFT, rejected generations, filtering, RL, and detector retraining under a declared accounting boundary.
 
 The original-data continued-training control distinguishes augmentation value from extra optimizer steps. Do not give RL a stronger Spark request bank than the baseline. Freeze method settings before using the final evaluation.
 
@@ -330,7 +330,7 @@ Associations are not a person's true ethnicity or gender. Spark must not invent 
 
 ### M12 — Generalization and bounded ablations
 
-**M12.1:** Evaluate preregistered unseen-name/context/domain tracks where data permit. **M12.2:** If affordable, score attacks with an independent detector without using its outputs to tune the generator. Distinguish attack transfer from improvement in the retrained target detector. **M12.3:** Choose one or two informative ablations, such as augmentation amount, selected versus random candidates, or confidence reward versus actual misses.
+**M12.1:** Evaluate preregistered unseen-name/context/domain tracks where data permit. **M12.2:** If affordable, score attacks with an independent detector without using its outputs to tune the attacker. Distinguish attack transfer from improvement in the retrained target detector. **M12.3:** Choose one or two informative ablations, such as augmentation amount, selected versus random candidates, or confidence reward versus actual misses.
 
 **Deliverables:** Generalization report, selected ablations, and reward-hacking/failure analysis.
 
@@ -338,7 +338,7 @@ Associations are not a person's true ethnicity or gender. Spark must not invent 
 
 ### M13 — Final report and handoff
 
-**M13.1:** Report the question, methods, data, results, costs, disparities, failure modes, and limitations. **M13.2:** Package exact configs, manifests, dependency versions, artifact checksums, and reproduction commands. **M13.3:** Show synthetic examples, before/after detector spans, and measured generator-performance comparisons. **M13.4:** Preserve current state, completed/deferred work, and the best next experiment; do not automatically publish.
+**M13.1:** Report the question, methods, data, results, costs, disparities, failure modes, and limitations. **M13.2:** Package exact configs, manifests, dependency versions, artifact checksums, and reproduction commands. **M13.3:** Show synthetic examples, before/after detector spans, and measured attacker-performance comparisons. **M13.4:** Preserve current state, completed/deferred work, and the best next experiment; do not automatically publish.
 
 **Deliverables:** reports/FINAL_REPORT.md, README/runbook, tables/plots, data/model cards, reproducibility package, final STATE.md, and acceleration-track status.
 
@@ -360,7 +360,7 @@ Quantization may change the target distribution. Correct exact speculative decod
 
 ### S01 — FP8 serving baseline
 
-**S01.1:** Export a frozen G_sft snapshot without overwriting training checkpoints; later validate G_rl separately. **S01.2:** Establish a small BF16/FP16 quality/performance reference where supported. **S01.3:** Describe actual weight/activation/KV-cache formats, scaling, calibration, and kernels. **S01.4:** Compare name compliance, semantic quality, diversity, difficulty, memory, and usable throughput on fixed requests.
+**S01.1:** Export a frozen SFT attacker snapshot without overwriting training checkpoints; later validate RL attacker separately. **S01.2:** Establish a small BF16/FP16 quality/performance reference where supported. **S01.3:** Describe actual weight/activation/KV-cache formats, scaling, calibration, and kernels. **S01.4:** Compare name compliance, semantic quality, diversity, difficulty, memory, and usable throughput on fixed requests.
 
 **Deliverables:** Versioned exports/configs, reference-versus-FP8 report, and selection decision.
 
@@ -368,7 +368,7 @@ Quantization may change the target distribution. Correct exact speculative decod
 
 ### S02 — Optional AWQ comparison
 
-**S02.1:** Build from the same master generator checkpoint, not an already FP8-quantized export. Record calibration source, bit width, formats, group size, kernels, and cost. **S02.2:** Compare matched batch/concurrency first; report maximum-capacity batching as a separate experiment.
+**S02.1:** Build from the same master attacker checkpoint, not an already FP8-quantized export. Record calibration source, bit width, formats, group size, kernels, and cost. **S02.2:** Compare matched batch/concurrency first; report maximum-capacity batching as a separate experiment.
 
 **Deliverables:** Optional AWQ export, manifest, measurements, and keep/drop decision.
 
@@ -384,7 +384,7 @@ Quantization may change the target distribution. Correct exact speculative decod
 
 ### S04 — DFlash draft training
 
-**S04.1:** Freeze a target, preferably final G_rl, plus tokenizer/export/serving configuration. **S04.2:** Collect the training traces/features actually required by the verified DFlash implementation, using approved training-side prompts; record any trace-versus-deployment precision mismatch. **S04.3:** Run the real documented training objective with the target frozen, starting with a tiny debug/overfit test; save resumable artifacts and all trace/training costs. **S04.4:** Compare the trained draft against no speculation and S03 at fixed target/precision/workload. **S04.5:** Assess total-cost amortization and rebenchmark when the target changes.
+**S04.1:** Freeze a target, preferably final RL attacker, plus tokenizer/export/serving configuration. **S04.2:** Collect the training traces/features actually required by the verified DFlash implementation, using approved training-side prompts; record any trace-versus-deployment precision mismatch. **S04.3:** Run the real documented training objective with the target frozen, starting with a tiny debug/overfit test; save resumable artifacts and all trace/training costs. **S04.4:** Compare the trained draft against no speculation and S03 at fixed target/precision/workload. **S04.5:** Assess total-cost amortization and rebenchmark when the target changes.
 
 Do not call generic draft-model SFT DFlash. Do not mark custom training complete because a pretrained draft was loaded. An owner-authorized budget is required before paid training.
 
@@ -408,11 +408,11 @@ Store example ID, source/revision, original document ID, text, language, domain 
 
 Every generation request stores its source, structured task, actual rendered prompt, bank version/hash, and authoring provenance. Spark-authored banks must remain replayable even when token counts or exact model settings are unavailable. Do not claim a random seed can reproduce a hosted generation when that has not been established.
 
-Every candidate stores request ID, generator/adapters/export, precision, decoder/draft, sampling settings, generated text, validity details, inferred target spans, reward components, D0 version, selection outcome, and costs. Keep unknown fields explicitly unknown.
+Every candidate stores request ID, attacker/adapters/export, precision, decoder/draft, sampling settings, generated text, validity details, inferred target spans, reward components, base detector version, selection outcome, and costs. Keep unknown fields explicitly unknown.
 
 Every run stores a unique ID, parent artifacts, code revision, resolved config, dataset/request-bank hashes, model/tokenizer/library versions, seed, hardware, timestamps/status, counters, checkpoints, metrics, and failures. Never put secrets in manifests.
 
-Keep small interfaces for detector predictions/target scoring, generator output, request loading/validation, reward, evaluation, and accounting. Fit these into existing code rather than imposing new module names.
+Keep small interfaces for detector predictions/target scoring, attacker output, request loading/validation, reward, evaluation, and accounting. Fit these into existing code rather than imposing new module names.
 
 ### Mandatory targeted tests
 
@@ -422,7 +422,7 @@ For training, verify completion masks, EOS/padding, group IDs, real intended-par
 
 For persistence, deliberately interrupt a small run, reload in another session, and continue with the supported model/optimizer/scheduler/RNG/data-state restoration. Saved files alone do not prove successful resume. Keep authoritative artifacts outside ephemeral session disks.
 
-For inference, verify actual loaded numerical modes and executed decoder paths, not just accepted configuration flags. Attribute quality changes separately to precision, request inputs, generator learning, and selection rules.
+For inference, verify actual loaded numerical modes and executed decoder paths, not just accepted configuration flags. Attribute quality changes separately to precision, request inputs, attacker learning, and selection rules.
 
 ## 9. Compute strategy and spending gates
 

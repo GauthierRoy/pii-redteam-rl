@@ -29,7 +29,7 @@ class TestExperimentsRegistry(unittest.TestCase):
 
     def test_loads_and_has_locks(self):
         self.assertEqual(self.registry["schema"], 1)
-        for key in ("final_eval_sha256", "request_bank_sha256", "d0_model_sha256"):
+        for key in ("final_eval_sha256", "request_bank_sha256", "base_detector_model_sha256"):
             self.assertEqual(len(self.registry["locks"][key]), 64, key)
 
     def test_runs_exist_with_required_fields(self):
