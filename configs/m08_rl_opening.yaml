@@ -1,0 +1,71 @@
+# M08 collapse-guard pilot (D20): the long-run setup (configs/m08_rl_long.yaml) with the
+# opening-share guard in the reward, stopped at step 200. The long run's reward had saturated
+# by step 200 (0.79, detector miss rate 0.85), so 200 steps is enough to see whether the guard
+# prevents the collapse onto one opening. Seed, bank, sampling, optimizer and max_steps (so the
+# learning-rate schedule) are unchanged: the first 200 steps differ only by the guard.
+# The Modal launcher (scripts/modal_rl.py) overrides the paths.
+
+run_id_prefix: m08-opening
+model_id: Qwen/Qwen3.5-2B
+seed: 20261113
+work_dir: artifacts/m08
+splits_dir: artifacts/splits
+locks:
+  final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
+max_minutes: 45                    # hard wall-clock cap on training, then save and stop
+stop_at_step: 200                  # end here; max_steps below still sets the lr schedule
+resume_from_checkpoint: null
+vllm_multimodal_names: true        # sync the text-only attacker into vLLM's multimodal Qwen3.5
+
+bank:
+  seed: 20261113
+  n_signal: 32                     # same held-out pre/post requests as the long run
+  n_train: 2000                    # same bank as the long run
+  exclude_banks:
+    - banks/v2_prompting/spark_seed20260920_v2_n20.jsonl
+
+detector:
+  path: artifacts/d1-frozen-d1v2-20261110-075731
+  sha256: ebfe4c693958c84cdb093d1a55b535e51f1ba0563a702e69e3c97bf5a36a4143
+
+model:
+  quantize_4bit: false
+
+lora:
+  r: 16
+  alpha: 32
+  target_modules: all-linear
+
+sampling:
+  temperature: 1.0
+  top_p: 1.0
+  batch_prompts: 4
+
+reward:
+  opening_share:                   # D20; calibrated on long-20261114-004948 (pre max 0.15, post 0.99)
+    threshold: 0.20                # flagged above this share of other requests' texts
+    window: 256                    # most recent valid texts = 8 steps of 32
+    min_other_texts: 128           # no flag until this many texts from other requests are seen
+
+grpo:
+  num_generations: 8
+  per_device_train_batch_size: 8
+  gradient_accumulation_steps: 4
+  max_completion_length: 192
+  max_steps: 1000
+  learning_rate: 2.0e-5
+  beta: 0.02
+  scale_rewards: false
+  gradient_checkpointing: true
+  save_steps: 50
+  save_total_limit: 3
+  use_vllm: true
+  vllm_mode: colocate
+  vllm_gpu_memory_utilization: 0.3
+  vllm_max_model_length: 1024
+
+thresholds:                        # health checks, not learning claims
+  pre_valid_rate_min: 0.7
+  peak_memory_fraction_max: 0.92
+  valid_rate_drop_max: 0.10
+  skipped_update_fraction_max: 0.5

@@ -38,6 +38,7 @@ from ..requests import load_person_name_pool
 from ..run_io import write_jsonl
 from .detector_scorer import DetectorScorer
 from .grpo_compat import build_grpo_config
+from .opening_share import OpeningShare
 from .rl_bank import bank_names, build_rl_requests
 from .rl_dataset import RL_PROMPT_VARIANT, rl_rows
 from .rl_reward import TargetDetectorReward
@@ -49,15 +50,22 @@ TRL_FIX_PARAM_NAME = trl_vllm.VLLMGeneration._fix_param_name_to_vllm
 
 
 class WallClockStop(TrainerCallback):
-    """Hard cap: stop training (and save) once `max_minutes` of wall clock have elapsed."""
+    """Stop training (and save) after `max_minutes` of wall clock, or at `stop_at_step`.
 
-    def __init__(self, max_minutes: float) -> None:
+    `stop_at_step` ends a run early while `max_steps` keeps defining the learning-rate
+    schedule, so its first steps match a longer run with the same `max_steps`.
+    """
+
+    def __init__(self, max_minutes: float, stop_at_step: int | None = None) -> None:
         self.deadline = time.time() + max_minutes * 60
+        self.stop_at_step = stop_at_step
         self.triggered = False
 
     def on_step_end(self, args, state, control, **kwargs):
-        if time.time() > self.deadline:
+        out_of_time = time.time() > self.deadline
+        if out_of_time:
             self.triggered = True
+        if out_of_time or (self.stop_at_step and state.global_step >= self.stop_at_step):
             control.should_save = True
             control.should_training_stop = True
         return control
@@ -193,10 +201,25 @@ def load_scorer(config: dict, device: str) -> DetectorScorer:
     return DetectorScorer(model, tokenizer, DETECTOR_MAX_LENGTH)
 
 
+def opening_share_guard(config: dict, window: int | None = None) -> OpeningShare | None:
+    """The collapse guard configured under `reward.opening_share`, or None when absent."""
+    settings = (config.get("reward") or {}).get("opening_share")
+    if not settings:
+        return None
+    return OpeningShare(
+        threshold=settings["threshold"],
+        window=window or settings["window"],
+        min_other_texts=settings["min_other_texts"],
+    )
+
+
 def sample_and_score(
-    tok, model, requests, config: dict, reward: TargetDetectorReward, device: str, label: str
+    tok, model, requests, config: dict, scorer: DetectorScorer, device: str, label: str
 ):
-    """Sample G rollouts per request with the RL sampling settings and score them."""
+    """Sample G rollouts per request with the RL sampling settings and score them.
+
+    Uses its own reward, so the opening shares are measured within this sample set only.
+    """
     sampling = config["sampling"]
     samples = _generate(
         tok,
@@ -214,18 +237,29 @@ def sample_and_score(
     extras: dict = {}
     metrics: dict = {}
     eos = tok.eos_token_id
+    reward = TargetDetectorReward(scorer, eos, opening_share_guard(config, window=len(samples)))
     rewards = reward(
         [s["raw_text"] for s in samples],
         [s["name"] for s in samples],
         completion_ids=[[] if s["truncated"] else [eos] for s in samples],
+        request_id=[s["request_id"] for s in samples],
         log_extra=extras.__setitem__,
         log_metric=metrics.__setitem__,
     )
-    for sample, r, status, p in zip(
-        samples, rewards, extras["status"], extras["p_target_mean"], strict=True
+    for sample, r, status, p, share in zip(
+        samples,
+        rewards,
+        extras["status"],
+        extras["p_target_mean"],
+        extras["opening_share"],
+        strict=True,
     ):
-        sample.update({"reward": r, "status": status, "p_target_mean": p})
+        sample.update({"reward": r, "status": status, "p_target_mean": p, "opening_share": share})
     return samples, metrics
+
+
+def planned_steps(config: dict) -> int:
+    return config.get("stop_at_step") or config["grpo"]["max_steps"]
 
 
 def smoke_checks(config: dict, summary: dict) -> dict[str, dict]:
@@ -243,8 +277,8 @@ def smoke_checks(config: dict, summary: dict) -> dict[str, dict]:
             f"{pre['valid_rate']:.3f} (min {thresholds['pre_valid_rate_min']})",
         ),
         "training reached the step cap": (
-            summary["steps_done"] == config["grpo"]["max_steps"] and not summary["wall_clock_stop"],
-            f"{summary['steps_done']}/{config['grpo']['max_steps']} steps, "
+            summary["steps_done"] == planned_steps(config) and not summary["wall_clock_stop"],
+            f"{summary['steps_done']}/{planned_steps(config)} steps, "
             f"wall-clock stop={summary['wall_clock_stop']}",
         ),
         "loss finite": (
@@ -302,12 +336,12 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
     if device == "cuda" and not config["model"]["quantize_4bit"]:
         model = model.to(device)
     scorer = load_scorer(config, device)
-    reward = TargetDetectorReward(scorer, tok.eos_token_id)
+    reward = TargetDetectorReward(scorer, tok.eos_token_id, opening_share_guard(config))
     model.eval()
     torch.manual_seed(config["seed"])
 
     pre_samples, pre_metrics = sample_and_score(
-        tok, model, signal_requests, config, reward, device, "pre-RL"
+        tok, model, signal_requests, config, scorer, device, "pre-RL"
     )
     write_jsonl(os.path.join(work_dir, "samples_pre.jsonl"), pre_samples)
     pre = signal_summary(pre_samples, pre_metrics)
@@ -335,7 +369,7 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
     if config.get("vllm_language_model_only"):
         restrict_vllm_to_language_model()
     lora = config["lora"]
-    stopper = WallClockStop(config["max_minutes"])
+    stopper = WallClockStop(config["max_minutes"], config.get("stop_at_step"))
     trainer = TimedGRPOTrainer(
         model=model,
         reward_funcs=reward,
@@ -374,7 +408,7 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
     model.eval()
     model.config.use_cache = True
     post_samples, post_metrics = sample_and_score(
-        tok, trainer.model, signal_requests, config, reward, device, "post-RL"
+        tok, trainer.model, signal_requests, config, scorer, device, "post-RL"
     )
     write_jsonl(os.path.join(work_dir, "samples_post.jsonl"), post_samples)
     post = signal_summary(post_samples, post_metrics)

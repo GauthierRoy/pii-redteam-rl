@@ -3,7 +3,12 @@
 import json
 import unittest
 
-from pii_redteam.training.rl_reward import INVALID_REWARD, TargetDetectorReward
+from pii_redteam.training.opening_share import OpeningShare
+from pii_redteam.training.rl_reward import (
+    INVALID_REWARD,
+    REPEATED_OPENING_REWARD,
+    TargetDetectorReward,
+)
 
 EOS = 7
 GOOD_TEXT = "Hi Lucas, could you please call me back about the invoice we discussed yesterday?"
@@ -132,6 +137,70 @@ class TestTargetDetectorReward(unittest.TestCase):
             {a: 0.3, b: 0.6},
         )
         self.assertEqual([round(r, 1) for r in rewards], [0.7, 0.7, 0.4, 0.4])
+
+    def collapse_batch(self):
+        """Three requests; every text opens with "Dear" except Amara's second one."""
+        names = ["Lucas", "Lucas", "Amara", "Amara", "Chidi", "Chidi"]
+        texts = [
+            "Dear Lucas, the invoice for the March delivery is attached for your review.",
+            "Dear Lucas, please confirm the delivery window for the replacement parts today.",
+            "Dear Amara, your appointment at the clinic is confirmed for Thursday at three.",
+            "Row 14 | Amara | keys returned at 09:40 | signed out by the front desk",
+            "Dear Chidi, thank you for reporting the broken latch on the west stairwell door.",
+            "Dear Chidi, the committee deferred the renewal decision until the broker replies.",
+        ]
+        return names, texts
+
+    def guarded_reward(self, texts):
+        guard = OpeningShare(threshold=0.5, window=64, min_other_texts=4)
+        return TargetDetectorReward(FakeScorer(dict.fromkeys(texts, 0.1)), EOS, guard)
+
+    def test_opening_shared_across_requests_loses_the_detector_reward(self):
+        names, texts = self.collapse_batch()
+        rewards = self.guarded_reward(texts)([message(t) for t in texts], names)
+        # Lucas and Chidi: 3 of the 4 other texts open with "dear"; Amara's: all 4 do
+        self.assertEqual(rewards[0], REPEATED_OPENING_REWARD)
+        self.assertEqual(rewards[2], REPEATED_OPENING_REWARD)
+        self.assertAlmostEqual(rewards[3], 0.9)
+        self.assertGreater(REPEATED_OPENING_REWARD, INVALID_REWARD)
+
+    def test_guard_groups_by_request_id_when_given(self):
+        names, texts = self.collapse_batch()
+        one_request = ["r1"] * len(texts)
+        rewards = self.guarded_reward(texts)(
+            [message(t) for t in texts], names, request_id=one_request
+        )
+        # a single request has no other requests to share an opening with
+        self.assertEqual([round(r, 1) for r in rewards], [0.9] * 6)
+
+    def test_guard_ignores_invalid_completions(self):
+        names, texts = self.collapse_batch()
+        completions = [message(t) for t in texts] + ["Dear nobody, not json"]
+        extra = {}
+        rewards = self.guarded_reward(texts)(
+            completions, names + ["Lucas"], log_extra=extra.__setitem__
+        )
+        self.assertEqual(rewards[-1], INVALID_REWARD)
+        self.assertIsNone(extra["opening_share"][-1])
+        self.assertEqual(extra["opening_share"][3], 0.0)
+
+    def test_guard_metrics_are_logged(self):
+        names, texts = self.collapse_batch()
+        logged = {}
+        self.guarded_reward(texts)(
+            [message(t) for t in texts], names, log_metric=logged.__setitem__
+        )
+        self.assertAlmostEqual(logged["repeated_opening_rate"], 5 / 6)
+        self.assertAlmostEqual(logged["opening_share_mean"], (0.75 * 4 + 1.0 + 0.0) / 6)
+
+    def test_without_the_guard_nothing_about_openings_is_logged(self):
+        names, texts = self.collapse_batch()
+        logged = {}
+        rewards = TargetDetectorReward(FakeScorer(dict.fromkeys(texts, 0.1)), EOS)(
+            [message(t) for t in texts], names, log_metric=logged.__setitem__
+        )
+        self.assertEqual([round(r, 1) for r in rewards], [0.9] * 6)
+        self.assertNotIn("repeated_opening_rate", logged)
 
     def test_trl_expects_a_function_name_for_logging(self):
         self.assertEqual(

@@ -46,7 +46,10 @@ if HAS_STACK:
     from pii_redteam.training.rl_reward import INVALID_REWARD, TargetDetectorReward
     from pii_redteam.training.rl_smoke import (
         TimedGRPOTrainer,
+        WallClockStop,
         align_vllm_names_with_multimodal_checkpoint,
+        opening_share_guard,
+        planned_steps,
         restrict_vllm_to_language_model,
         timing_summary,
         to_multimodal_qwen_name,
@@ -361,6 +364,44 @@ class TestUpcastTrainableParams(unittest.TestCase):
         for name, param in model.named_parameters():
             expected = torch.float32 if param.requires_grad else torch.float16
             self.assertEqual(param.dtype, expected, name)
+
+
+@unittest.skipUnless(HAS_STACK, "needs torch, transformers, peft and trl")
+class TestStopAndGuardConfig(unittest.TestCase):
+    def control_after(self, stopper, step):
+        from transformers import TrainerControl, TrainerState
+
+        return stopper.on_step_end(None, TrainerState(global_step=step), TrainerControl())
+
+    def test_stop_at_step_ends_training_without_a_wall_clock_stop(self):
+        stopper = WallClockStop(max_minutes=60, stop_at_step=3)
+        self.assertFalse(self.control_after(stopper, 2).should_training_stop)
+        control = self.control_after(stopper, 3)
+        self.assertTrue(control.should_training_stop)
+        self.assertTrue(control.should_save)
+        self.assertFalse(stopper.triggered)
+
+    def test_wall_clock_stop_is_reported_as_triggered(self):
+        stopper = WallClockStop(max_minutes=-1)
+        self.assertTrue(self.control_after(stopper, 1).should_training_stop)
+        self.assertTrue(stopper.triggered)
+
+    def test_planned_steps_prefers_stop_at_step(self):
+        self.assertEqual(planned_steps({"grpo": {"max_steps": 1000}}), 1000)
+        self.assertEqual(planned_steps({"stop_at_step": 200, "grpo": {"max_steps": 1000}}), 200)
+
+    def test_guard_is_off_without_reward_settings(self):
+        self.assertIsNone(opening_share_guard({}))
+        self.assertIsNone(opening_share_guard({"reward": None}))
+
+    def test_guard_reads_settings_and_window_override(self):
+        settings = {"threshold": 0.2, "window": 256, "min_other_texts": 128}
+        config = {"reward": {"opening_share": settings}}
+        guard = opening_share_guard(config)
+        self.assertEqual(
+            (guard.threshold, guard.recent.maxlen, guard.min_other_texts), (0.2, 256, 128)
+        )
+        self.assertEqual(opening_share_guard(config, window=64).recent.maxlen, 64)
 
 
 if __name__ == "__main__":

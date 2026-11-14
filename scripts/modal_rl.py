@@ -11,6 +11,9 @@ Arms: hf = Hugging Face generate (baseline); fla = plus flash-linear-attention; 
 TRL colocated vLLM with the attacker's weights renamed to the multimodal Qwen3.5 checkpoint names;
 vllm_lm = the same plus vLLM loading only the language model (no vision tower).
 
+Capped pilot of any repo config (Modal kills it after `PILOT_TIMEOUT_S`):
+    modal run --detach scripts/modal_rl.py::pilot --config configs/m08_rl_opening.yaml
+
 Cost is bounded by `BENCH_TIMEOUT_S` per arm: Modal kills the container at the timeout.
 """
 
@@ -44,6 +47,7 @@ LONG_CONFIG = f"{REPO_DIR}/configs/m08_rl_long.yaml"
 GPU = "L4"
 BENCH_TIMEOUT_S = 900
 LONG_TIMEOUT_S = 9600
+PILOT_TIMEOUT_S = 3600
 L4_CONTAINER_USD_PER_HOUR = 1.12  # approximate list prices: L4 + 4 CPU + 16 GiB
 COMMIT_INTERVAL_S = 120
 
@@ -111,6 +115,7 @@ GPU_FUNCTION: dict[str, Any] = {
     "volumes": {VOLUME_DIR: volume},
 }
 LONG_GPU_FUNCTION: dict[str, Any] = {**GPU_FUNCTION, "timeout": LONG_TIMEOUT_S}
+PILOT_GPU_FUNCTION: dict[str, Any] = {**GPU_FUNCTION, "timeout": PILOT_TIMEOUT_S}
 
 
 def sha256_of(path: str) -> str:
@@ -319,6 +324,14 @@ def long_run(commit: str, resume_from: str = "") -> dict:
     return run_arm("long", {}, commit, base_config=LONG_CONFIG, resume_from=resume_from)
 
 
+@app.function(image=IMAGE_VLLM, **PILOT_GPU_FUNCTION)
+def pilot_run(commit: str, config: str, resume_from: str = "") -> dict:
+    name = Path(config).stem.removeprefix("m08_rl_")
+    return run_arm(
+        f"pilot-{name}", {}, commit, base_config=f"{REPO_DIR}/{config}", resume_from=resume_from
+    )
+
+
 BENCH_ARMS = {
     "hf": bench_hf,
     "fla": bench_fla,
@@ -382,3 +395,11 @@ def long(resume_from: str = ""):
     commit = local_commit()
     print(f"repo state: {commit}; timeout {LONG_TIMEOUT_S}s on {GPU}")
     print(format_result("long", long_run.remote(commit, resume_from)))
+
+
+@app.local_entrypoint()
+def pilot(config: str, resume_from: str = ""):
+    """A capped run of any repo config, e.g. `--config configs/m08_rl_opening.yaml`."""
+    commit = local_commit()
+    print(f"repo state: {commit}; config {config}; timeout {PILOT_TIMEOUT_S}s on {GPU}")
+    print(format_result("pilot", pilot_run.remote(commit, config, resume_from)))
