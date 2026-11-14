@@ -73,6 +73,9 @@ VLLM_NAMES_OVERRIDES = {**VLLM_OVERRIDES, "vllm_multimodal_names": True}
 VLLM_LM_OVERRIDES = {**VLLM_NAMES_OVERRIDES, "vllm_language_model_only": True}
 REPORTED_PACKAGES = ["torch", "transformers", "trl", "peft", "vllm", "flash-linear-attention"]
 
+# Importing this launcher writes its own .pyc under scripts/, which would change mid-build.
+COMPILED_PYTHON = modal.FilePatternMatcher("**/__pycache__", "**/*.pyc")
+
 
 def build_image(packages: list[str]) -> modal.Image:
     return (
@@ -86,14 +89,10 @@ def build_image(packages: list[str]) -> modal.Image:
                 "TOKENIZERS_PARALLELISM": "false",
             }
         )
-        .add_local_dir(
-            REPO_ROOT / "src",
-            f"{REPO_DIR}/src",
-            ignore=modal.FilePatternMatcher("**/__pycache__", "**/*.pyc"),
-        )
+        .add_local_dir(REPO_ROOT / "src", f"{REPO_DIR}/src", ignore=COMPILED_PYTHON)
         .add_local_dir(REPO_ROOT / "configs", f"{REPO_DIR}/configs")
         .add_local_dir(REPO_ROOT / "banks", f"{REPO_DIR}/banks")
-        .add_local_dir(REPO_ROOT / "scripts", f"{REPO_DIR}/scripts")
+        .add_local_dir(REPO_ROOT / "scripts", f"{REPO_DIR}/scripts", ignore=COMPILED_PYTHON)
     )
 
 
