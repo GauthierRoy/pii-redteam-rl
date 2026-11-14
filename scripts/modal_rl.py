@@ -26,6 +26,7 @@ import threading
 import time
 from importlib import metadata
 from pathlib import Path
+from typing import Any
 
 import modal
 
@@ -102,13 +103,14 @@ with IMAGE_HF.imports():
 
 app = modal.App("pii-redteam-rl")
 volume = modal.Volume.from_name("pii-redteam-rl", create_if_missing=True)
-GPU_FUNCTION = {
+GPU_FUNCTION: dict[str, Any] = {
     "gpu": GPU,
     "cpu": 4,
     "memory": 16384,
     "timeout": BENCH_TIMEOUT_S,
     "volumes": {VOLUME_DIR: volume},
 }
+LONG_GPU_FUNCTION: dict[str, Any] = {**GPU_FUNCTION, "timeout": LONG_TIMEOUT_S}
 
 
 def sha256_of(path: str) -> str:
@@ -312,7 +314,7 @@ def resume_b(commit: str, resume_from: str) -> dict:
     return run_arm("resume-b", overrides, commit, resume_from=resume_from)
 
 
-@app.function(image=IMAGE_VLLM, **{**GPU_FUNCTION, "timeout": LONG_TIMEOUT_S})
+@app.function(image=IMAGE_VLLM, **LONG_GPU_FUNCTION)
 def long_run(commit: str, resume_from: str = "") -> dict:
     return run_arm("long", {}, commit, base_config=LONG_CONFIG, resume_from=resume_from)
 
