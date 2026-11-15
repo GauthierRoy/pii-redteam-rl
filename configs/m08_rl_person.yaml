@@ -12,7 +12,7 @@ work_dir: artifacts/m08
 splits_dir: artifacts/splits
 locks:
   final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
-max_minutes: 75                    # hard wall-clock cap on training, then save and stop
+max_minutes: 90                    # hard wall-clock cap on training, then save and stop
 stop_at_step: 400                  # end here; max_steps below still sets the lr schedule
 resume_from_checkpoint: null
 vllm_multimodal_names: true        # sync the text-only attacker into vLLM's multimodal Qwen3.5
@@ -51,6 +51,11 @@ reward:
     model: mistral-medium-2604     # Mistral Medium 3.5, dated id so the judge does not change silently
     api_key_env: MISTRAL_API_KEY
     timeout_s: 60
+    max_workers: 32
+  audit:                           # log only, never changes the reward; accuracy not measured
+    model: mistral-medium-2604     # asked while the person judge runs: another person's name,
+    api_key_env: MISTRAL_API_KEY   # natural message, fits the requested kind of message
+    timeout_s: 30
     max_workers: 32
 
 grpo:

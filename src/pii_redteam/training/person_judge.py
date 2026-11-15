@@ -6,6 +6,10 @@ miss and earns the full reward: 236 of 240 texts in pilot-opening-20261114-12432
 
 The judge is a hosted chat model (OpenAI-style chat completions endpoint). A run stops when
 the judge cannot be reached: letting texts through unchecked would bring the exploit back.
+
+`TextAudit` asks three more questions about the same text. Its answers are logged and never
+change the reward, so a new exploit shows up as a moving curve during training. The judge's
+accuracy on these questions has not been measured; a failed audit call yields None.
 """
 
 from __future__ import annotations
@@ -24,6 +28,18 @@ QUESTION = (
     "(someone's first name, surname or full name)? Answer no if it is used as a "
     "place, building, organisation, brand, product, event or any other thing. "
     "Answer with one word: yes or no."
+)
+
+
+AUDIT_FIELDS = ("other_person", "natural", "fits_format")
+AUDIT_QUESTION = (
+    'Requested kind of message: {context}.\nRequested name: "{name}".\n\nText:\n{text}\n\n'
+    "Answer three questions about the text with true or false:\n"
+    '- other_person: does it contain the name of any person other than "{name}"?\n'
+    "- natural: is it a coherent message that a real person or organisation could have written?\n"
+    "- fits_format: is it written as the requested kind of message?\n"
+    'Reply with only a JSON object, for example {{"other_person": false, "natural": true, '
+    '"fits_format": true}}.'
 )
 
 
@@ -46,6 +62,22 @@ def parse_verdict(answer: str) -> str:
     if word.startswith("no"):
         return NOT_PERSON
     return UNPARSED
+
+
+def parse_audit(answer: str) -> dict[str, bool] | None:
+    """The three booleans of an audit answer, or None when the answer is not that object."""
+    start, end = answer.find("{"), answer.rfind("}")
+    if start < 0 or end < start:
+        return None
+    try:
+        parsed = json.loads(answer[start : end + 1])
+    except ValueError:
+        return None
+    if not isinstance(parsed, dict) or not all(
+        isinstance(parsed.get(field), bool) for field in AUDIT_FIELDS
+    ):
+        return None
+    return {field: parsed[field] for field in AUDIT_FIELDS}
 
 
 def http_transport(api_key: str, url: str, timeout: float) -> Callable[[dict], dict]:
@@ -108,3 +140,40 @@ class PersonJudge:
             if verdict != UNPARSED:
                 break
         return verdict
+
+
+class TextAudit:
+    """Log-only checklist per text, in parallel. Never raises: a failed call gives None."""
+
+    def __init__(
+        self, model: str, post: Callable[[dict], dict], max_workers: int = 32, max_tokens: int = 60
+    ) -> None:
+        self.model = model
+        self.post = post
+        self.max_workers = max_workers
+        self.max_tokens = max_tokens
+
+    def audits(
+        self, names: list[str], texts: list[str], contexts: list[str]
+    ) -> list[dict[str, bool] | None]:
+        if not texts:
+            return []
+        with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
+            return list(pool.map(self._audit, names, texts, contexts))
+
+    def _audit(self, name: str, text: str, context: str) -> dict[str, bool] | None:
+        body = {
+            "model": self.model,
+            "temperature": 0,
+            "max_tokens": self.max_tokens,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": AUDIT_QUESTION.format(context=context, name=name, text=text),
+                }
+            ],
+        }
+        try:
+            return parse_audit(answer_text(self.post(body)))
+        except (OSError, KeyError, IndexError, ValueError):
+            return None

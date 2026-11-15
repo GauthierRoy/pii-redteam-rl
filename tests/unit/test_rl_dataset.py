@@ -6,6 +6,7 @@ import os
 import unittest
 
 from pii_redteam.prompt_v2 import render_prompt_v2
+from pii_redteam.requests import CONTEXT_TYPE_LABELS
 from pii_redteam.training.rl_dataset import rl_rows
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,6 +26,7 @@ class TestRlRows(unittest.TestCase):
         for record, row in zip(records, rows, strict=True):
             self.assertEqual(row["name"], record["task"]["entities"][0]["value"])
             self.assertEqual(row["request_id"], record["request_id"])
+            self.assertEqual(row["context"], CONTEXT_TYPE_LABELS[record["task"]["context_type"]])
 
     def test_prompt_is_the_validated_p1_text_as_one_user_message(self):
         record = load_records()[0]

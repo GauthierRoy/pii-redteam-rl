@@ -82,6 +82,10 @@ the name is a person in 200/216.
   inside the reward; a non-person use is invalid. It kept 242/250 persons on labelled texts, at
   about 0.7 s per 32 calls from a laptop. `zai-glm-5-3-flash` kept 248/250 but takes 2-5 s per
   32 calls, which costs more GPU time than it saves in API price.
+- **Log-only audit (D21).** While the person judge runs, the same model also answers: another
+  person's name? natural message? fits the requested kind of message? Logged, never in the
+  reward, accuracy not measured. Saved samples: pre-RL 19/216 other person and 78/216 off
+  format; long-run letters 118/254 and 148/254.
 - **Spend.** Long run about $2.58, pilots about $0.61 and $1.13 (launcher estimates; Modal
   billing lags). Monthly Modal budget raised to $30 by the owner on 2026-11-14.
 - **Not done.** No diversity measure beyond the opening word. The extra-person-name gap

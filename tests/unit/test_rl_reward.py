@@ -44,6 +44,16 @@ class FakeJudge:
         return [self.verdict_by_text[text] for text in texts]
 
 
+class FakeAudit:
+    def __init__(self, audit_by_text: dict[str, dict | None]) -> None:
+        self.audit_by_text = audit_by_text
+        self.contexts: list[str] = []
+
+    def audits(self, names: list[str], texts: list[str], contexts: list[str]) -> list:
+        self.contexts += contexts
+        return [self.audit_by_text[text] for text in texts]
+
+
 def message(text: str) -> str:
     return json.dumps({"text": text})
 
@@ -263,6 +273,64 @@ class TestTargetDetectorReward(unittest.TestCase):
         reward = TargetDetectorReward(FakeScorer(dict.fromkeys(texts, 0.1)), EOS, guard, judge)
         reward([message(t) for t in texts], names)
         self.assertEqual(len(guard.recent), 4)
+
+    def audited_reward(self, audit, judge=None):
+        scorer = FakeScorer({GOOD_TEXT: 0.1, OTHER_TEXT: 0.1})
+        return TargetDetectorReward(scorer, EOS, person_judge=judge, audit=audit)
+
+    def test_audit_is_logged_and_never_changes_the_reward(self):
+        bad = {"other_person": True, "natural": False, "fits_format": False}
+        good = {"other_person": False, "natural": True, "fits_format": True}
+        audit = FakeAudit({GOOD_TEXT: bad, OTHER_TEXT: good})
+        extra, logged = {}, {}
+        rewards = self.audited_reward(audit)(
+            [message(GOOD_TEXT), message(OTHER_TEXT), "not json"],
+            ["Lucas"] * 3,
+            context=["a chat", "a report", "a chat"],
+            log_extra=extra.__setitem__,
+            log_metric=logged.__setitem__,
+        )
+        self.assertEqual([round(r, 1) for r in rewards], [0.9, 0.9, INVALID_REWARD])
+        self.assertEqual(extra["other_person"], [True, False, None])
+        self.assertEqual(extra["fits_format"], [False, True, None])
+        self.assertEqual(audit.contexts, ["a chat", "a report"])
+        self.assertEqual(logged["audit_other_person_rate"], 0.5)
+        self.assertEqual(logged["audit_unnatural_rate"], 0.5)
+        self.assertEqual(logged["audit_off_format_rate"], 0.5)
+
+    def test_failed_audit_is_logged_as_missing(self):
+        audit = FakeAudit({GOOD_TEXT: None})
+        extra, logged = {}, {}
+        rewards = self.audited_reward(audit)(
+            [message(GOOD_TEXT)],
+            ["Lucas"],
+            context=["a chat"],
+            log_extra=extra.__setitem__,
+            log_metric=logged.__setitem__,
+        )
+        self.assertAlmostEqual(rewards[0], 0.9)
+        self.assertEqual(extra["natural"], [None])
+        self.assertNotIn("audit_unnatural_rate", logged)
+
+    def test_audit_rates_leave_out_texts_the_person_judge_rejected(self):
+        flagged = {"other_person": True, "natural": True, "fits_format": True}
+        clean = {"other_person": False, "natural": True, "fits_format": True}
+        audit = FakeAudit({GOOD_TEXT: clean, OTHER_TEXT: flagged})
+        judge = FakeJudge({GOOD_TEXT: PERSON, OTHER_TEXT: NOT_PERSON})
+        logged = {}
+        self.audited_reward(audit, judge)(
+            [message(GOOD_TEXT), message(OTHER_TEXT)],
+            ["Lucas"] * 2,
+            context=["a chat", "a chat"],
+            log_metric=logged.__setitem__,
+        )
+        self.assertEqual(logged["audit_other_person_rate"], 0.0)
+
+    def test_audit_is_skipped_without_the_context_column(self):
+        audit = FakeAudit({})
+        rewards = self.audited_reward(audit)([message(GOOD_TEXT)], ["Lucas"])
+        self.assertAlmostEqual(rewards[0], 0.9)
+        self.assertEqual(audit.contexts, [])
 
     def test_trl_expects_a_function_name_for_logging(self):
         self.assertEqual(

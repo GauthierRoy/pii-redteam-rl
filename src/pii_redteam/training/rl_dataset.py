@@ -2,19 +2,21 @@
 
 One row per request, with exactly the prompt the M07b comparison validated (`render_prompt_v2`)
 as a single user chat message. The row carries `name` (the requested PERSON value), which TRL
-passes to the reward function, and `request_id` for provenance. Chat-template options such as
+passes to the reward function, `request_id` for provenance and `context` (the requested kind
+of message, in words) for the log-only audit. Chat-template options such as
 `enable_thinking=False` belong to the trainer config, not to the rows.
 """
 
 from __future__ import annotations
 
 from ..prompt_v2 import PROMPT_VARIANTS, render_prompt_v2
+from ..requests import CONTEXT_TYPE_LABELS
 
 RL_PROMPT_VARIANT = "P1"
 
 
 def rl_rows(records: list[dict], variant: str = RL_PROMPT_VARIANT) -> list[dict]:
-    """Validated v2 request records -> `{"prompt", "name", "request_id"}` rows."""
+    """Validated v2 request records -> `{"prompt", "name", "request_id", "context"}` rows."""
     if variant not in PROMPT_VARIANTS:
         raise ValueError(f"unknown prompt variant {variant!r}")
     rows = []
@@ -34,6 +36,7 @@ def rl_rows(records: list[dict], variant: str = RL_PROMPT_VARIANT) -> list[dict]
                 "prompt": [{"role": "user", "content": render_prompt_v2(record, variant)}],
                 "name": entities[0]["value"],
                 "request_id": request_id,
+                "context": CONTEXT_TYPE_LABELS[record["task"]["context_type"]],
             }
         )
     return rows

@@ -8,7 +8,9 @@ from pii_redteam.training.person_judge import (
     UNPARSED,
     JudgeUnavailableError,
     PersonJudge,
+    TextAudit,
     answer_text,
+    parse_audit,
     parse_verdict,
 )
 
@@ -96,6 +98,47 @@ class TestPersonJudge(unittest.TestCase):
             raise AssertionError("must not be called")
 
         self.assertEqual(judge(post).verdicts([], []), [])
+
+
+class TestTextAudit(unittest.TestCase):
+    GOOD = '{"other_person": false, "natural": true, "fits_format": true}'
+
+    def test_object_is_parsed_even_inside_a_code_fence(self):
+        expected = {"other_person": False, "natural": True, "fits_format": True}
+        self.assertEqual(parse_audit(self.GOOD), expected)
+        self.assertEqual(parse_audit(f"```json\n{self.GOOD}\n```"), expected)
+
+    def test_missing_or_non_boolean_fields_are_rejected(self):
+        self.assertIsNone(parse_audit('{"other_person": false, "natural": true}'))
+        self.assertIsNone(
+            parse_audit('{"other_person": "no", "natural": true, "fits_format": true}')
+        )
+        self.assertIsNone(parse_audit("yes"))
+        self.assertIsNone(parse_audit("{not json}"))
+
+    def test_question_carries_context_name_and_text(self):
+        seen = []
+
+        def post(body):
+            seen.append(body["messages"][0]["content"])
+            return reply(self.GOOD)
+
+        audits = TextAudit("fake", post).audits(["Bob"], ["Hi Bob."], ["a casual chat message"])
+        self.assertEqual(audits, [{"other_person": False, "natural": True, "fits_format": True}])
+        for part in ("a casual chat message", '"Bob"', "Hi Bob."):
+            self.assertIn(part, seen[0])
+
+    def test_failed_call_gives_none_and_never_raises(self):
+        def post(body):
+            if "Amara" in body["messages"][0]["content"]:
+                raise OSError("rate limited")
+            return reply(self.GOOD)
+
+        audits = TextAudit("fake", post).audits(
+            ["Bob", "Amara"], ["Hi Bob.", "Hi Amara."], ["a chat", "a chat"]
+        )
+        self.assertIsNotNone(audits[0])
+        self.assertIsNone(audits[1])
 
 
 if __name__ == "__main__":

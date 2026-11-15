@@ -53,6 +53,7 @@ if HAS_STACK:
         person_judge,
         planned_steps,
         restrict_vllm_to_language_model,
+        text_audit,
         timing_summary,
         to_multimodal_qwen_name,
         upcast_trainable_params_to_fp32,
@@ -409,6 +410,20 @@ class TestStopAndGuardConfig(unittest.TestCase):
         with mock.patch.dict(os.environ, {"PII_REDTEAM_TEST_MISSING_KEY": "k"}):
             judge = person_judge({"reward": {"person_judge": settings}})
         self.assertEqual((judge.model, judge.max_workers), ("zai-glm-5-3-flash", 32))
+
+    def test_text_audit_is_off_without_settings_and_needs_its_key(self):
+        self.assertIsNone(text_audit({"reward": {"person_judge": {}}}))
+        settings = {
+            "model": "mistral-medium-2604",
+            "api_key_env": "PII_REDTEAM_TEST_MISSING_KEY",
+            "timeout_s": 30,
+            "max_workers": 16,
+        }
+        with self.assertRaises(SystemExit):
+            text_audit({"reward": {"audit": settings}})
+        with mock.patch.dict(os.environ, {"PII_REDTEAM_TEST_MISSING_KEY": "k"}):
+            audit = text_audit({"reward": {"audit": settings}})
+        self.assertEqual((audit.model, audit.max_workers), ("mistral-medium-2604", 16))
 
     def test_guard_reads_settings_and_window_override(self):
         settings = {

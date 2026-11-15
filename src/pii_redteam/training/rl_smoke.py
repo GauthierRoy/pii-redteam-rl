@@ -34,12 +34,12 @@ from transformers import (
 from trl import GRPOTrainer
 
 from ..prompt_compare import _device_dtype, _generate
-from ..requests import load_person_name_pool
+from ..requests import CONTEXT_TYPE_LABELS, load_person_name_pool
 from ..run_io import write_jsonl
 from .detector_scorer import DetectorScorer
 from .grpo_compat import build_grpo_config
 from .opening_share import OpeningShare
-from .person_judge import MISTRAL_CHAT_URL, PersonJudge, http_transport
+from .person_judge import AUDIT_FIELDS, MISTRAL_CHAT_URL, PersonJudge, TextAudit, http_transport
 from .rl_bank import bank_names, build_rl_requests
 from .rl_dataset import RL_PROMPT_VARIANT, rl_rows
 from .rl_reward import TargetDetectorReward
@@ -230,6 +230,21 @@ def person_judge(config: dict) -> PersonJudge | None:
     )
 
 
+def text_audit(config: dict) -> TextAudit | None:
+    """The log-only audit configured under `reward.audit`, or None when absent."""
+    settings = (config.get("reward") or {}).get("audit")
+    if not settings:
+        return None
+    api_key = os.environ.get(settings["api_key_env"])
+    if not api_key:
+        raise SystemExit(f"audit needs the {settings['api_key_env']} environment variable")
+    return TextAudit(
+        model=settings["model"],
+        post=http_transport(api_key, settings.get("url", MISTRAL_CHAT_URL), settings["timeout_s"]),
+        max_workers=settings["max_workers"],
+    )
+
+
 def sample_and_score(
     tok,
     model,
@@ -237,6 +252,7 @@ def sample_and_score(
     config: dict,
     scorer: DetectorScorer,
     judge: PersonJudge | None,
+    audit: TextAudit | None,
     device: str,
     label: str,
 ):
@@ -262,13 +278,14 @@ def sample_and_score(
     metrics: dict = {}
     eos = tok.eos_token_id
     reward = TargetDetectorReward(
-        scorer, eos, opening_share_guard(config, window=len(samples)), judge
+        scorer, eos, opening_share_guard(config, window=len(samples)), judge, audit
     )
     rewards = reward(
         [s["raw_text"] for s in samples],
         [s["name"] for s in samples],
         completion_ids=[[] if s["truncated"] else [eos] for s in samples],
         request_id=[s["request_id"] for s in samples],
+        context=[CONTEXT_TYPE_LABELS[s["context_type"]] for s in samples],
         log_extra=extras.__setitem__,
         log_metric=metrics.__setitem__,
     )
@@ -281,6 +298,9 @@ def sample_and_score(
         strict=True,
     ):
         sample.update({"reward": r, "status": status, "p_target_mean": p, "opening_share": share})
+    for field in AUDIT_FIELDS:
+        for sample, value in zip(samples, extras[field], strict=True):
+            sample[field] = value
     return samples, metrics
 
 
@@ -362,13 +382,15 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
     if device == "cuda" and not config["model"]["quantize_4bit"]:
         model = model.to(device)
     scorer = load_scorer(config, device)
-    judge = person_judge(config)
-    reward = TargetDetectorReward(scorer, tok.eos_token_id, opening_share_guard(config), judge)
+    judge, audit = person_judge(config), text_audit(config)
+    reward = TargetDetectorReward(
+        scorer, tok.eos_token_id, opening_share_guard(config), judge, audit
+    )
     model.eval()
     torch.manual_seed(config["seed"])
 
     pre_samples, pre_metrics = sample_and_score(
-        tok, model, signal_requests, config, scorer, judge, device, "pre-RL"
+        tok, model, signal_requests, config, scorer, judge, audit, device, "pre-RL"
     )
     write_jsonl(os.path.join(work_dir, "samples_pre.jsonl"), pre_samples)
     pre = signal_summary(pre_samples, pre_metrics)
@@ -435,7 +457,7 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
     model.eval()
     model.config.use_cache = True
     post_samples, post_metrics = sample_and_score(
-        tok, trainer.model, signal_requests, config, scorer, judge, device, "post-RL"
+        tok, trainer.model, signal_requests, config, scorer, judge, audit, device, "post-RL"
     )
     write_jsonl(os.path.join(work_dir, "samples_post.jsonl"), post_samples)
     post = signal_summary(post_samples, post_metrics)
