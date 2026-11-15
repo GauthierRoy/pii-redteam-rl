@@ -39,6 +39,7 @@ from ..run_io import write_jsonl
 from .detector_scorer import DetectorScorer
 from .grpo_compat import build_grpo_config
 from .opening_share import OpeningShare
+from .person_judge import MISTRAL_CHAT_URL, PersonJudge, http_transport
 from .rl_bank import bank_names, build_rl_requests
 from .rl_dataset import RL_PROMPT_VARIANT, rl_rows
 from .rl_reward import TargetDetectorReward
@@ -214,8 +215,30 @@ def opening_share_guard(config: dict, window: int | None = None) -> OpeningShare
     )
 
 
+def person_judge(config: dict) -> PersonJudge | None:
+    """The judge configured under `reward.person_judge`, or None when absent."""
+    settings = (config.get("reward") or {}).get("person_judge")
+    if not settings:
+        return None
+    api_key = os.environ.get(settings["api_key_env"])
+    if not api_key:
+        raise SystemExit(f"person judge needs the {settings['api_key_env']} environment variable")
+    return PersonJudge(
+        model=settings["model"],
+        post=http_transport(api_key, settings.get("url", MISTRAL_CHAT_URL), settings["timeout_s"]),
+        max_workers=settings["max_workers"],
+    )
+
+
 def sample_and_score(
-    tok, model, requests, config: dict, scorer: DetectorScorer, device: str, label: str
+    tok,
+    model,
+    requests,
+    config: dict,
+    scorer: DetectorScorer,
+    judge: PersonJudge | None,
+    device: str,
+    label: str,
 ):
     """Sample G rollouts per request with the RL sampling settings and score them.
 
@@ -238,7 +261,9 @@ def sample_and_score(
     extras: dict = {}
     metrics: dict = {}
     eos = tok.eos_token_id
-    reward = TargetDetectorReward(scorer, eos, opening_share_guard(config, window=len(samples)))
+    reward = TargetDetectorReward(
+        scorer, eos, opening_share_guard(config, window=len(samples)), judge
+    )
     rewards = reward(
         [s["raw_text"] for s in samples],
         [s["name"] for s in samples],
@@ -337,12 +362,13 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
     if device == "cuda" and not config["model"]["quantize_4bit"]:
         model = model.to(device)
     scorer = load_scorer(config, device)
-    reward = TargetDetectorReward(scorer, tok.eos_token_id, opening_share_guard(config))
+    judge = person_judge(config)
+    reward = TargetDetectorReward(scorer, tok.eos_token_id, opening_share_guard(config), judge)
     model.eval()
     torch.manual_seed(config["seed"])
 
     pre_samples, pre_metrics = sample_and_score(
-        tok, model, signal_requests, config, scorer, device, "pre-RL"
+        tok, model, signal_requests, config, scorer, judge, device, "pre-RL"
     )
     write_jsonl(os.path.join(work_dir, "samples_pre.jsonl"), pre_samples)
     pre = signal_summary(pre_samples, pre_metrics)
@@ -409,7 +435,7 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
     model.eval()
     model.config.use_cache = True
     post_samples, post_metrics = sample_and_score(
-        tok, trainer.model, signal_requests, config, scorer, device, "post-RL"
+        tok, trainer.model, signal_requests, config, scorer, judge, device, "post-RL"
     )
     write_jsonl(os.path.join(work_dir, "samples_post.jsonl"), post_samples)
     post = signal_summary(post_samples, post_metrics)

@@ -14,6 +14,7 @@ so the attacker actually responds to small hidden-state changes.
 """
 
 import importlib.util
+import os
 import tempfile
 import unittest
 from unittest import mock
@@ -49,6 +50,7 @@ if HAS_STACK:
         WallClockStop,
         align_vllm_names_with_multimodal_checkpoint,
         opening_share_guard,
+        person_judge,
         planned_steps,
         restrict_vllm_to_language_model,
         timing_summary,
@@ -393,6 +395,20 @@ class TestStopAndGuardConfig(unittest.TestCase):
     def test_guard_is_off_without_reward_settings(self):
         self.assertIsNone(opening_share_guard({}))
         self.assertIsNone(opening_share_guard({"reward": None}))
+
+    def test_person_judge_is_off_without_settings_and_needs_its_key(self):
+        self.assertIsNone(person_judge({}))
+        settings = {
+            "model": "zai-glm-5-3-flash",
+            "api_key_env": "PII_REDTEAM_TEST_MISSING_KEY",
+            "timeout_s": 60,
+            "max_workers": 32,
+        }
+        with self.assertRaises(SystemExit):
+            person_judge({"reward": {"person_judge": settings}})
+        with mock.patch.dict(os.environ, {"PII_REDTEAM_TEST_MISSING_KEY": "k"}):
+            judge = person_judge({"reward": {"person_judge": settings}})
+        self.assertEqual((judge.model, judge.max_workers), ("zai-glm-5-3-flash", 32))
 
     def test_guard_reads_settings_and_window_override(self):
         settings = {

@@ -287,3 +287,60 @@ runs:
       extra_person_names_manual_share_of_valid: [0.055, 0.087]
       reward_gain_from_validity_share: 0.93
     outcome: "Update path works end to end on Qwen3.5-2B QLoRA on a T4 (30/30 steps, no OOM). Valid rate rose 0.64 -> 0.90, almost entirely the output format being learned (about 93% of the reward gain); no evidence yet of detector evasion (misses 2 -> 1 of 256, within noise). Side effects to watch: more 'Dear Name,' openers (where target detector is weakest, p ~0.82 vs ~0.97), name_dup 1 -> 7, extra person names in 5-9% of valid texts that validity v2 does not reject. The pre-RL valid rate (0.64) is far below M07b P1 at t=1.0 (~0.92); cause not isolated (top_p 1.0 vs 0.95, 4-bit fp16 vs fp32, different request set). Smoke run only: not a pilot result, one seed."
+
+  - run_id: long-20261114-004948
+    kind: rl-long
+    milestone: M08.3
+    executed: 2026-11-14
+    where: modal L4 (23.7 GB), bf16 LoRA, colocated vLLM 0.33.0
+    repo_commit: "feat/m08-rl-smoke working tree before commit 2090fec (launched with uncommitted changes)"
+    artifacts: "Modal volume pii-redteam-rl: /runs/long-20261114-004948/m08-long-20261114-005016/ (rl_smoke_report.json, samples_pre.jsonl, samples_post.jsonl, requests_signal.jsonl, checkpoints/, adapter/)"
+    checks: { pass: 6, fail: 1 }
+    metrics:
+      setup: { config: configs/m08_rl_long.yaml, reward: "D18 (r_prob, invalid -1), no guard, no judge", steps_done: 840, planned_steps: 1000, stopped_by: "135-minute wall-clock cap", lr: 2.0e-5, beta: 0.02, rollouts_per_prompt: 8, prompts_per_step: 4 }
+      cost: { wall_seconds: 8281, median_step_seconds: 9.05, median_generation_seconds: 3.76, peak_memory_gb: 11.1, estimated_usd: 2.58 }
+      failed_checks: "training reached the step cap (wall-clock stop, by design)"
+      training_reward_by_step: { "1-25": -0.06, "76-100": 0.55, "176-200": 0.79, "801-825": 0.87 }
+      training_detector_miss_rate_by_step: { "1-25": 0.03, "76-100": 0.47, "176-200": 0.85, "801-825": 0.91 }
+      pre_vs_post_heldout: { valid: ["216/256", "254/256"], detector_finds_name: ["203/216", "5/254"], opens_with_dear: [33, 253], distinct_opening_words: [51, 2], mean_words: [20.5, 43.8], unique_texts: [216, 254] }
+      opening_share_with_other_requests: { pre_max: 0.153, post_mean: 0.99 }
+      name_is_a_person_by_judge: { judge: mistral-medium-latest, pre: "200/216", post: "254/254", detector_misses_that_are_persons_post: "249/249" }
+    outcome: "Pipeline works end to end on Modal. The attacker collapsed onto one letter template (Dear <name>, ... Sincerely, <signer>) for every context type. The target detector misses the name in those letters and the name is a person in all of them, so this is one real weakness over-exploited, not usable as diverse adversarial data. Led to D20."
+
+  - run_id: pilot-opening-20261114-103332
+    kind: rl-pilot
+    milestone: M08.3
+    executed: 2026-11-14
+    where: modal L4 (23.7 GB), bf16 LoRA, colocated vLLM 0.33.0
+    repo_commit: "9c186ca (+ untracked .claude/)"
+    artifacts: "Modal volume pii-redteam-rl: /runs/pilot-opening-20261114-103332/m08-opening-20261114-103401/"
+    checks: { pass: 7, fail: 0 }
+    metrics:
+      setup: { config: "configs/m08_rl_opening.yaml at 9c186ca", reward: "D18 + opening-share guard, HARD cut: reward 0 above a share of 0.20", steps_done: 200, lr_schedule: "max_steps 1000 as the long run, stopped at 200" }
+      cost: { wall_seconds: 1953, median_step_seconds: 7.35, median_generation_seconds: 2.58, peak_memory_gb: 11.1, estimated_usd: 0.61 }
+      training_reward_by_step: { "1-25": -0.07, "76-100": 0.00, "176-200": 0.04 }
+      training_detector_miss_rate_by_step: { "1-25": 0.03, "76-100": 0.02, "176-200": 0.08 }
+      training_texts_with_zeroed_reward_by_step: { "1-25": 0.138, "26-50": 0.291, "176-200": 0.216 }
+      pre_vs_post_heldout: { valid: ["216/256", "250/256"], detector_finds_name: ["203/216", "229/250"], opens_with_dear: [33, 54], distinct_opening_words: [51, 59], mean_words: [20.5, 18.1] }
+      name_is_a_person_by_judge: { judge: mistral-medium-latest, post: "238/250", detector_misses_that_are_persons_post: "17/21" }
+    outcome: "No collapse (openings as varied as before RL, Dear pinned at the 0.20 threshold) but no attack learned either: reward -0.07 -> +0.04. The hard cut was too tight in training: the base share swings around 0.15 from window to window, so 14-29% of valid texts lost their reward. Replaced by a linear scale-down (0.25 -> 0.50)."
+
+  - run_id: pilot-opening-20261114-124322
+    kind: rl-pilot
+    milestone: M08.3
+    executed: 2026-11-14
+    where: modal L4 (23.7 GB), bf16 LoRA, colocated vLLM 0.33.0
+    repo_commit: "3e9117f (+ untracked .claude/)"
+    artifacts: "Modal volume pii-redteam-rl: /runs/pilot-opening-20261114-124322/m08-opening-20261114-124349/"
+    checks: { pass: 7, fail: 0 }
+    metrics:
+      setup: { config: "configs/m08_rl_opening.yaml at 3e9117f", reward: "D18 + opening-share guard, SOFT: full reward up to a share of 0.25, linear to 0 at 0.50", steps_done: 400, lr_schedule: "max_steps 1000 as the long run, stopped at 400" }
+      cost: { wall_seconds: 3619, median_step_seconds: 7.6, median_generation_seconds: 2.68, peak_memory_gb: 11.1, estimated_usd: 1.13 }
+      training_reward_by_step: { "1-50": -0.04, "151-200": 0.07, "251-300": 0.22, "301-350": 0.68, "351-400": 0.77 }
+      training_detector_miss_rate_by_step: { "1-50": 0.03, "151-200": 0.11, "251-300": 0.33, "301-350": 0.70, "351-400": 0.88 }
+      training_kl_by_step: { "1-50": 0.061, "251-300": 0.192, "351-400": 0.541 }
+      pre_vs_post_heldout: { valid: ["216/256", "240/256"], detector_finds_name: ["203/216", "7/240"], opens_with_dear: [33, 84], distinct_opening_words: [51, 27], mean_words: [20.5, 34.8] }
+      name_is_a_person_by_judge: { judge: mistral-medium-latest, pre: "200/216", post: "4/240", detector_misses_that_are_persons_post: "3/233" }
+      judge_sanity: { short_eval_v2_persons_by_construction: "142/150 judged person" }
+    outcome: "INVALID as adversarial data. The guard held (27 opening words, Dear 84/240) and learning was slow for 250 steps, then the attacker found a different exploit: the requested name used as a place or brand (the Olimpico, the Mulaton store, the El Bez clinic). The target detector rightly ignores those, so they score as misses. The validity rules did not check that the name is a person. Led to D21."
+

@@ -8,6 +8,10 @@ get INVALID_REWARD, strictly below the valid range [0, 1].
 
 Optional collapse guard (D20): the detector reward of a valid text is scaled down, to zero
 at worst, when its opening word is shared by too many texts written for other requests.
+
+Optional person judge (D21): a text that passes the validity rules but uses the requested
+name as something other than a person is invalid (NOT_PERSON_STATUS), so a detector that
+rightly ignores a place or brand name is not counted as fooled.
 """
 
 from __future__ import annotations
@@ -18,9 +22,12 @@ from typing import Protocol
 from ..probe_metrics import reward_variants
 from ..validity_v2 import classify_sample_v2
 from .opening_share import OpeningShare, opening_word
+from .person_judge import PERSON, UNPARSED, PersonJudge
 
 INVALID_REWARD = -1.0
 SCORER_TRUNCATED = "invalid:scorer_truncated"
+NOT_PERSON_STATUS = "invalid:name_not_person"
+JUDGE_UNPARSED_STATUS = "invalid:judge_unparsed"
 
 
 class Scorer(Protocol):
@@ -42,11 +49,16 @@ class TargetDetectorReward:
     __name__ = "target_detector_reward"
 
     def __init__(
-        self, scorer: Scorer, eos_token_id: int, opening_share: OpeningShare | None = None
+        self,
+        scorer: Scorer,
+        eos_token_id: int,
+        opening_share: OpeningShare | None = None,
+        person_judge: PersonJudge | None = None,
     ) -> None:
         self.scorer = scorer
         self.eos_token_id = eos_token_id
         self.opening_share = opening_share
+        self.person_judge = person_judge
 
     def __call__(
         self,
@@ -64,6 +76,7 @@ class TargetDetectorReward:
             classify_sample_v2(completion_text(c), n, t)
             for c, n, t in zip(completions, name, truncated, strict=True)
         ]
+        self._reject_non_person_names(samples, name)
         self.scorer.score(samples)
         self._flag_repeated_openings(samples, name, request_id or name)
         rewards = [self._reward(sample) for sample in samples]
@@ -75,6 +88,20 @@ class TargetDetectorReward:
             for key, value in self.metrics(samples).items():
                 log_metric(key, value)
         return rewards
+
+    def _reject_non_person_names(self, samples: list[dict], names: list[str]) -> None:
+        """Valid samples whose name is not used as a person become invalid before scoring."""
+        if self.person_judge is None:
+            return
+        valid = [i for i, sample in enumerate(samples) if sample["status"] == "valid"]
+        verdicts = self.person_judge.verdicts(
+            [names[i] for i in valid], [samples[i]["text"] for i in valid]
+        )
+        for i, verdict in zip(valid, verdicts, strict=True):
+            if verdict != PERSON:
+                samples[i]["status"] = (
+                    JUDGE_UNPARSED_STATUS if verdict == UNPARSED else NOT_PERSON_STATUS
+                )
 
     def _flag_repeated_openings(
         self, samples: list[dict], names: list[str], requests: list[str]
@@ -112,6 +139,7 @@ class TargetDetectorReward:
             "valid_rate": statuses["valid"] / total,
             "truncated_rate": statuses["invalid:truncated"] / total,
             "true_miss_rate": outcomes["complete_miss"] / total,
+            "not_person_rate": statuses[NOT_PERSON_STATUS] / total,
         }
         shares = [s["opening_share"] for s in samples if s.get("opening_share") is not None]
         if shares:

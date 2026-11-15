@@ -1,6 +1,10 @@
 # STATE — pii-redteam-rl
 
-- **Date:** 2026-11-13
+- **Date:** 2026-11-15
+- **Now (M08.3):** three Modal RL runs done, none usable as adversarial data yet; reward amended twice
+  (D20 opening-share guard, D21 person judge). Next: one 400-step pilot with both
+  (`configs/m08_rl_person.yaml`). Details in the first section below. Model names changed on
+  2026-11-14 (D19, `docs/GLOSSARY.md`).
 - **Milestone:** M07b done: target detector (`d1v2-20261110-075731`, epoch 2) FROZEN 2026-11-10 and the
   M07a probe go/no-go passes against it at temperature 1.0 (M08 gate formally open).
   Base detector frozen 2026-10-10 (dev span-F1 0.9633). M08.1 done as a recommendation (TRL
@@ -44,6 +48,44 @@
   re-imported through `load_bank` with pool provenance attached. All 200 entity values
   verified requestable. Same seed + pool version reproduces the bank; regeneration is
   never assumed.
+
+## M08.3 Modal runs: collapse, then a non-person exploit (2026-11-14/15)
+
+Three runs on one Modal L4, same seed, bank, sampling and optimizer; only the reward differs.
+Full numbers in `EXPERIMENTS.yaml`; decisions D20 and D21.
+
+| Run | Reward | Steps | Target detector finds the name (held-out, post) | Name is a person (judge) | Verdict |
+|---|---|---|---|---|---|
+| `long-20261114-004948` | D18 | 840 | 5/254 | 254/254 | One real weakness, over-exploited: every text is a "Dear <name>" letter |
+| `pilot-opening-20261114-103332` | D18 + hard opening guard (0 above 0.20) | 200 | 229/250 | 238/250 | No collapse, nothing learned |
+| `pilot-opening-20261114-124322` | D18 + soft opening guard (0.25 -> 0.50) | 400 | 7/240 | 4/240 | Invalid: name used as a place or brand |
+
+Pre-RL reference on the same 32 held-out requests: the target detector finds 203/216 names;
+the name is a person in 200/216.
+
+- **Long run.** Reward saturated by step 200 (0.79; detector miss rate 0.85). The letters are
+  genuine person mentions that the target detector misses, so the weakness is real, but it is
+  one weakness out of ten context types.
+- **Context adherence is not checked (decided against, D20).** Three API judges recovered the
+  labelled context type of `short_eval_v2` rows only 25-37% of the time (top-3: 67-77%). The
+  labelled texts themselves only loosely follow their type ("support ticket" rows are prose
+  about a ticket).
+- **Opening-share guard (D20).** For each valid text: share of the last 256 valid texts written
+  for other requests that start with the same word. On the long run's samples: at most 0.15
+  pre-RL, 0.99 post-RL. The hard cut at 0.20 removed the reward of 14-29% of valid texts in
+  training (the base share swings around 0.15) and nothing was learned in 200 steps. The soft
+  version keeps the full reward up to 0.25 and scales it to zero at 0.50.
+- **Non-person exploit.** With the soft guard, learning was slow for 250 steps, then reward
+  jumped to 0.77 by step 400: "a great taco spot near the Olimpico", "the nearest Mulaton
+  store", "the El Bez clinic". The validity rules never checked that the name is a person.
+- **Person judge (D21).** `zai-glm-5-3-flash` on the Mistral API, asked once per valid text
+  inside the reward; a non-person use is invalid. It kept 248/250 persons and rejected 234/236
+  non-persons on labelled texts; about 2.5-5 s per 32 calls when measured from a laptop.
+- **Spend.** Long run about $2.58, pilots about $0.61 and $1.13 (launcher estimates; Modal
+  billing lags). Monthly Modal budget raised to $30 by the owner on 2026-11-14.
+- **Not done.** No diversity measure beyond the opening word. The extra-person-name gap
+  (signers such as "Dr. Sarah") is still open. Whether the "Dear" weakness is the greeting,
+  the length or the sign-off has not been isolated.
 
 ## M08.2 update-path validation done on a tiny model (2026-11-13; trainer = TRL `GRPOTrainer`)
 

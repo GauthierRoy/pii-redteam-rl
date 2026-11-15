@@ -4,7 +4,13 @@ import json
 import unittest
 
 from pii_redteam.training.opening_share import OpeningShare
-from pii_redteam.training.rl_reward import INVALID_REWARD, TargetDetectorReward
+from pii_redteam.training.person_judge import NOT_PERSON, PERSON, UNPARSED
+from pii_redteam.training.rl_reward import (
+    INVALID_REWARD,
+    JUDGE_UNPARSED_STATUS,
+    NOT_PERSON_STATUS,
+    TargetDetectorReward,
+)
 
 EOS = 7
 GOOD_TEXT = "Hi Lucas, could you please call me back about the invoice we discussed yesterday?"
@@ -26,6 +32,16 @@ class FakeScorer:
             p_target = sample["p_target_mean"]
             if p_target is not None:
                 sample["outcome"] = "complete_miss" if p_target < 0.5 else "exact_hit"
+
+
+class FakeJudge:
+    def __init__(self, verdict_by_text: dict[str, str]) -> None:
+        self.verdict_by_text = verdict_by_text
+        self.asked: list[tuple[str, str]] = []
+
+    def verdicts(self, names: list[str], texts: list[str]) -> list[str]:
+        self.asked += list(zip(names, texts, strict=True))
+        return [self.verdict_by_text[text] for text in texts]
 
 
 def message(text: str) -> str:
@@ -201,6 +217,52 @@ class TestTargetDetectorReward(unittest.TestCase):
         )
         self.assertEqual([round(r, 1) for r in rewards], [0.9] * 6)
         self.assertNotIn("repeated_opening_rate", logged)
+
+    def test_name_used_as_a_place_is_invalid_and_never_scored(self):
+        place = "I just found a great taco spot near the Lucas for our movie night tonight."
+        scorer = FakeScorer({GOOD_TEXT: 0.1})
+        judge = FakeJudge({GOOD_TEXT: PERSON, place: NOT_PERSON})
+        extra, logged = {}, {}
+        rewards = TargetDetectorReward(scorer, EOS, person_judge=judge)(
+            [message(GOOD_TEXT), message(place)],
+            ["Lucas", "Lucas"],
+            log_extra=extra.__setitem__,
+            log_metric=logged.__setitem__,
+        )
+        self.assertAlmostEqual(rewards[0], 0.9)
+        self.assertEqual(rewards[1], INVALID_REWARD)
+        self.assertEqual(extra["status"], ["valid", NOT_PERSON_STATUS])
+        self.assertEqual(scorer.scored_texts, [GOOD_TEXT])
+        self.assertEqual(logged["not_person_rate"], 0.5)
+        self.assertEqual(logged["valid_rate"], 0.5)
+
+    def test_judge_only_sees_texts_that_pass_the_validity_rules(self):
+        judge = FakeJudge({GOOD_TEXT: PERSON})
+        TargetDetectorReward(FakeScorer({GOOD_TEXT: 0.1}), EOS, person_judge=judge)(
+            [message(GOOD_TEXT), "not json", message("Hi Lucas")], ["Lucas"] * 3
+        )
+        self.assertEqual(judge.asked, [("Lucas", GOOD_TEXT)])
+
+    def test_unparsed_judge_answer_is_invalid_under_its_own_status(self):
+        judge = FakeJudge({GOOD_TEXT: UNPARSED})
+        extra = {}
+        rewards = TargetDetectorReward(FakeScorer({}), EOS, person_judge=judge)(
+            [message(GOOD_TEXT)], ["Lucas"], log_extra=extra.__setitem__
+        )
+        self.assertEqual(rewards, [INVALID_REWARD])
+        self.assertEqual(extra["status"], [JUDGE_UNPARSED_STATUS])
+
+    def test_rejected_texts_do_not_enter_the_opening_window(self):
+        names, texts = self.collapse_batch()
+        judge = FakeJudge(
+            {t: (NOT_PERSON if t.startswith("Dear Chidi") else PERSON) for t in texts}
+        )
+        guard = OpeningShare(
+            full_reward_until=0.5, zero_reward_from=1.0, window=64, min_other_texts=2
+        )
+        reward = TargetDetectorReward(FakeScorer(dict.fromkeys(texts, 0.1)), EOS, guard, judge)
+        reward([message(t) for t in texts], names)
+        self.assertEqual(len(guard.recent), 4)
 
     def test_trl_expects_a_function_name_for_logging(self):
         self.assertEqual(

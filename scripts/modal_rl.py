@@ -12,7 +12,9 @@ TRL colocated vLLM with the attacker's weights renamed to the multimodal Qwen3.5
 vllm_lm = the same plus vLLM loading only the language model (no vision tower).
 
 Capped pilot of any repo config (Modal kills it after `PILOT_TIMEOUT_S`):
-    modal run --detach scripts/modal_rl.py::pilot --config configs/m08_rl_opening.yaml
+    modal run --detach scripts/modal_rl.py::pilot --config configs/m08_rl_person.yaml
+The pilot function reads the Modal secret `mistral` (one-time setup, key never in the repo):
+    modal secret create mistral MISTRAL_API_KEY=<key>
 
 Cost is bounded by `BENCH_TIMEOUT_S` per arm: Modal kills the container at the timeout.
 """
@@ -47,7 +49,8 @@ LONG_CONFIG = f"{REPO_DIR}/configs/m08_rl_long.yaml"
 GPU = "L4"
 BENCH_TIMEOUT_S = 900
 LONG_TIMEOUT_S = 9600
-PILOT_TIMEOUT_S = 5400
+PILOT_TIMEOUT_S = 6600
+JUDGE_SECRET = "mistral"  # holds MISTRAL_API_KEY for the person judge (reward.person_judge)
 L4_CONTAINER_USD_PER_HOUR = 1.12  # approximate list prices: L4 + 4 CPU + 16 GiB
 COMMIT_INTERVAL_S = 120
 
@@ -114,7 +117,11 @@ GPU_FUNCTION: dict[str, Any] = {
     "volumes": {VOLUME_DIR: volume},
 }
 LONG_GPU_FUNCTION: dict[str, Any] = {**GPU_FUNCTION, "timeout": LONG_TIMEOUT_S}
-PILOT_GPU_FUNCTION: dict[str, Any] = {**GPU_FUNCTION, "timeout": PILOT_TIMEOUT_S}
+PILOT_GPU_FUNCTION: dict[str, Any] = {
+    **GPU_FUNCTION,
+    "timeout": PILOT_TIMEOUT_S,
+    "secrets": [modal.Secret.from_name(JUDGE_SECRET)],
+}
 
 
 def sha256_of(path: str) -> str:
