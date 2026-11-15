@@ -12,7 +12,7 @@ work_dir: artifacts/m08
 splits_dir: artifacts/splits
 locks:
   final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
-max_minutes: 95                    # hard wall-clock cap on training, then save and stop
+max_minutes: 75                    # hard wall-clock cap on training, then save and stop
 stop_at_step: 400                  # end here; max_steps below still sets the lr schedule
 resume_from_checkpoint: null
 vllm_multimodal_names: true        # sync the text-only attacker into vLLM's multimodal Qwen3.5
@@ -47,8 +47,8 @@ reward:
     zero_reward_from: 0.50         # reward falls linearly from full to zero between the two
     window: 256                    # most recent valid texts = 8 steps of 32
     min_other_texts: 128           # no flag until this many texts from other requests are seen
-  person_judge:                    # D21; on 486 labelled texts: 248/250 persons kept, 234/236 non-persons rejected
-    model: zai-glm-5-3-flash
+  person_judge:                    # D21; on 486 labelled texts: 242/250 persons kept, 236/236 non-persons rejected
+    model: mistral-medium-2604     # Mistral Medium 3.5, dated id so the judge does not change silently
     api_key_env: MISTRAL_API_KEY
     timeout_s: 60
     max_workers: 32

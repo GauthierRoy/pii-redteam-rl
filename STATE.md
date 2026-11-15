@@ -78,9 +78,10 @@ the name is a person in 200/216.
 - **Non-person exploit.** With the soft guard, learning was slow for 250 steps, then reward
   jumped to 0.77 by step 400: "a great taco spot near the Olimpico", "the nearest Mulaton
   store", "the El Bez clinic". The validity rules never checked that the name is a person.
-- **Person judge (D21).** `zai-glm-5-3-flash` on the Mistral API, asked once per valid text
-  inside the reward; a non-person use is invalid. It kept 248/250 persons and rejected 234/236
-  non-persons on labelled texts; about 2.5-5 s per 32 calls when measured from a laptop.
+- **Person judge (D21).** `mistral-medium-2604` on the Mistral API, asked once per valid text
+  inside the reward; a non-person use is invalid. It kept 242/250 persons on labelled texts, at
+  about 0.7 s per 32 calls from a laptop. `zai-glm-5-3-flash` kept 248/250 but takes 2-5 s per
+  32 calls, which costs more GPU time than it saves in API price.
 - **Spend.** Long run about $2.58, pilots about $0.61 and $1.13 (launcher estimates; Modal
   billing lags). Monthly Modal budget raised to $30 by the owner on 2026-11-14.
 - **Not done.** No diversity measure beyond the opening word. The extra-person-name gap
