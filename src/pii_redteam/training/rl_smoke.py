@@ -316,6 +316,9 @@ def sample_and_score(
         judge,
         audit,
         detector_reward=detector_reward(config),
+        reject_other_person=bool(
+            ((config.get("reward") or {}).get("audit") or {}).get("reject_other_person")
+        ),
     )
     rewards = reward(
         [s["raw_text"] for s in samples],
@@ -418,6 +421,13 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
     tok, model = load_attacker(config, dtype)
     if device == "cuda" and not config["model"]["quantize_4bit"]:
         model = model.to(device)
+    init_adapter = (config.get("attacker") or {}).get("init_adapter")
+    if init_adapter:
+        # continue training an earlier attacker's LoRA instead of a fresh one
+        from peft import PeftModel
+
+        model = PeftModel.from_pretrained(model, init_adapter, is_trainable=True)
+        report["init_adapter"] = init_adapter
     scorer = load_scorer(config, device)
     judge, audit = person_judge(config), text_audit(config)
     reward = TargetDetectorReward(
@@ -428,6 +438,9 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
         audit,
         record=TrainTextLog(os.path.join(work_dir, "train_texts.jsonl")),
         detector_reward=detector_reward(config),
+        reject_other_person=bool(
+            ((config.get("reward") or {}).get("audit") or {}).get("reject_other_person")
+        ),
     )
     model.eval()
     torch.manual_seed(config["seed"])
@@ -468,7 +481,9 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
         args=args,
         train_dataset=Dataset.from_list(rl_rows(train_requests)),
         processing_class=tok,
-        peft_config=LoraConfig(
+        peft_config=None
+        if init_adapter
+        else LoraConfig(
             r=lora["r"],
             lora_alpha=lora["alpha"],
             target_modules=lora["target_modules"],

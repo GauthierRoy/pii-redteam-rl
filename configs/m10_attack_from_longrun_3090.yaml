@@ -1,0 +1,86 @@
+# Night run 2 (2026-11-18, RTX 3090): as configs/m10_attack_person_3090.yaml, but the attacker
+# continues from the long run's LoRA (long-20261114-004948, the "Dear" attacker) instead of a
+# fresh one. Its Dear letters no longer pay against the retrained detector; does a trained
+# attacker move on to a new weakness faster than the base model?
+run_id_prefix: m10-attack-from-longrun
+model_id: Qwen/Qwen3.5-2B
+seed: 20261113
+work_dir: /home/gauthier/runs
+splits_dir: artifacts/splits
+locks:
+  final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
+max_minutes: 100                   # hard cap; everything must stop before 09:00
+stop_at_step: 600                  # longer than the 400-step pilots; lr schedule still from max_steps
+resume_from_checkpoint: null
+vllm_multimodal_names: true        # sync the text-only attacker into vLLM's multimodal Qwen3.5
+
+attacker:
+  init_adapter: /home/gauthier/attackers/longrun-20261114   # copied from the Modal volume
+
+bank:
+  seed: 20261113
+  n_signal: 32                     # same held-out pre/post requests as the long run
+  n_train: 2000                    # same bank as the long run
+  exclude_banks:
+    - banks/v2_prompting/spark_seed20260920_v2_n20.jsonl
+
+detector:
+  path: /home/gauthier/runs/m10-retrain-rl-pilot-20261115-174807/d1-epoch3   # retrained detector (epoch 3)
+  sha256: 4755db737176bc63148531036a9d693457e38bd659974e4004e0a7b17e3d8233
+
+model:
+  quantize_4bit: false
+
+lora:
+  r: 16
+  alpha: 32
+  target_modules: all-linear
+
+sampling:
+  temperature: 1.0
+  top_p: 1.0
+  batch_prompts: 4
+
+reward:
+  detector_score:                  # D23: clip(1 + log((1-p)/p) / span, 0, 1); p <= 0.5 pays 1
+    kind: log_odds
+    span: 10.0                     # p = 0.9998 -> 0.15, 0.99 -> 0.54, 0.9 -> 0.78
+  opening_share:                   # D20; calibrated on long-20261114-004948 (pre max 0.15, post 0.99)
+    full_reward_until: 0.25        # share of other requests' texts with the same opening word
+    zero_reward_from: 0.50         # reward falls linearly from full to zero between the two
+    window: 256                    # most recent valid texts = 8 steps of 32
+    min_other_texts: 128           # no flag until this many texts from other requests are seen
+  person_judge:                    # D21; on 486 labelled texts: 242/250 persons kept, 236/236 non-persons rejected
+    model: mistral-medium-2604     # Mistral Medium 3.5, dated id so the judge does not change silently
+    api_key_env: MISTRAL_API_KEY
+    timeout_s: 60
+    max_workers: 32
+  audit:                           # log only, never changes the reward; accuracy not measured
+    model: mistral-medium-2604     # asked while the person judge runs: another person's name,
+    api_key_env: MISTRAL_API_KEY   # natural message, fits the requested kind of message
+    timeout_s: 30
+    max_workers: 32
+    reject_other_person: true      # night run: a text naming another person is invalid
+
+grpo:
+  num_generations: 8
+  per_device_train_batch_size: 8
+  gradient_accumulation_steps: 4
+  max_completion_length: 192
+  max_steps: 1000
+  learning_rate: 2.0e-5
+  beta: 0.02
+  scale_rewards: false
+  gradient_checkpointing: true
+  save_steps: 50
+  save_total_limit: 3
+  use_vllm: true
+  vllm_mode: colocate
+  vllm_gpu_memory_utilization: 0.3
+  vllm_max_model_length: 1024
+
+thresholds:                        # health checks, not learning claims
+  pre_valid_rate_min: 0.7
+  peak_memory_fraction_max: 0.92
+  valid_rate_drop_max: 0.10
+  skipped_update_fraction_max: 0.5

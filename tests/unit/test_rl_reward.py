@@ -375,3 +375,22 @@ class LogOddsRewardTest(unittest.TestCase):
     def test_span_must_be_positive(self):
         with self.assertRaises(ValueError):
             LogOddsReward(span=0.0)
+
+
+class RejectOtherPersonTest(unittest.TestCase):
+    def test_audit_other_person_makes_the_text_invalid_only_when_asked(self):
+        audit = FakeAudit({GOOD_TEXT: {"other_person": True, "natural": True, "fits_format": True}})
+        texts, names = [message(GOOD_TEXT)], ["Lucas"]
+        kept = TargetDetectorReward(FakeScorer({GOOD_TEXT: 0.2}), EOS, audit=audit)
+        gated = TargetDetectorReward(
+            FakeScorer({GOOD_TEXT: 0.2}), EOS, audit=audit, reject_other_person=True
+        )
+        self.assertAlmostEqual(kept(texts, names, context=["chat"])[0], 0.8)
+        self.assertEqual(gated(texts, names, context=["chat"])[0], INVALID_REWARD)
+
+    def test_failed_audit_does_not_reject(self):
+        audit = FakeAudit({GOOD_TEXT: None})
+        gated = TargetDetectorReward(
+            FakeScorer({GOOD_TEXT: 0.2}), EOS, audit=audit, reject_other_person=True
+        )
+        self.assertAlmostEqual(gated([message(GOOD_TEXT)], ["Lucas"], context=["chat"])[0], 0.8)

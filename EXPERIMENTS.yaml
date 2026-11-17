@@ -489,3 +489,43 @@ runs:
       logodds_post_texts_missed_of_245: { target: 17, template: 3, plain: 1, gf: 10, rl: 23 }
       short_eval_neg_v1_flagged_of_111: { target: 3, template: 7, plain: 7, gf: 5, rl: 4 }
     outcome: "The PERSON reading changes the numbers by at most a few rows and keeps every ranking of the BIO-argmax tables. New detail: the RL-retrained detector misses more AI4Privacy dev names (147 vs 127 for the target detector) and the most log-odds-run texts (23/245), while its dev F1 rises through precision. Span F1 on logodds_post is low for all detectors because they tag the attacker's longer name ('Sarah Hentzy') against a surname-only gold span; use complete misses there."
+
+  - run_id: m10-attack-person-20261117-231822
+    kind: rl-pilot
+    milestone: M10 (pilot)
+    executed: 2026-11-18
+    where: RTX 3090 (ssh rtx3090), sharing the GPU with the label-scheme ablation
+    repo_commit: "504f060 + audit gate (configs/m10_attack_person_3090.yaml)"
+    artifacts: "rtx3090:~/runs/m10-attack-person-20261117-231822/ (train_texts.jsonl, samples_pre.jsonl; no post samples, no adapter)"
+    checks: { pass: 0, fail: 1 }   # crashed at step 155: GPU fell off the bus (CUDA unspecified launch failure, then nvidia-smi "No devices were found")
+    metrics:
+      setup: { reward: "D23 log-odds on the D25 PERSON reading", gates: "D21 person judge, D20 guard, audit other_person now rejects (invalid:other_person)", detector: "retrained detector epoch 3", planned_steps: 600 }
+      training_by_25_steps: { mean_p: [0.998, 0.991, 0.999, 0.998, 0.999, 0.995, 0.997], misses: [0, 6, 1, 1, 0, 3, 0], mean_reward: [-0.19, 0.01, 0.03, 0.02, 0.00, 0.05, 0.13], dear_openings: [46, 51, 48, 106, 153, 171, 29] }
+      pre_heldout: { valid: "157/256", misses: 2, rejected_other_person: 24 }
+    outcome: "No exploit and no weakness within 155 steps: the gates held (no B/I or second-name trick), detector probability stayed near 0.998, and the reward rose through validity only. The attacker drifted back towards Dear letters (46 -> 171 per 25 steps) although the retrained detector catches them. Inconclusive: the D23 run only moved after step 100-150."
+
+  - run_id: ablation-label-scheme-20261117-2323
+    kind: detector-training
+    milestone: M12 (ablation, limitation L1)
+    executed: 2026-11-18
+    where: RTX 3090
+    repo_commit: "504f060 + scripts/train_label_scheme_ablation.py"
+    artifacts: "rtx3090:~/runs/ablation-bio-*/ (incomplete)"
+    checks: { pass: 0, fail: 1 }   # killed in epoch 1 of the BIO twin by the same GPU failure
+    metrics:
+      setup: { model: "answerdotai/ModernBERT-base from scratch", schemes: ["bio", "io"], lr: 5.0e-5, batch: 16, epochs: 3, seed: 20260920 }
+      speed_shared_gpu: "about 45 min per epoch while sharing the GPU with the RL run"
+    outcome: "Not run to completion. To repeat alone on a healthy GPU: about 2 x 1.5-2 h."
+
+  - run_id: probe-first-name-start-20261118
+    kind: evaluation
+    milestone: M10 (pilot)
+    executed: 2026-11-18
+    where: RTX 3090 CPU (GPU unavailable)
+    repo_commit: "504f060"
+    artifacts: "rtx3090:~/runs/probe_first_name_start_20261118.json"
+    checks: { pass: 1, fail: 0 }
+    metrics:
+      setup: "20 common first names x 6 fixed templates, complete misses per detector (PERSON reading)"
+      misses_of_20: { start_comma: { target: 0, template: 0, plain: 1, gf: 1, rl: 2 }, start_verb: { target: 0, template: 0, plain: 0, gf: 0, rl: 1 }, start_wrote: { all: 0 }, hi_comma: { target: 3, others: 0 }, mid_sentence: { target: 3, template: 0, plain: 0, gf: 0, rl: 3 }, dear: { target: 13, template: 3, plain: 0, gf: 0, rl: 0 } }
+    outcome: "No real 'bare first name at the start' weakness (hinted by 'James, please...' and 'Olivia arrived...' misses in RL texts): at most 2/20 for any detector. The Dear weakness of the target detector shows clearly (13/20)."

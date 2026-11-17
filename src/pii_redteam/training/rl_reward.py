@@ -44,6 +44,7 @@ INVALID_REWARD = -1.0
 SCORER_TRUNCATED = "invalid:scorer_truncated"
 NOT_PERSON_STATUS = "invalid:name_not_person"
 JUDGE_UNPARSED_STATUS = "invalid:judge_unparsed"
+OTHER_PERSON_STATUS = "invalid:other_person"
 
 
 def probability_reward(p: float) -> float:
@@ -91,6 +92,7 @@ class TargetDetectorReward:
         audit: TextAudit | None = None,
         record: Callable[[list[dict]], None] | None = None,
         detector_reward: Callable[[float], float] = probability_reward,
+        reject_other_person: bool = False,
     ) -> None:
         self.scorer = scorer
         self.eos_token_id = eos_token_id
@@ -99,6 +101,7 @@ class TargetDetectorReward:
         self.audit = audit
         self.record = record
         self.detector_reward = detector_reward
+        self.reject_other_person = reject_other_person
 
     def __call__(
         self,
@@ -118,6 +121,12 @@ class TargetDetectorReward:
             for c, n, t in zip(completions, name, truncated, strict=True)
         ]
         self._judge_texts(samples, name, context)
+        if self.reject_other_person:
+            # The augmentation sets reject such texts, so the attacker must not earn on them
+            # (94% of the D24 exploit texts named another person). A failed audit (None) passes.
+            for sample in samples:
+                if sample["status"] == "valid" and (sample.get("audit") or {}).get("other_person"):
+                    sample["status"] = OTHER_PERSON_STATUS
         self.scorer.score(samples)
         self._flag_repeated_openings(samples, name, request_id or name)
         rewards = [self._reward(sample) for sample in samples]
@@ -212,6 +221,7 @@ class TargetDetectorReward:
             "truncated_rate": statuses["invalid:truncated"] / total,
             "true_miss_rate": outcomes["complete_miss"] / total,
             "not_person_rate": statuses[NOT_PERSON_STATUS] / total,
+            "other_person_rejected_rate": statuses[OTHER_PERSON_STATUS] / total,
         }
         audited = [s["audit"] for s in samples if s["status"] == "valid" and s.get("audit")]
         if audited:

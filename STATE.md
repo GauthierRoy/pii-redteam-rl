@@ -142,6 +142,15 @@ the name is a person in 200/216.
   exploit. No retraining; scoring, reward and evaluation now use 1 - P(O) and merged PERSON
   runs. Limitation L1 in `docs/LIMITATIONS.md`. Next: re-score the four-way comparison, then
   the next attack.
+- **Night of 2026-11-18 on the RTX 3090 (owner's go-ahead until 09:00).** Night run 1 (D23 log-odds
+  + D25 PERSON reading + audit gate rejecting texts that name another person) ran 155 steps: no
+  exploit, no weakness, probability near 0.998; the attacker drifted back to Dear letters. At
+  about 00:45 the GPU fell off the bus again (second time; the attack and the label-scheme
+  ablation were sharing it, 16.5 GB, 100%), killing both. No sudo, so no reboot: the rest of the
+  night was CPU only. A CPU probe found no "bare first name at the start" weakness (<= 2/20).
+  Ready to rerun once the GPU is back: `configs/m10_attack_person_3090.yaml` (600 steps),
+  `configs/m10_attack_from_longrun_3090.yaml` (continues the long-run attacker),
+  `scripts/train_label_scheme_ablation.py` (BIO vs PERSON/O twins). Run one job at a time.
 - **Spend.** Long run about $2.58, pilots about $0.61, $1.13 and $1.32, attack on the retrained
   detector $1.30 (launcher estimates; Modal
   billing lags). Monthly Modal budget raised to $30 by the owner on 2026-11-14.
