@@ -1,0 +1,57 @@
+# M06 non-RL baselines: the BASE attacker (Qwen3.5-2B, no adapter; M05 dropped the SFT stage, so
+# the base model is both the ordinary-generation baseline and the RL starting point) on the SAME
+# 600 requests as m09_rl_generate (bank seed 20261115, names never seen by the RL run), with the
+# same prompt, sampling, validity rules, person judge and audit. 4 samples per request make one
+# candidate pool for both arms (scripts/finalize_base_aug_v1.py):
+#   plain_aug_v1 = the first sample of each request when accepted (ordinary generation, M06.2)
+#   gf_aug_v1    = the hardest accepted samples by target-detector probability (M06.3)
+# Paths are for the RTX 3090 (ssh rtx3090); MISTRAL_API_KEY from ~/.config/pii-redteam/mistral.env.
+
+run_id_prefix: m06-base-generate
+model_id: Qwen/Qwen3.5-2B
+seed: 20261115
+work_dir: /home/gauthier/runs
+splits_dir: artifacts/splits
+locks:
+  final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
+
+attacker:
+  adapter_path: null               # base attacker
+
+bank:                              # identical to configs/m09_rl_generate.yaml
+  seed: 20261115
+  n: 600
+  prefix: aug
+  exclude_banks:
+    - banks/v2_prompting/spark_seed20260920_v2_n20.jsonl
+  exclude_rl_bank:
+    seed: 20261113
+    n: 2032
+
+detector:                          # target detector (the RL reward model)
+  path: /home/gauthier/pii-redteam-rl/artifacts/d1-frozen-d1v2-20261110-075731
+  sha256: ebfe4c693958c84cdb093d1a55b535e51f1ba0563a702e69e3c97bf5a36a4143
+
+model:
+  quantize_4bit: false
+
+sampling:
+  temperature: 1.0
+  top_p: 1.0
+  batch_prompts: 16
+
+grpo:                              # read by the shared sampling code
+  num_generations: 4
+  max_completion_length: 192
+
+reward:
+  person_judge:
+    model: mistral-medium-2604
+    api_key_env: MISTRAL_API_KEY
+    timeout_s: 60
+    max_workers: 32
+  audit:
+    model: mistral-medium-2604
+    api_key_env: MISTRAL_API_KEY
+    timeout_s: 30
+    max_workers: 32

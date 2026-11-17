@@ -23,7 +23,7 @@ import time
 import torch
 from transformers import AutoModelForCausalLM, AutoModelForTokenClassification, AutoTokenizer
 
-from pii_redteam.detector import bio_labels_from_spans, spans_from_bio_labels, trim_span_whitespace
+from pii_redteam.detector import bio_labels_from_spans, person_spans, trim_span_whitespace
 from pii_redteam.probe_metrics import (
     PROMPT_MARKER,
     classify_sample,
@@ -209,12 +209,14 @@ def _score_with_detector(detector, detector_tok, samples: list[dict], max_length
         attn = torch.tensor(enc["attention_mask"]).to(detector.device)
         logits = detector(input_ids=input_ids, attention_mask=attn).logits.float()
         probs = torch.softmax(logits, dim=-1)
+        o_id = {lab: i for i, lab in detector.config.id2label.items()}["O"]
         for j, s in enumerate(chunk):
             offsets = enc["offset_mapping"][j]
-            labels = [detector.config.id2label[p] for p in logits[j].argmax(-1).tolist()]
+            # PERSON / not-PERSON reading (D25, docs/LIMITATIONS.md L1): B and I are summed.
+            p_person = (1.0 - probs[j, :, o_id]).tolist()
             pred = [
                 (sp["start"], sp["end"])
-                for sp in trim_span_whitespace(s["text"], spans_from_bio_labels(offsets, labels))
+                for sp in trim_span_whitespace(s["text"], person_spans(offsets, p_person))
             ]
             gold_labels = bio_labels_from_spans(
                 offsets,
@@ -229,8 +231,7 @@ def _score_with_detector(detector, detector_tok, samples: list[dict], max_length
                 s["pred_spans"] = pred
                 spans_all[index[id(s)]] = s
                 continue
-            label2id = {lab: i for i, lab in detector.config.id2label.items()}
-            p_vals = [float(probs[j, t, label2id[gold_labels[t]]]) for t in target_idx]
+            p_vals = [p_person[t] for t in target_idx]
             s["detector_truncated_target"] = False
             s["pred_spans"] = pred
             s["p_target_mean"] = sum(p_vals) / len(p_vals)

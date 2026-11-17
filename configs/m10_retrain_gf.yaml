@@ -1,0 +1,50 @@
+# M10 matched comparison, gf arm: configs/m10_retrain_rl_pilot.yaml with ONLY the augmentation
+# file and run id changed (data/synthetic/gf_aug_v1.jsonl, 316 rows matched to rl_aug_v1).
+# Paths are for the RTX 3090 (ssh rtx3090). Final-eval is not touched.
+
+run_id_prefix: m10-retrain-gf
+seed: 20260920
+repo_dir: /home/gauthier/pii-redteam-rl
+cache_dir: /home/gauthier/cache
+work_dir: /home/gauthier/runs
+rebuild_locks: false
+
+locks:
+  final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
+
+detector:                        # the starting detector ("d0" in the report)
+  path: /home/gauthier/pii-redteam-rl/artifacts/d1-frozen-d1v2-20261110-075731
+  sha256: ebfe4c693958c84cdb093d1a55b535e51f1ba0563a702e69e3c97bf5a36a4143
+  expected_dev_f1: 0.9605        # target detector epoch 2, recorded at its freeze
+  max_length: 512
+
+data:
+  augmentation:
+    data/synthetic/gf_aug_v1.jsonl: SHA_gf
+  aug_exclude_ids: []            # texts with another person were already rejected by the audit
+  aug_dev_fraction: 0.10
+  expected_rows: { train_side: 28713, dev_calibration: 7923 }
+  short_eval:
+    short_eval_v2:
+      data/synthetic/short_eval_v2.jsonl: 0bee4dc3431f558fb5f076d9ac0acc68d8cddf5313646935100ce3b23e68749a
+    short_eval_deepseek_v1:
+      data/synthetic/short_eval_deepseek_v1.jsonl: bfe130721e2e6d10a11831ac2d4e27fc9cc95cb8e284e9fff6d37cef2a7785ef
+
+training:
+  epochs: 3
+  batch_size: 16
+  eval_batch_size: 32
+  lr: 2.0e-5
+  replay_per_aug_row: 3
+  save_epochs: [2, 3]
+
+selection:
+  dev_f1_max_drop: 0.01
+  freeze_rule:
+    rule: fewest_dev_neg_fp_rows
+    dev_f1_max_drop: 0.01
+
+gates:
+  primary_short_eval_slice: short_eval_v2
+  short_eval_recall_gain_min: 0.0   # pilot: short_eval read as no-regression, not as a gain
+  final_eval_max_drop: 0.01

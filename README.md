@@ -2,6 +2,8 @@
 
 Planning artifact: `PROJECT_PLAN.md` (v1.2). Agent kickoff: `AGENT_START_HERE.md`.
 Reuse audit of the pre-existing `../rl` repo: `docs/REUSE_AUDIT.md`.
+Known design errors and limitations: `docs/LIMITATIONS.md` (read before quoting any result;
+L1: the detectors were trained with B/I tags, which this one-entity task does not need).
 
 ## Status
 

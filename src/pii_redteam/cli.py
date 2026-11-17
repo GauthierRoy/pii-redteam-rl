@@ -25,6 +25,15 @@ def main() -> None:
         "rl-smoke", help="M08.3 capped RL smoke run (TRL GRPO vs the frozen target detector)"
     )
     smoke.add_argument("--config", required=True, help="path to an RL smoke YAML config")
+    train_detector = sub.add_parser(
+        "train-detector",
+        help="fine-tune a frozen detector on an augmentation set, then score short_eval",
+    )
+    train_detector.add_argument("--config", required=True, help="path to a train-detector config")
+    generate = sub.add_parser(
+        "rl-generate", help="sample a trained RL attacker on fresh names and filter the texts"
+    )
+    generate.add_argument("--config", required=True, help="path to an RL generation YAML config")
     args = parser.parse_args()
 
     if args.command == "probe-base":
@@ -62,6 +71,26 @@ def main() -> None:
 
         report = run_rl_smoke(config, repo_dir)
         print(json.dumps({"run_id": report["run_id"], "checks": report["checks"]}, indent=2))
+    elif args.command == "train-detector":
+        with open(args.config, encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        repo_dir = config.get("repo_dir") or os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+        config.setdefault("repo_commit", os.environ.get("PROBE_REPO_COMMIT", "unrecorded"))
+        from pii_redteam.train_detector import run_train_d1
+
+        report = run_train_d1(config, repo_dir)
+        print(json.dumps({"run_id": report["run_id"], "status": report["status"]}, indent=2))
+    elif args.command == "rl-generate":
+        with open(args.config, encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        config.setdefault("repo_commit", os.environ.get("PROBE_REPO_COMMIT", "unrecorded"))
+        repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from pii_redteam.training.rl_generate import run_rl_generate
+
+        report = run_rl_generate(config, repo_dir)
+        print(json.dumps({"run_id": report["run_id"], "counts": report["counts"]}, indent=2))
 
 
 if __name__ == "__main__":

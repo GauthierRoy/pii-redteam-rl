@@ -1,0 +1,53 @@
+# M09 RL augmentation texts: the long run's attacker (long-20261114-004948, D22) sampled once per
+# request on 600 names it never saw, then filtered (validity rules, person judge, no other
+# person's name by the audit, no exact repeat). Same prompt and sampling as the RL runs.
+# The Modal launcher (scripts/modal_rl.py) overrides work_dir, splits_dir and detector.path.
+
+run_id_prefix: m09-rl-generate
+model_id: Qwen/Qwen3.5-2B
+seed: 20261115
+work_dir: artifacts/m09
+splits_dir: artifacts/splits
+locks:
+  final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
+
+attacker:
+  adapter_path: /vol/runs/long-20261114-004948/m08-long-20261114-005016/adapter  # Modal volume
+
+bank:
+  seed: 20261115
+  n: 600
+  prefix: aug
+  exclude_banks:
+    - banks/v2_prompting/spark_seed20260920_v2_n20.jsonl
+  exclude_rl_bank:                 # the long run's 32 held-out + 2000 training requests
+    seed: 20261113
+    n: 2032
+
+detector:
+  path: artifacts/d1-frozen-d1v2-20261110-075731
+  sha256: ebfe4c693958c84cdb093d1a55b535e51f1ba0563a702e69e3c97bf5a36a4143
+
+model:
+  quantize_4bit: false
+
+sampling:
+  temperature: 1.0
+  top_p: 1.0
+  batch_prompts: 16
+
+grpo:                              # read by the shared sampling code
+  num_generations: 1
+  max_completion_length: 192
+
+reward:
+  person_judge:
+    model: mistral-medium-2604
+    api_key_env: MISTRAL_API_KEY
+    timeout_s: 60
+    max_workers: 32
+  audit:
+    model: mistral-medium-2604
+    api_key_env: MISTRAL_API_KEY
+    timeout_s: 30
+    max_workers: 32

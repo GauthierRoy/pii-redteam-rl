@@ -16,6 +16,9 @@ Capped pilot of any repo config (Modal kills it after `PILOT_TIMEOUT_S`):
 The pilot function reads the Modal secret `mistral` (one-time setup, key never in the repo):
     modal secret create mistral MISTRAL_API_KEY=<key>
 
+Augmentation texts from a trained attacker (same secret, killed after `GENERATE_TIMEOUT_S`):
+    modal run --detach scripts/modal_rl.py::generate --config configs/m09_rl_generate.yaml
+
 Cost is bounded by `BENCH_TIMEOUT_S` per arm: Modal kills the container at the timeout.
 """
 
@@ -50,6 +53,7 @@ GPU = "L4"
 BENCH_TIMEOUT_S = 900
 LONG_TIMEOUT_S = 9600
 PILOT_TIMEOUT_S = 6600
+GENERATE_TIMEOUT_S = 1800
 JUDGE_SECRET = "mistral"  # holds MISTRAL_API_KEY for the person judge (reward.person_judge)
 L4_CONTAINER_USD_PER_HOUR = 1.12  # approximate list prices: L4 + 4 CPU + 16 GiB
 COMMIT_INTERVAL_S = 120
@@ -124,6 +128,9 @@ PILOT_GPU_FUNCTION: dict[str, Any] = {
 }
 
 
+GENERATE_GPU_FUNCTION: dict[str, Any] = {**PILOT_GPU_FUNCTION, "timeout": GENERATE_TIMEOUT_S}
+
+
 def sha256_of(path: str) -> str:
     digest = hashlib.sha256()
     with open(path, "rb") as f:
@@ -191,7 +198,7 @@ def arm_summary(arm: str, exit_code: int, wall_seconds: float, run_dir: str) -> 
         "estimated_cost_usd": round(wall_seconds / 3600 * L4_CONTAINER_USD_PER_HOUR, 3),
         "packages": package_versions(),
     }
-    reports = glob.glob(os.path.join(run_dir, "*", "rl_smoke_report.json"))
+    reports = glob.glob(os.path.join(run_dir, "*", "rl_*_report.json"))
     if not reports:
         return summary
     with open(reports[0], encoding="utf-8") as f:
@@ -203,6 +210,7 @@ def arm_summary(arm: str, exit_code: int, wall_seconds: float, run_dir: str) -> 
             "steps_done": training.get("steps_done"),
             "timing": training.get("timing"),
             "peak_memory_gb": report.get("peak_memory_gb"),
+            "counts": report.get("counts"),
             "pre_valid_rate": report.get("pre", {}).get("valid_rate"),
             "post_valid_rate": report.get("post", {}).get("valid_rate"),
             "failed_checks": [
@@ -225,6 +233,7 @@ def run_arm(
     commit: str,
     base_config: str = BENCH_CONFIG,
     resume_from: str = "",
+    command_name: str = "rl-smoke",
 ) -> dict:
     if resume_from:
         overrides = {**overrides, "resume_from_checkpoint": latest_checkpoint(resume_from)}
@@ -233,19 +242,14 @@ def run_arm(
     os.makedirs(run_dir)
     with open(base_config, encoding="utf-8") as f:
         base = yaml.safe_load(f)
-    config = with_overrides(
-        base,
-        {
-            "work_dir": run_dir,
-            "splits_dir": SPLITS_DIR,
-            "detector.path": TARGET_DETECTOR_DIR,
-            **overrides,
-        },
-    )
+    paths = {"work_dir": run_dir, "splits_dir": SPLITS_DIR}
+    if not base["detector"]["path"].startswith(f"{VOLUME_DIR}/"):
+        paths["detector.path"] = TARGET_DETECTOR_DIR  # a repo path means the target detector
+    config = with_overrides(base, {**paths, **overrides})
     config_path = f"{run_dir}/config.yaml"
     with open(config_path, "w", encoding="utf-8") as f:
         yaml.safe_dump(config, f, sort_keys=False)
-    command = [sys.executable, "-u", "-m", "pii_redteam.cli", "rl-smoke", "--config", config_path]
+    command = [sys.executable, "-u", "-m", "pii_redteam.cli", command_name, "--config", config_path]
     started = time.time()
     env = dict(os.environ, PROBE_REPO_COMMIT=commit)
     stop = threading.Event()
@@ -338,6 +342,13 @@ def pilot_run(commit: str, config: str, resume_from: str = "") -> dict:
     )
 
 
+@app.function(image=IMAGE_HF, **GENERATE_GPU_FUNCTION)
+def generate_run(commit: str, config: str) -> dict:
+    return run_arm(
+        "generate", {}, commit, base_config=f"{REPO_DIR}/{config}", command_name="rl-generate"
+    )
+
+
 BENCH_ARMS = {
     "hf": bench_hf,
     "fla": bench_fla,
@@ -409,3 +420,13 @@ def pilot(config: str, resume_from: str = ""):
     commit = local_commit()
     print(f"repo state: {commit}; config {config}; timeout {PILOT_TIMEOUT_S}s on {GPU}")
     print(format_result("pilot", pilot_run.remote(commit, config, resume_from)))
+
+
+@app.local_entrypoint()
+def generate(config: str):
+    """Sample a trained RL attacker on fresh names and filter the texts."""
+    commit = local_commit()
+    print(f"repo state: {commit}; config {config}; timeout {GENERATE_TIMEOUT_S}s on {GPU}")
+    result = generate_run.remote(commit, config)
+    print(format_result("generate", result))
+    print(json.dumps(result.get("counts"), indent=2))

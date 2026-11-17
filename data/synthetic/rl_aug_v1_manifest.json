@@ -1,0 +1,14 @@
+{
+  "file": "data/synthetic/rl_aug_v1.jsonl",
+  "sha256": "3a397c846b1cfd6e08ae0cb9462b577ce27d4542f5b4dcdd6d57a0dba0ccbe03",
+  "rows": 316,
+  "names": 316,
+  "source": {
+    "run_id": "m09-rl-generate-20261115-114151",
+    "accepted_sha256": "f73464cfc0284d9df3695d5e66583313a4047f50faf13107747bd49fba2bd47d"
+  },
+  "attacker": "long-20261114-004948 (D18 reward, 840 steps)",
+  "filters": "validity v2, person judge (mistral-medium-2604), audit other_person false, no exact repeat",
+  "target_detector_misses": 294,
+  "opens_with_dear": 314
+}

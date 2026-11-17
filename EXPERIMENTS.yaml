@@ -344,3 +344,148 @@ runs:
       judge_sanity: { short_eval_v2_persons_by_construction: "142/150 judged person" }
     outcome: "INVALID as adversarial data. The guard held (27 opening words, Dear 84/240) and learning was slow for 250 steps, then the attacker found a different exploit: the requested name used as a place or brand (the Olimpico, the Mulaton store, the El Bez clinic). The target detector rightly ignores those, so they score as misses. The validity rules did not check that the name is a person. Led to D21."
 
+  - run_id: pilot-person-20261115-095501
+    kind: rl-pilot
+    milestone: M08.3
+    executed: 2026-11-15
+    where: modal L4 (23.7 GB), bf16 LoRA, colocated vLLM 0.33.0
+    repo_commit: "7a8c733 (+ untracked .claude/)"
+    artifacts: "Modal volume pii-redteam-rl: /runs/pilot-person-20261115-095501/m08-person-20261115-095527/"
+    checks: { pass: 7, fail: 0 }
+    metrics:
+      setup: { config: "configs/m08_rl_person.yaml at 7a8c733", reward: "D18 + soft opening-share guard (0.25 -> 0.50) + person judge gate (D21); log-only audit", judge_model: mistral-medium-2604, steps_done: 400, lr_schedule: "max_steps 1000 as the long run, stopped at 400" }
+      cost: { wall_seconds: 4256, median_step_seconds: 8.94, median_generation_seconds: 2.63, peak_memory_gb: 11.1, estimated_usd: 1.32 }
+      training_reward_by_step: { "1-40": -0.10, "121-160": 0.00, "201-240": 0.03, "281-320": 0.05, "321-360": 0.10, "361-400": 0.06 }
+      training_detector_miss_rate_by_step: { "1-40": 0.020, "121-160": 0.037, "281-320": 0.054, "361-400": 0.046 }
+      training_valid_rate_by_step: { "1-40": 0.85, "361-400": 0.95 }
+      training_not_person_rate_by_step: { "1-40": 0.038, "281-320": 0.015, "361-400": 0.037 }
+      training_audit_by_step: { other_person: "0.09-0.16, flat", unnatural: "0.003-0.012, flat", off_format: { "1-40": 0.39, "41-80": 0.46, "361-400": 0.29 } }
+      training_opening_share_by_step: { "step 9": 0.03, "step 33": 0.39, "1-80": 0.246, "161-240": 0.225, "321-400": 0.236 }
+      training_reduced_reward_rate_by_step: { "1-80": 0.36, "161-240": 0.42, "321-400": 0.42 }
+      training_kl_by_step: { "1-40": 0.068, "321-360": 0.177, "361-400": 0.077 }
+      pre_vs_post_heldout: { valid: ["200/256", "254/256"], name_not_person_rejected: [16, 2], detector_finds_name: ["190/200", "232/254"], mean_detector_probability: [0.900, 0.777], opens_with_dear: [33, 90], opens_with_yo: [0, 44], opening_share_mean: [0.069, 0.172], texts_with_reduced_reward: [0, 90], requests_with_a_miss: ["-", "4/32"] }
+      misses_post: { dear_letters: "17/22", by_context: { support_ticket: "10/32", email_with_signature: "10/32", forwarded_email_thread: "1/24", list_or_table_row: "1/24", other_six_types: 0 }, by_name: { Bob: "8/8", Sujeepan: "4/8", Kchok: "3/8" } }
+      audit_heldout_pre_vs_post: { other_person: ["21/200", "26/254"], unnatural: [0, 0], off_format: ["75/200", "77/254"] }
+    outcome: "Clean but weak. No exploit: persons throughout, audit curves flat, valid rate 0.78 -> 0.99. The attacker learned little in 400 steps (held-out misses 10/200 -> 22/254) and what it learned is the long run's weakness: Dear letters rose to a share of about 0.35, where the soft guard still pays 60% of the reward; 17 of 22 misses are Dear letters. Detector probability also fell outside the letters (0.94 -> 0.84) without crossing 0.5. In training the shared-opening move happened within about 30 steps and the guard held it for the rest of the run."
+
+  - run_id: m09-rl-generate-20261115-114151
+    kind: augmentation-generation
+    milestone: M09
+    executed: 2026-11-15
+    where: modal L4, HF generate (no vLLM)
+    repo_commit: "7a8c733 + uncommitted rl_generate (configs/m09_rl_generate.yaml)"
+    artifacts: "Modal volume pii-redteam-rl: /runs/generate-20261115-114132/m09-rl-generate-20261115-114151/; data/synthetic/rl_aug_v1.jsonl (+ manifest)"
+    checks: { pass: 1, fail: 0 }   # the job has no check list; 1 = finished and wrote its counts
+    metrics:
+      setup: { attacker: "long-20261114-004948 adapter (D18 reward)", requests: "600 fresh names, none in the long run's 2032 requests", samples_per_request: 1, temperature: 1.0 }
+      cost: { wall_seconds: 410, estimated_usd: 0.13 }
+      decisions: { accepted: 316, rejected_other_person: 262, rejected_name_not_person: 16, rejected_validity: 6 }
+      accepted: { names: 316, opens_with_dear: 314, target_detector_misses: 294, most_common_first_sentence: "17/316 (I hope this message finds you well)" }
+    outcome: "rl_aug_v1: 316 letters on 316 names, all person mentions by the judge, no other person by the audit. Narrow by construction (314 open with Dear)."
+
+  - run_id: m10-retrain-rl-pilot-20261115-174807
+    kind: detector-training
+    milestone: M10 (pilot)
+    executed: 2026-11-15
+    where: RTX 3090 (roommate's machine, ssh rtx3090)
+    repo_commit: "7a8c733 + uncommitted train_detector port (configs/m10_retrain_rl_pilot.yaml)"
+    artifacts: "rtx3090:~/runs/m10-retrain-rl-pilot-20261115-174807/ (d1_report.json, held_out_letters.json, d1-candidate = epoch 1, d1-epoch2, d1-epoch3)"
+    checks: { pass: 8, fail: 1 }   # fail = short_eval_v2 recall gain >= 0.0 (got -0.0133)
+    metrics:
+      setup: { start: "frozen target detector (ebfe4c69...)", augmentation: "rl_aug_v1: 284 train / 32 name-disjoint aug-dev", replay: "852 AI4Privacy rows per epoch", epochs: 3, lr: 2.0e-5 }
+      cost: { train_seconds: 189, peak_memory_gb: 5.05 }
+      start_reproduces_dev_f1: "0.9605 vs 0.9605 recorded"
+      dev_calibration_by_epoch: { start: { f1: 0.9605, name_free_rows_flagged: 67 }, "1": { f1: 0.9626, flagged: 87 }, "2": { f1: 0.9652, flagged: 87 }, "3": { f1: 0.9647, flagged: 66 } }
+      freeze_rule_choice: "epoch 3 (fewest name-free dev rows flagged)"
+      aug_dev_miss_rate: ["0.906 start", "0.0 after epoch 1"]
+      short_eval_v2_recall_epoch3: ["0.9933", "0.98 (lost 2 of 150: 'Ms. Peru', 'de Meurichy | row 5')"]
+      short_eval_deepseek_v1: "1.0 -> 1.0"
+      held_out_rl_texts_epoch3: { rows: "508 (long-run + person pilot post-RL samples; 32 names not in rl_aug_v1)", dear_miss_rate: ["0.717", "0.0"], other_miss_rate: ["0.030", "0.0"], recall_all: ["0.331", "0.988"] }
+      name_free_epoch3: { short_eval_neg_v1_rows_flagged: ["3/111", "4/111"], dear_not_a_person_rows_flagged: ["1/20 (Tenant)", "2/20 (Tenant, Colleagues)"] }
+    outcome: "The Dear weakness closes with 316 letters in 3 minutes of training: misses on held-out letters 72% -> 0%, dev F1 slightly up, small costs (2/150 short_eval_v2 rows lost, one more name-free short message and one more 'Dear <word>' flagged). Pilot only: starts from the target detector and has no non-RL baseline, so it does not show that RL data beats other augmentation (M10)."
+
+
+  - run_id: m10-attack-retrained-20261115-203246
+    kind: rl-pilot
+    milestone: M10 (pilot)
+    executed: 2026-11-15
+    where: modal L4, TRL GRPO + colocated vLLM
+    repo_commit: "7a8c733 + uncommitted (configs/m10_attack_retrained_modal.yaml)"
+    artifacts: "Modal volume pii-redteam-rl: /runs/pilot-m10_attack_retrained_modal-20261115-203219/m10-attack-retrained-20261115-203246/"
+    checks: { pass: 7, fail: 0 }
+    metrics:
+      setup: { attacker: "base attacker (Qwen3.5-2B + fresh LoRA)", detector: "retrained detector epoch 3 (4755db73...)", reward: "D20 soft opening guard + D21 person judge and audit (mistral-medium-2604)", steps: 400 }
+      cost: { wall_seconds: 4184, median_step_seconds: 8.98, estimated_usd: 1.30, peak_memory_gb: 11.1 }
+      pre_vs_post_heldout: { valid: ["200/256", "248/256"], name_not_person_rejected: [16, 2], detector_misses: ["1/200", "0/248"], opens_with_dear: [43, 53], opening_share_mean: [0.069, 0.098], audit_other_person: [0.10, 0.13], audit_off_format: [0.37, 0.41] }
+      training_misses: "48 of 11967 valid texts (0.4%), per 50 steps 6,5,3,6,4,5,12,7; mostly bare first names at sentence start (Olivia, Jur, Near)"
+      earlier_attempt: "rtx3090 m10-attack-retrained-20261115-175434 stopped at step 114 (GPU fell off the bus); reward -0.15 to -0.07, miss rate about 0.1% up to there"
+    outcome: "No new weakness found in 400 steps: held-out misses 0/248 after training (pilot 3 on the target detector reached 22/254), no return to Dear letters, no exploit. A single short run with a small attacker, so it bounds what this setup finds, not what the detector gets wrong."
+
+  - run_id: m06-base-generate-20261117-212200
+    kind: augmentation-generation
+    milestone: M06
+    executed: 2026-11-17
+    where: RTX 3090 (ssh rtx3090), HF generate
+    repo_commit: "7a8c733 + uncommitted (configs/m06_base_generate.yaml)"
+    artifacts: "rtx3090:~/runs/m06-base-generate-20261117-212200/; data/synthetic/{template,plain,gf}_aug_v1.jsonl (+ manifests)"
+    checks: { pass: 1, fail: 0 }   # no check list; 1 = finished and wrote its counts
+    metrics:
+      setup: { attacker: "base Qwen3.5-2B (no SFT attacker exists; also the RL starting point)", requests: "the 600 requests of m09-rl-generate", samples_per_request: 4 }
+      decisions: { generated: 2400, accepted: 1584, accepted_names: 578, rejected_other_person: 182, rejected_name_not_person: 122, rejected_validity: 512 }
+      accepted_target_detector_misses: 32
+      sets: { template_aug_v1: "316 rows, rl_aug_v1's names and message types, 50 templates", plain_aug_v1: "316 rows, first accepted sample per request", gf_aug_v1: "316 rows, lowest target-detector probability first, one per name, <= 48 per message type" }
+    outcome: "Earlier attempts (20261117-211039, -211529) stopped or lost 883 audits to Mistral HTTP 429 while a Modal run shared the key; judge and audit now back off up to 60 s and honour Retry-After."
+
+  - run_id: m10-retrain-baselines-20261117
+    kind: detector-training
+    milestone: M10 (pilot, matched arms)
+    executed: 2026-11-17
+    where: RTX 3090 (ssh rtx3090)
+    repo_commit: "7a8c733 + uncommitted (configs/m10_retrain_{template,plain,gf}.yaml = m10_retrain_rl_pilot.yaml with the augmentation file swapped)"
+    artifacts: "rtx3090:~/runs/m10-retrain-template-20261117-212525, m10-retrain-plain-20261117-212955, m10-retrain-gf-20261117-213434 (d1_report.json, held_out_letters_m06.json, held_out_base_texts.json)"
+    checks: { pass: 9, fail: 0 }   # per arm, all three arms
+    metrics:
+      start_target_detector: { dev_f1: 0.9605, dev_name_free_rows_flagged: 67, short_eval_v2_recall: 0.9933, held_out_dear_letters_miss: 0.717, held_out_other_rl_miss: 0.030, held_out_base_texts_f1: 0.910, short_eval_neg_v1_flagged: 3, dear_not_a_person_flagged: 1 }
+      template: { epoch: 2, dev_f1: 0.9630, dev_flagged: 78, short_eval_v2_recall: 0.9933, dear_letters_miss: 0.137, other_rl_miss: 0.006, base_texts_f1: 0.948, neg_flagged: 7, dear_not_a_person: 1 }
+      plain: { epoch: 2, dev_f1: 0.9604, dev_flagged: 99, short_eval_v2_recall: 1.0, dear_letters_miss: 0.041, other_rl_miss: 0.0, base_texts_f1: 0.976, neg_flagged: 7, dear_not_a_person: 2 }
+      generate_and_filter: { epoch: 3, dev_f1: 0.9658, dev_flagged: 73, short_eval_v2_recall: 1.0, dear_letters_miss: 0.017, other_rl_miss: 0.0, base_texts_f1: 0.976, neg_flagged: 5, dear_not_a_person: 2 }
+      rl_pilot: { epoch: 3, dev_f1: 0.9647, dev_flagged: 66, short_eval_v2_recall: 0.98, dear_letters_miss: 0.0, other_rl_miss: 0.0, base_texts_f1: 0.973, neg_flagged: 4, dear_not_a_person: 2 }
+    outcome: "Generate-and-filter nearly matches RL on RL's own weakness (Dear letters missed 1.7% vs 0%, 6 vs 0 of 343) and is as good or better elsewhere (dev F1, short_eval_v2, base texts); plain generation alone closes most of the gap (4.1%). Templates help least (13.7%). RL keeps the fewest dev false alarms (66 vs 73-99) but loses 2 short_eval_v2 rows. One seed per arm, development sets only; differences of a few rows are within noise."
+
+  - run_id: m10-attack-logodds-20261117-212849
+    kind: rl-pilot
+    milestone: M10 (pilot)
+    executed: 2026-11-17
+    where: modal L4, TRL GRPO + colocated vLLM
+    repo_commit: "7a8c733 + uncommitted (configs/m10_attack_logodds_modal.yaml)"
+    artifacts: "Modal volume pii-redteam-rl: /runs/pilot-m10_attack_logodds_modal-20261117-212825/m10-attack-logodds-20261117-212849/"
+    checks: { pass: 7, fail: 0 }
+    metrics:
+      setup: { reward: "D23 log-odds scale (span 10) on the gold-label probability, D20 guard, D21 judge + audit", detector: "retrained detector epoch 3 (4755db73...)", steps: 400 }
+      cost: { wall_seconds: 3940, median_step_seconds: 8.44, estimated_usd: 1.23 }
+      earlier_attempt: "20261117-210 (Modal) stopped at step 10 on Mistral HTTP 429, about $0.11"
+      training_gold_label_p_by_50_steps: { mean: [0.989, 0.982, 0.931, 0.692, 0.640, 0.627, 0.604, 0.630], median: [0.9998, 0.9997, 0.998, 0.668, 0.666, 0.663, 0.663, 0.665] }
+      exploit: "invented first name or title before the requested surname ('Dr. Sarah Hentzy' for 'Hentzy'): 234/245 post texts. The detector tags the longer name, so the surname gets I-PERSON instead of the gold B-PERSON and the gold-label probability falls to about 0.67 although the name is found. Audit other_person 0.10 -> 0.94 caught it (log only)."
+      post_heldout_rescored_cpu: { valid: 245, gold_label_p_below_half: 100, any_person_p_below_half: 33, complete_miss: { target_detector: 17, rl_retrained: 23, gf_retrained: 10, plain_retrained: 1 } }
+    outcome: "Reward exploit, not a new weakness of the kind sought: a label artifact of the gold-label probability. Beneath it, real misses (no predicted span) of full names with a title in texts with several people ('Mr. John Sothy', 'Dr. John Beyan'): 23/245 for the RL-retrained detector, more than the target detector (17) and the generate-and-filter (10) and plain (1) retrained detectors. Texts contain other persons, so they fall outside the augmentation acceptance rules."
+
+  - run_id: rescore-person-reading-20261118
+    kind: evaluation
+    milestone: M10 (pilot)
+    executed: 2026-11-18
+    where: RTX 3090 (ssh rtx3090)
+    repo_commit: "7a8c733 + uncommitted (scripts/rescore_person_reading.py, D25 reading)"
+    artifacts: "rtx3090:~/runs/rescore_person_reading_20261118.json"
+    checks: { pass: 1, fail: 0 }   # target detector dev F1 0.9607 under the new reading vs 0.9605 under BIO argmax
+    metrics:
+      reading: "PERSON / not-PERSON (D25): token PERSON when 1 - P(O) >= 0.5, consecutive PERSON tokens merged"
+      ai4privacy_dev_f1: { target: 0.9607, template: 0.9631, plain: 0.9608, gf: 0.9665, rl: 0.9650 }
+      ai4privacy_dev_complete_misses_of_7923: { target: 127, template: 120, plain: 107, gf: 124, rl: 147 }
+      ai4privacy_dev_name_free_rows_flagged_of_5662: { target: 68, template: 78, plain: 99, gf: 73, rl: 66 }
+      short_eval_v2_recall: { target: 0.9933, template: 0.9933, plain: 1.0, gf: 0.9933, rl: 0.9867 }
+      held_out_dear_letters_missed_of_343: { target: 246, template: 46, plain: 14, gf: 6, rl: 0 }
+      held_out_other_rl_missed_of_165: { target: 5, template: 1, plain: 0, gf: 0, rl: 0 }
+      held_out_base_texts_f1: { target: 0.917, template: 0.948, plain: 0.973, gf: 0.976, rl: 0.968 }
+      logodds_post_texts_missed_of_245: { target: 17, template: 3, plain: 1, gf: 10, rl: 23 }
+      short_eval_neg_v1_flagged_of_111: { target: 3, template: 7, plain: 7, gf: 5, rl: 4 }
+    outcome: "The PERSON reading changes the numbers by at most a few rows and keeps every ranking of the BIO-argmax tables. New detail: the RL-retrained detector misses more AI4Privacy dev names (147 vs 127 for the target detector) and the most log-odds-run texts (23/245), while its dev F1 rises through precision. Span F1 on logodds_post is low for all detectors because they tag the attacker's longer name ('Sarah Hentzy') against a surname-only gold span; use complete misses there."

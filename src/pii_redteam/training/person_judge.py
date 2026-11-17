@@ -43,6 +43,20 @@ AUDIT_QUESTION = (
 )
 
 
+def backoff_seconds(attempt: int, error: Exception, base: float, cap: float) -> float:
+    """Exponential backoff (base, 2*base, 4*base ... capped), or the server's Retry-After on a 429.
+
+    Four retries over 12 s were not enough when two runs shared one Mistral key (HTTP 429 on
+    2026-11-17 stopped both, and 883 of 2400 audits in m06-base-generate came back empty)."""
+    backoff = min(cap, base * 2**attempt)
+    headers = getattr(error, "headers", None)
+    retry_after = headers.get("Retry-After") if headers is not None else None
+    try:
+        return min(cap, max(backoff, float(retry_after)))
+    except (TypeError, ValueError):
+        return backoff
+
+
 class JudgeUnavailableError(RuntimeError):
     """The judge could not be reached after every retry."""
 
@@ -101,8 +115,9 @@ class PersonJudge:
         model: str,
         post: Callable[[dict], dict],
         max_workers: int = 32,
-        attempts: int = 4,
+        attempts: int = 8,
         retry_seconds: float = 2.0,
+        max_wait_seconds: float = 60.0,
         max_tokens: int = 700,
     ) -> None:
         self.model = model
@@ -110,6 +125,7 @@ class PersonJudge:
         self.max_workers = max_workers
         self.attempts = attempts
         self.retry_seconds = retry_seconds
+        self.max_wait_seconds = max_wait_seconds
         self.max_tokens = max_tokens
 
     def verdicts(self, names: list[str], texts: list[str]) -> list[str]:
@@ -135,23 +151,37 @@ class PersonJudge:
                     raise JudgeUnavailableError(
                         f"person judge {self.model} failed {self.attempts} times: {error!r}"
                     ) from error
-                time.sleep(self.retry_seconds * (attempt + 1))
+                time.sleep(self._wait(attempt, error))
                 continue
             if verdict != UNPARSED:
                 break
         return verdict
 
+    def _wait(self, attempt: int, error: Exception) -> float:
+        return backoff_seconds(attempt, error, self.retry_seconds, self.max_wait_seconds)
+
 
 class TextAudit:
-    """Log-only checklist per text, in parallel. Never raises: a failed call gives None."""
+    """Log-only checklist per text, in parallel. Never raises: a call that still fails after
+    the retries, or an answer that is not the JSON object, gives None."""
 
     def __init__(
-        self, model: str, post: Callable[[dict], dict], max_workers: int = 32, max_tokens: int = 60
+        self,
+        model: str,
+        post: Callable[[dict], dict],
+        max_workers: int = 32,
+        max_tokens: int = 60,
+        attempts: int = 6,
+        retry_seconds: float = 2.0,
+        max_wait_seconds: float = 60.0,
     ) -> None:
         self.model = model
         self.post = post
         self.max_workers = max_workers
         self.max_tokens = max_tokens
+        self.attempts = attempts
+        self.retry_seconds = retry_seconds
+        self.max_wait_seconds = max_wait_seconds
 
     def audits(
         self, names: list[str], texts: list[str], contexts: list[str]
@@ -173,7 +203,12 @@ class TextAudit:
                 }
             ],
         }
-        try:
-            return parse_audit(answer_text(self.post(body)))
-        except (OSError, KeyError, IndexError, ValueError):
-            return None
+        for attempt in range(self.attempts):
+            try:
+                return parse_audit(answer_text(self.post(body)))
+            except (OSError, KeyError, IndexError, ValueError) as error:
+                if attempt < self.attempts - 1:
+                    time.sleep(
+                        backoff_seconds(attempt, error, self.retry_seconds, self.max_wait_seconds)
+                    )
+        return None

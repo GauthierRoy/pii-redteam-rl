@@ -1,6 +1,7 @@
 """GRPO reward adapter: contract statuses, reward ordering, truncation, logging, groups."""
 
 import json
+import math
 import unittest
 
 from pii_redteam.training.opening_share import OpeningShare
@@ -9,6 +10,7 @@ from pii_redteam.training.rl_reward import (
     INVALID_REWARD,
     JUDGE_UNPARSED_STATUS,
     NOT_PERSON_STATUS,
+    LogOddsReward,
     TargetDetectorReward,
 )
 
@@ -332,6 +334,19 @@ class TestTargetDetectorReward(unittest.TestCase):
         self.assertAlmostEqual(rewards[0], 0.9)
         self.assertEqual(audit.contexts, [])
 
+    def test_record_gets_one_row_per_completion_with_text_and_scores(self):
+        batches = []
+        reward = TargetDetectorReward(FakeScorer({GOOD_TEXT: 0.2}), EOS, record=batches.append)
+        rewards = reward(
+            [message(GOOD_TEXT), "not json"], ["Lucas", "Amara"], request_id=["r1", "r2"]
+        )
+        (rows,) = batches
+        self.assertEqual([row["request_id"] for row in rows], ["r1", "r2"])
+        self.assertEqual(rows[0]["raw_text"], message(GOOD_TEXT))
+        self.assertEqual((rows[0]["status"], rows[0]["p_target_mean"]), ("valid", 0.2))
+        self.assertEqual([row["reward"] for row in rows], rewards)
+        self.assertEqual((rows[1]["status"], rows[1]["raw_text"]), ("invalid:json", "not json"))
+
     def test_trl_expects_a_function_name_for_logging(self):
         self.assertEqual(
             TargetDetectorReward(FakeScorer({}), EOS).__name__, "target_detector_reward"
@@ -340,3 +355,23 @@ class TestTargetDetectorReward(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LogOddsRewardTest(unittest.TestCase):
+    def test_scale_separates_confident_hits_and_pays_a_miss_in_full(self):
+        scale = LogOddsReward(span=10.0)
+        self.assertAlmostEqual(scale(0.5), 1.0)
+        self.assertEqual(scale(0.1), 1.0)
+        self.assertEqual(scale(0.999999), 0.0)
+        self.assertAlmostEqual(scale(0.99), 1 - math.log(99) / 10)
+        self.assertGreater(scale(0.99) - scale(0.9998), 0.3)
+
+    def test_reward_uses_the_configured_detector_score(self):
+        reward = TargetDetectorReward(
+            FakeScorer({GOOD_TEXT: 0.99}), EOS, detector_reward=LogOddsReward(10.0)
+        )
+        self.assertAlmostEqual(reward([message(GOOD_TEXT)], ["Lucas"])[0], 1 - math.log(99) / 10)
+
+    def test_span_must_be_positive(self):
+        with self.assertRaises(ValueError):
+            LogOddsReward(span=0.0)

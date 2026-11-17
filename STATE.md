@@ -1,9 +1,11 @@
 # STATE — pii-redteam-rl
 
 - **Date:** 2026-11-15
-- **Now (M08.3):** three Modal RL runs done, none usable as adversarial data yet; reward amended twice
-  (D20 opening-share guard, D21 person judge). Next: one 400-step pilot with both
-  (`configs/m08_rl_person.yaml`). Details in the first section below. Model names changed on
+- **Now (M08.3):** four Modal RL runs done, none usable as adversarial data yet; reward amended twice
+  (D20 opening-share guard, D21 person judge). The pilot with both
+  (`pilot-person-20261115-095501`) is clean but learned little in 400 steps, and what it
+  learned is again the "Dear" letter. Decided (D22): stop tuning the reward, build the RL
+  augmentation set from the long run's attacker and retrain the detector (M09/M10). Model names changed on
   2026-11-14 (D19, `docs/GLOSSARY.md`).
 - **Milestone:** M07b done: target detector (`d1v2-20261110-075731`, epoch 2) FROZEN 2026-11-10 and the
   M07a probe go/no-go passes against it at temperature 1.0 (M08 gate formally open).
@@ -51,7 +53,7 @@
 
 ## M08.3 Modal runs: collapse, then a non-person exploit (2026-11-14/15)
 
-Three runs on one Modal L4, same seed, bank, sampling and optimizer; only the reward differs.
+Four runs on one Modal L4, same seed, bank, sampling and optimizer; only the reward differs.
 Full numbers in `EXPERIMENTS.yaml`; decisions D20 and D21.
 
 | Run | Reward | Steps | Target detector finds the name (held-out, post) | Name is a person (judge) | Verdict |
@@ -59,6 +61,7 @@ Full numbers in `EXPERIMENTS.yaml`; decisions D20 and D21.
 | `long-20261114-004948` | D18 | 840 | 5/254 | 254/254 | One real weakness, over-exploited: every text is a "Dear <name>" letter |
 | `pilot-opening-20261114-103332` | D18 + hard opening guard (0 above 0.20) | 200 | 229/250 | 238/250 | No collapse, nothing learned |
 | `pilot-opening-20261114-124322` | D18 + soft opening guard (0.25 -> 0.50) | 400 | 7/240 | 4/240 | Invalid: name used as a place or brand |
+| `pilot-person-20261115-095501` | D18 + soft opening guard + person judge | 400 | 232/254 | 254/256 (gate) | Clean, little learned: misses 10/200 -> 22/254, 17 of the 22 are "Dear" letters |
 
 Pre-RL reference on the same 32 held-out requests: the target detector finds 203/216 names;
 the name is a person in 200/216.
@@ -86,7 +89,61 @@ the name is a person in 200/216.
   person's name? natural message? fits the requested kind of message? Logged, never in the
   reward, accuracy not measured. Saved samples: pre-RL 19/216 other person and 78/216 off
   format; long-run letters 118/254 and 148/254.
-- **Spend.** Long run about $2.58, pilots about $0.61 and $1.13 (launcher estimates; Modal
+- **Pilot with guard + person judge (`pilot-person-20261115-095501`).** No exploit: the judge
+  rejected 1-4% of texts throughout training and 2/256 at the end; the audit curves stayed flat
+  (other person 9-16%, unnatural about 1%, off format 29-46%). Valid rate rose 0.78 -> 0.99.
+  Training reward crept from -0.10 to 0.05-0.10 and the miss rate from 2% to 4-5%. On the
+  held-out requests, texts opening with "Dear" went from 33 to 90 and sit at a share of about
+  0.35, where the guard still pays 60% of the reward; 17 of the 22 misses are such letters,
+  and misses stay in two context types (support ticket 10/32, email with signature 10/32).
+  The mean detector probability on the name fell from 0.90 to 0.78, also outside the letters
+  (0.94 -> 0.84). Judge and audit did not slow training (median step 8.9 s vs 7.6 s without).
+  In training the attacker moved to shared openings within about 30 steps (opening share
+  0.03 at step 9, 0.39 at step 33) and the guard then held it there: share 0.22-0.26 and
+  36-46% of completions with a reduced reward for the rest of the run.
+- **Decision after this pilot (D22, owner, 2026-11-15).** No more reward pilots against the
+  current target detector: the "Dear" letter is accepted as its one main weakness reachable by
+  this attacker. Next: RL augmentation set from the long run's attacker, retrain the detector,
+  then attack the retrained detector. Set size/mix and the M06 baselines are not settled.
+- **RL augmentation set and retraining pilot (2026-11-15).** The long run's attacker on 600
+  fresh names gave `rl_aug_v1`: 316 kept letters (262 rejected for another person's name), the
+  target detector misses 294. Fine-tuning the target detector on it with AI4Privacy replay
+  (`configs/m10_retrain_rl_pilot.yaml`, RTX 3090, 3 minutes): misses on 343 held-out "Dear"
+  letters 72% -> 0%, dev F1 0.9605 -> 0.9647, short_eval_v2 recall 0.993 -> 0.980 (2 rows),
+  "Dear <non-person>" flagged 1/20 -> 2/20. Training code ported from `feat/m07b-freeze-d1` as
+  `train_detector.py`. Not yet the M10 comparison (no non-RL baseline, starts from the target
+  detector). Next: attack the retrained detector (epoch 3) with the D20 + D21 reward.
+- **Attack on the retrained detector (2026-11-15, `m10-attack-retrained-20261115-203246`,
+  Modal L4, 400 steps, $1.30).** Same setup as pilot 3, reward from the retrained detector. No
+  new weakness found: held-out misses 1/200 before -> 0/248 after (pilot 3 on the target
+  detector: 10/200 -> 22/254); 48 misses among 11,967 valid training texts (0.4%), scattered
+  (bare first names at sentence start such as "Olivia arrived...", "Jur wrote..."). No drift
+  back to "Dear" (43 -> 53 of 256 held-out texts), valid rate 0.78 -> 0.97, audit flat. An
+  earlier attempt on the RTX 3090 stopped at step 114 when its GPU fell off the bus (same
+  picture up to there). Caveat: one 400-step run with a weak attacker; "no weakness found" is
+  not "no weakness". Next (not approved): M06 baselines and the M10 matched comparison.
+- **M06 baselines and matched retraining (2026-11-17, RTX 3090, about 1 h).** Three 316-row
+  sets on the same requests and filters as `rl_aug_v1`: templates, plain base-attacker
+  generation, generate-and-filter (2400 candidates, hardest kept). Same retraining as the RL
+  pilot. Held-out "Dear" letters missed (target detector 71.7%): templates 13.7%, plain 4.1%,
+  generate-and-filter 1.7%, RL 0%. Dev F1 0.963 / 0.960 / 0.966 / 0.965; held-out base texts
+  F1 0.948 / 0.976 / 0.976 / 0.973. Reading: on this pilot RL beats the baselines only on its
+  own weakness and only narrowly against generate-and-filter. One seed, development data only.
+  Proposed next arm (not built): a large LLM given the detector scores as feedback (D24 if approved).
+- **Log-odds attack on the retrained detector (2026-11-17, `m10-attack-logodds-20261117-212849`,
+  Modal, 400 steps, $1.23).** D23 gave the attacker a slope: gold-label probability median
+  0.9998 -> 0.67 by step 150. It was a label exploit: an invented first name or title before the
+  requested surname makes the surname I-PERSON instead of B-PERSON (234/245 held-out texts),
+  though the name is still found. Beneath it, 23/245 real misses of titled full names in
+  multi-person texts ("Mr. John Sothy"), more than the target detector (17) or the gf (10) and
+  plain (1) retrained detectors. Fix implemented (D24, `p_person_mean`, any PERSON label), not run.
+- **D25 (2026-11-18): detectors read as PERSON / not-PERSON.** B/I tags were a design error for
+  a one-entity redaction task (0.2-0.3% touching name pairs in AI4Privacy) and caused the D24
+  exploit. No retraining; scoring, reward and evaluation now use 1 - P(O) and merged PERSON
+  runs. Limitation L1 in `docs/LIMITATIONS.md`. Next: re-score the four-way comparison, then
+  the next attack.
+- **Spend.** Long run about $2.58, pilots about $0.61, $1.13 and $1.32, attack on the retrained
+  detector $1.30 (launcher estimates; Modal
   billing lags). Monthly Modal budget raised to $30 by the owner on 2026-11-14.
 - **Not done.** No diversity measure beyond the opening word. The extra-person-name gap
   (signers such as "Dr. Sarah") is still open. Whether the "Dear" weakness is the greeting,
@@ -851,6 +908,35 @@ Findings (read-only analysis of the saved samples, target detector rescoring mat
 3. **Diversity control** (not collapsing onto one detector weakness; lower priority):
    monitor duplicate/near-duplicate rate, length and opening-pattern share during the first
    real RL run; an API-model check or reward term only if collapse appears.
+
+## Owner ideas, 2026-11-17 (not decided, none implemented)
+
+1. **Expert LLM with detector feedback (non-RL arm).** A large API model (DeepSeek or GLM)
+   writes texts in rounds and sees the detector's scores of earlier attempts (shared board of
+   hardest/easiest/rejected texts, scores as probability and log-odds). Same acceptance filters
+   (validity, person judge, audit), detector queries capped near an RL run's budget, API cost
+   reported. Step 1: attack pilot on the target detector (does it find "Dear", how fast);
+   step 2: 316-row set and the same retraining. Would be D24. Open: which API/key.
+2. **RL's hoped-for edge: harder patterns.** "Dear" was easy (about 8% of base-model accepted
+   texts, so generate-and-filter found it). The claim to test: against the retrained
+   detector, RL finds patterns the base model almost never writes. Tests: the log-odds run
+   (D23); generate-and-filter re-run against the retrained detector as the bar; base-model
+   frequency of any pattern RL finds (under 1% would support the claim).
+3. **Attack a Jev-based PII detector with the best attacker.** Jev (TypeSafe AI, early access
+   since 2026-09-15 per secondary sources, not verified against TypeSafe's docs) is a "decision"
+   model: it picks among answers the developer defines and returns a probability per answer,
+   no generated text. A PII detector on it = per-sentence "contains a person's name?" decision,
+   then per-word choice of what to redact (one developer's reported recipe). Its probabilities
+   can serve as the attack reward the same way as ModernBERT's. Attack it
+   (RL or the LLM feedback loop, whichever finds more). End goal: show that the ModernBERT
+   detector is the better choice because its weaknesses can be patched by retraining
+   (72% -> 0% on "Dear" in 3 minutes), whereas a prompt-based detector can only be patched
+   by editing its prompt. Sketch: (a) find weaknesses of the jev detector with the same
+   filters; (b) patch both detectors (retraining vs prompt edits, a fixed number of
+   attempts); (c) compare miss rate on held-out attack texts, regressions on the clean sets,
+   cost and latency per text. Needs: API access (key, endpoint), TypeSafe's official docs and
+   terms for automated querying, real price (secondary sources say $0.042 per million input
+   tokens, no output charge), and only synthetic texts sent. Not started.
 
 ## Blockers / open decisions
 

@@ -1,6 +1,7 @@
 """Person judge: answer parsing, retries, outage handling, order of verdicts."""
 
 import unittest
+import urllib.error
 
 from pii_redteam.training.person_judge import (
     NOT_PERSON,
@@ -93,6 +94,14 @@ class TestPersonJudge(unittest.TestCase):
         self.assertEqual(judge(post, attempts=3).verdicts(["Bob"], ["Hi Bob."]), [UNPARSED])
         self.assertEqual(len(calls), 3)
 
+    def test_backoff_doubles_and_honours_retry_after_up_to_the_cap(self):
+        waiting = PersonJudge(model="fake", post=lambda body: {}, retry_seconds=2.0)
+        plain = OSError("down")
+        self.assertEqual([waiting._wait(a, plain) for a in range(7)], [2, 4, 8, 16, 32, 60, 60])
+        limited = urllib.error.HTTPError("u", 429, "Too Many Requests", {"Retry-After": "20"}, None)
+        self.assertEqual(waiting._wait(0, limited), 20.0)
+        self.assertEqual(waiting._wait(5, limited), 60.0)
+
     def test_no_texts_means_no_calls(self):
         def post(body):
             raise AssertionError("must not be called")
@@ -134,11 +143,24 @@ class TestTextAudit(unittest.TestCase):
                 raise OSError("rate limited")
             return reply(self.GOOD)
 
-        audits = TextAudit("fake", post).audits(
+        audits = TextAudit("fake", post, retry_seconds=0.0).audits(
             ["Bob", "Amara"], ["Hi Bob.", "Hi Amara."], ["a chat", "a chat"]
         )
         self.assertIsNotNone(audits[0])
         self.assertIsNone(audits[1])
+
+    def test_rate_limited_call_is_retried(self):
+        calls = []
+
+        def post(body):
+            calls.append(1)
+            if len(calls) < 3:
+                raise urllib.error.HTTPError("u", 429, "Too Many Requests", {}, None)
+            return reply(self.GOOD)
+
+        audits = TextAudit("fake", post, retry_seconds=0.0).audits(["Bob"], ["Hi Bob."], ["a chat"])
+        self.assertIsNotNone(audits[0])
+        self.assertEqual(len(calls), 3)
 
 
 if __name__ == "__main__":

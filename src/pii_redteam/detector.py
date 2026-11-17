@@ -37,6 +37,33 @@ def bio_labels_from_spans(offsets: list[tuple[int, int]], spans: list[dict]) -> 
     return labels
 
 
+def person_spans(
+    offsets: list[tuple[int, int]], p_person: list[float], threshold: float = 0.5
+) -> list[dict]:
+    """PERSON spans read as PERSON / not-PERSON (D25): a token is PERSON when
+    P(B-PERSON) + P(I-PERSON) = 1 - P(O) >= threshold, and consecutive PERSON tokens form
+    one span whatever their B/I split. Zero-width tokens close a span, as in
+    `spans_from_bio_labels`. See docs/LIMITATIONS.md (L1) for why B/I is ignored.
+    """
+    if len(offsets) != len(p_person):
+        raise ValueError(f"{len(offsets)} offsets vs {len(p_person)} probabilities")
+    spans: list[dict] = []
+    current: list[int] | None = None  # [start, end]
+    for (tok_start, tok_end), p in zip(offsets, p_person, strict=True):
+        if tok_start == tok_end or p < threshold:
+            if current is not None:
+                spans.append({"label": PERSON, "start": current[0], "end": current[1]})
+                current = None
+            continue
+        if current is None:
+            current = [tok_start, tok_end]
+        else:
+            current[1] = tok_end
+    if current is not None:
+        spans.append({"label": PERSON, "start": current[0], "end": current[1]})
+    return spans
+
+
 def spans_from_bio_labels(offsets: list[tuple[int, int]], labels: list[str]) -> list[dict]:
     """Decode BIO labels back to char spans (conlleval-style).
 

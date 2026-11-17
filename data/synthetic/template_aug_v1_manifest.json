@@ -1,0 +1,26 @@
+{
+  "file": "data/synthetic/template_aug_v1.jsonl",
+  "sha256": "3c561b1a87e2b472c4731e2021ed270900f0ffaf5422cd9a635340dce85868b7",
+  "rows": 316,
+  "names": 316,
+  "names_and_contexts_from": {
+    "file": "data/synthetic/rl_aug_v1.jsonl",
+    "sha256": "3a397c846b1cfd6e08ae0cb9462b577ce27d4542f5b4dcdd6d57a0dba0ccbe03"
+  },
+  "templates": 50,
+  "seed": 20261117,
+  "by_context": {
+    "support_ticket": 56,
+    "email_with_signature": 13,
+    "meeting_notes": 27,
+    "appointment_reminder": 32,
+    "form_record_line": 50,
+    "list_or_table_row": 39,
+    "informal_text_with_typos": 21,
+    "third_person_report": 40,
+    "chat_message": 20,
+    "forwarded_email_thread": 18
+  },
+  "distinct_texts_ignoring_name": 184,
+  "opens_with_dear": 1
+}

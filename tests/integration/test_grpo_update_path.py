@@ -14,6 +14,7 @@ so the attacker actually responds to small hidden-state changes.
 """
 
 import importlib.util
+import json
 import os
 import tempfile
 import unittest
@@ -47,6 +48,7 @@ if HAS_STACK:
     from pii_redteam.training.rl_reward import INVALID_REWARD, TargetDetectorReward
     from pii_redteam.training.rl_smoke import (
         TimedGRPOTrainer,
+        TrainTextLog,
         WallClockStop,
         align_vllm_names_with_multimodal_checkpoint,
         opening_share_guard,
@@ -388,6 +390,16 @@ class TestStopAndGuardConfig(unittest.TestCase):
         stopper = WallClockStop(max_minutes=-1)
         self.assertTrue(self.control_after(stopper, 1).should_training_stop)
         self.assertTrue(stopper.triggered)
+
+    def test_train_text_log_appends_rows_with_the_reward_call_number(self):
+        with tempfile.TemporaryDirectory() as folder:
+            log = TrainTextLog(os.path.join(folder, "train_texts.jsonl"))
+            log([{"name": "Lucas"}, {"name": "Amara"}])
+            log([{"name": "Zoé"}])
+            with open(log.path, encoding="utf-8") as f:
+                rows = [json.loads(line) for line in f]
+        self.assertEqual([row["reward_call"] for row in rows], [1, 1, 2])
+        self.assertEqual(rows[2]["name"], "Zoé")
 
     def test_planned_steps_prefers_stop_at_step(self):
         self.assertEqual(planned_steps({"grpo": {"max_steps": 1000}}), 1000)

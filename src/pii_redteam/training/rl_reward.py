@@ -3,8 +3,15 @@
 Same scorer path as the M07a probe and the validity-v2 rules the M07b prompt comparison
 passed under (strict JSON contract, one word-boundary mention of the requested name, minimum
 length and content, no refusal), so a degenerate text such as "Hi Lucas" cannot earn the
-reward by being short. Reward = 1 - mean detector probability over the name's tokens. Invalid completions
+reward by being short. Reward = 1 - mean detector probability that the name's tokens are PERSON (1 - P(O), B and I
+summed; D25, docs/LIMITATIONS.md L1). Invalid completions
 get INVALID_REWARD, strictly below the valid range [0, 1].
+
+Optional log-odds scale (D23): reward = clip(1 + log((1 - p) / p) / span, 0, 1), so a text at
+p = 0.9998 earns 0.15 and one at p = 0.99 earns 0.54, where 1 - p gives 0.0002 and 0.01. The
+plain reward cannot tell these apart, which left GRPO with nothing to climb against the
+retrained detector (m10-attack-retrained-20261115-203246: median p 0.9998 for 400 steps).
+p <= 0.5 (a miss) earns the full reward of 1.
 
 Optional collapse guard (D20): the detector reward of a valid text is scaled down, to zero
 at worst, when its opening word is shared by too many texts written for other requests.
@@ -13,13 +20,18 @@ Optional person judge (D21): a text that passes the validity rules but uses the 
 name as something other than a person is invalid (NOT_PERSON_STATUS), so a detector that
 rightly ignores a place or brand name is not counted as fooled.
 
+Optional `record`: called once per batch with one row per completion (text, status, reward,
+scores), so a training run can keep the texts it produced.
+
 Optional audit (D21): three more judge answers per text (another person's name, natural,
 fits the requested format), fetched while the person judge runs. Logged only.
 """
 
 from __future__ import annotations
 
+import math
 from collections import Counter
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Protocol
 
@@ -32,6 +44,24 @@ INVALID_REWARD = -1.0
 SCORER_TRUNCATED = "invalid:scorer_truncated"
 NOT_PERSON_STATUS = "invalid:name_not_person"
 JUDGE_UNPARSED_STATUS = "invalid:judge_unparsed"
+
+
+def probability_reward(p: float) -> float:
+    """Default detector reward: 1 - p."""
+    return reward_variants(p)["r_prob"]
+
+
+class LogOddsReward:
+    """clip(1 + log((1 - p) / p) / span, 0, 1): 0 at p >= 1/(1 + e^-span), 1 at p <= 0.5."""
+
+    def __init__(self, span: float = 10.0) -> None:
+        if span <= 0:
+            raise ValueError("span must be positive")
+        self.span = span
+
+    def __call__(self, p: float) -> float:
+        p = min(max(p, 1e-9), 1 - 1e-9)
+        return min(1.0, max(0.0, 1.0 + math.log((1 - p) / p) / self.span))
 
 
 class Scorer(Protocol):
@@ -59,12 +89,16 @@ class TargetDetectorReward:
         opening_share: OpeningShare | None = None,
         person_judge: PersonJudge | None = None,
         audit: TextAudit | None = None,
+        record: Callable[[list[dict]], None] | None = None,
+        detector_reward: Callable[[float], float] = probability_reward,
     ) -> None:
         self.scorer = scorer
         self.eos_token_id = eos_token_id
         self.opening_share = opening_share
         self.person_judge = person_judge
         self.audit = audit
+        self.record = record
+        self.detector_reward = detector_reward
 
     def __call__(
         self,
@@ -96,6 +130,24 @@ class TargetDetectorReward:
         if log_metric:
             for key, value in self.metrics(samples).items():
                 log_metric(key, value)
+        if self.record:
+            self.record(
+                [
+                    {
+                        "request_id": request,
+                        "name": requested_name,
+                        "raw_text": completion_text(completion),
+                        "status": sample["status"],
+                        "reward": reward,
+                        "p_target_mean": sample.get("p_target_mean"),
+                        "opening_share": sample.get("opening_share"),
+                        **(sample.get("audit") or {}),
+                    }
+                    for request, requested_name, completion, sample, reward in zip(
+                        request_id or name, name, completions, samples, rewards, strict=True
+                    )
+                ]
+            )
         return rewards
 
     def _judge_texts(
@@ -141,16 +193,13 @@ class TargetDetectorReward:
             samples[i]["opening_share"] = share
             samples[i]["opening_factor"] = self.opening_share.reward_factor(share)
 
-    @staticmethod
-    def _reward(sample: dict) -> float:
+    def _reward(self, sample: dict) -> float:
         if sample["status"] != "valid":
             return INVALID_REWARD
         if sample.get("p_target_mean") is None:
             sample["status"] = SCORER_TRUNCATED
             return INVALID_REWARD
-        return reward_variants(sample["p_target_mean"])["r_prob"] * sample.get(
-            "opening_factor", 1.0
-        )
+        return self.detector_reward(sample["p_target_mean"]) * sample.get("opening_factor", 1.0)
 
     @staticmethod
     def metrics(samples: list[dict]) -> dict[str, float]:

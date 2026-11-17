@@ -117,3 +117,31 @@ class TestAlignment(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PersonSpansTest(unittest.TestCase):
+    """PERSON / not-PERSON reading (D25): B and I are summed, so B/I splits never matter."""
+
+    def test_consecutive_person_tokens_form_one_span_whatever_their_split(self):
+        from pii_redteam.detector import person_spans
+
+        offsets = [(0, 0), (0, 3), (3, 9), (9, 16), (0, 0)]
+        self.assertEqual(
+            person_spans(offsets, [0.0, 0.1, 0.9, 0.8, 0.0]),
+            [{"label": "PERSON", "start": 3, "end": 16}],
+        )
+
+    def test_threshold_and_zero_width_tokens_close_spans(self):
+        from pii_redteam.detector import person_spans
+
+        offsets = [(0, 2), (2, 2), (2, 5), (5, 8)]
+        self.assertEqual(
+            person_spans(offsets, [0.6, 0.9, 0.49, 0.5]),
+            [{"label": "PERSON", "start": 0, "end": 2}, {"label": "PERSON", "start": 5, "end": 8}],
+        )
+
+    def test_length_mismatch_is_refused(self):
+        from pii_redteam.detector import person_spans
+
+        with self.assertRaises(ValueError):
+            person_spans([(0, 1)], [0.9, 0.9])

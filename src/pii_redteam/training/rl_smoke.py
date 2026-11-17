@@ -19,6 +19,7 @@ import os
 import statistics
 import sys
 import time
+from collections.abc import Callable
 
 import torch
 import trl.generation.vllm_generation as trl_vllm
@@ -42,7 +43,7 @@ from .opening_share import OpeningShare
 from .person_judge import AUDIT_FIELDS, MISTRAL_CHAT_URL, PersonJudge, TextAudit, http_transport
 from .rl_bank import bank_names, build_rl_requests
 from .rl_dataset import RL_PROMPT_VARIANT, rl_rows
-from .rl_reward import TargetDetectorReward
+from .rl_reward import LogOddsReward, TargetDetectorReward, probability_reward
 from .rl_signal import signal_summary
 
 DETECTOR_MAX_LENGTH = 512
@@ -84,6 +85,21 @@ class TimedGRPOTrainer(GRPOTrainer):
         output = super()._generate_single_turn(*args, **kwargs)
         self.generation_seconds.append(time.perf_counter() - started)
         return output
+
+
+class TrainTextLog:
+    """Appends every completion the reward saw during training to a JSONL file."""
+
+    def __init__(self, path: str) -> None:
+        self.path = path
+        self.reward_calls = 0
+
+    def __call__(self, rows: list[dict]) -> None:
+        self.reward_calls += 1
+        with open(self.path, "a", encoding="utf-8") as f:
+            for row in rows:
+                line = {"reward_call": self.reward_calls, **row}
+                f.write(json.dumps(line, ensure_ascii=False) + "\n")
 
 
 def to_multimodal_qwen_name(name: str) -> str:
@@ -141,8 +157,8 @@ def save_report(report: dict, path: str) -> None:
         json.dump(report, f, indent=2, ensure_ascii=False)
 
 
-def build_requests(config: dict, repo_dir: str) -> tuple[list[dict], list[dict], dict]:
-    """(train requests, held-out signal requests, provenance) with the final-eval lock asserted."""
+def load_name_pool(config: dict, repo_dir: str) -> tuple[frozenset[str], dict, frozenset[str]]:
+    """(requestable names, provenance, names used by other banks); asserts the final-eval lock."""
     splits_dir = resolve(config["splits_dir"], repo_dir)
     manifest_path = os.path.join(splits_dir, "final_eval_manifest.json")
     with open(manifest_path, encoding="utf-8") as f:
@@ -153,12 +169,18 @@ def build_requests(config: dict, repo_dir: str) -> tuple[list[dict], list[dict],
     excluded: set[str] = set()
     for path in config["bank"]["exclude_banks"]:
         excluded |= bank_names(resolve(path, repo_dir))
+    return pool, pool_provenance, frozenset(excluded)
+
+
+def build_requests(config: dict, repo_dir: str) -> tuple[list[dict], list[dict], dict]:
+    """(train requests, held-out signal requests, provenance)."""
+    pool, pool_provenance, excluded = load_name_pool(config, repo_dir)
     n_signal, n_train = config["bank"]["n_signal"], config["bank"]["n_train"]
     requests = build_rl_requests(
         pool,
         n=n_signal + n_train,
         seed=config["bank"]["seed"],
-        exclude=frozenset(excluded),
+        exclude=excluded,
     )
     provenance = {
         "pool": pool_provenance,
@@ -213,6 +235,16 @@ def opening_share_guard(config: dict, window: int | None = None) -> OpeningShare
         window=window or settings["window"],
         min_other_texts=settings["min_other_texts"],
     )
+
+
+def detector_reward(config: dict) -> Callable[[float], float]:
+    """`reward.detector_score`: absent or kind prob -> 1 - p; kind log_odds -> LogOddsReward."""
+    settings = (config.get("reward") or {}).get("detector_score") or {"kind": "prob"}
+    if settings["kind"] == "prob":
+        return probability_reward
+    if settings["kind"] == "log_odds":
+        return LogOddsReward(span=settings["span"])
+    raise ValueError(f"unknown reward.detector_score.kind: {settings['kind']!r}")
 
 
 def person_judge(config: dict) -> PersonJudge | None:
@@ -278,7 +310,12 @@ def sample_and_score(
     metrics: dict = {}
     eos = tok.eos_token_id
     reward = TargetDetectorReward(
-        scorer, eos, opening_share_guard(config, window=len(samples)), judge, audit
+        scorer,
+        eos,
+        opening_share_guard(config, window=len(samples)),
+        judge,
+        audit,
+        detector_reward=detector_reward(config),
     )
     rewards = reward(
         [s["raw_text"] for s in samples],
@@ -384,7 +421,13 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
     scorer = load_scorer(config, device)
     judge, audit = person_judge(config), text_audit(config)
     reward = TargetDetectorReward(
-        scorer, tok.eos_token_id, opening_share_guard(config), judge, audit
+        scorer,
+        tok.eos_token_id,
+        opening_share_guard(config),
+        judge,
+        audit,
+        record=TrainTextLog(os.path.join(work_dir, "train_texts.jsonl")),
+        detector_reward=detector_reward(config),
     )
     model.eval()
     torch.manual_seed(config["seed"])
