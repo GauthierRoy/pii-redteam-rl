@@ -151,6 +151,8 @@ the name is a person in 200/216.
   Ready to rerun once the GPU is back: `configs/m10_attack_person_3090.yaml` (600 steps),
   `configs/m10_attack_from_longrun_3090.yaml` (continues the long-run attacker),
   `scripts/train_label_scheme_ablation.py` (BIO vs PERSON/O twins). Run one job at a time.
+  The GPU did not come back overnight (watcher until 07:40; at 07:45 the PC did not answer on
+  the network at all, so it was off or rebooting). Nothing else ran.
 - **Spend.** Long run about $2.58, pilots about $0.61, $1.13 and $1.32, attack on the retrained
   detector $1.30 (launcher estimates; Modal
   billing lags). Monthly Modal budget raised to $30 by the owner on 2026-11-14.
