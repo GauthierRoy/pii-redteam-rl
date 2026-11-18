@@ -153,6 +153,9 @@ the name is a person in 200/216.
   `scripts/train_label_scheme_ablation.py` (BIO vs PERSON/O twins). Run one job at a time.
   The GPU did not come back overnight (watcher until 07:40; at 07:45 the PC did not answer on
   the network at all, so it was off or rebooting). Nothing else ran.
+  After the reboot (07:50) the full 1000-step run was relaunched alone; the GPU fell off again at
+  step 93 (08:02), the third time and this time with a single job. The 3090 is unreliable for
+  sustained load until its hardware/power issue is fixed.
 - **Spend.** Long run about $2.58, pilots about $0.61, $1.13 and $1.32, attack on the retrained
   detector $1.30 (launcher estimates; Modal
   billing lags). Monthly Modal budget raised to $30 by the owner on 2026-11-14.
