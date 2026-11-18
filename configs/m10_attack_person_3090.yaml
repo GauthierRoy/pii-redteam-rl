@@ -9,8 +9,8 @@ work_dir: /home/gauthier/runs
 splits_dir: artifacts/splits
 locks:
   final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
-max_minutes: 100                   # hard cap; everything must stop before 09:00
-stop_at_step: 600                  # longer than the 400-step pilots; lr schedule still from max_steps
+max_minutes: 160                   # hard cap (owner OK on 2026-11-18 morning for a long run)
+stop_at_step: 1000                 # full lr schedule (max_steps 1000)
 resume_from_checkpoint: null
 vllm_multimodal_names: true        # sync the text-only attacker into vLLM's multimodal Qwen3.5
 
