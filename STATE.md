@@ -156,6 +156,12 @@ the name is a person in 200/216.
   After the reboot (07:50) the full 1000-step run was relaunched alone; the GPU fell off again at
   step 93 (08:02), the third time and this time with a single job. The 3090 is unreliable for
   sustained load until its hardware/power issue is fixed.
+  2026-11-22: relaunched after a reboot with a 2-s GPU log; fell off again at step 74 (11:09),
+  alone, at 74 C core and 249 W, well under the 370 W limit. Thermal slowdown flags were active
+  from the first minute (software thermal 279 of 502 samples, hardware thermal/slowdown 9) while
+  the core stayed at or below 76 C and the fan at 100%: an unseen sensor, most likely the GDDR6X
+  memory junction, is overheating. The same 1000-step run went to Modal
+  (configs/m10_attack_person_modal.yaml, `modal_rl.py::long_pilot`, 3 h cap).
 - **Spend.** Long run about $2.58, pilots about $0.61, $1.13 and $1.32, attack on the retrained
   detector $1.30 (launcher estimates; Modal
   billing lags). Monthly Modal budget raised to $30 by the owner on 2026-11-14.
