@@ -53,6 +53,7 @@ GPU = "L4"
 BENCH_TIMEOUT_S = 900
 LONG_TIMEOUT_S = 9600
 PILOT_TIMEOUT_S = 6600
+LONG_PILOT_TIMEOUT_S = 10800  # 1000-step runs: about 140 min of steps on an L4 plus setup
 GENERATE_TIMEOUT_S = 1800
 JUDGE_SECRET = "mistral"  # holds MISTRAL_API_KEY for the person judge (reward.person_judge)
 L4_CONTAINER_USD_PER_HOUR = 1.12  # approximate list prices: L4 + 4 CPU + 16 GiB
@@ -129,6 +130,7 @@ PILOT_GPU_FUNCTION: dict[str, Any] = {
 
 
 GENERATE_GPU_FUNCTION: dict[str, Any] = {**PILOT_GPU_FUNCTION, "timeout": GENERATE_TIMEOUT_S}
+LONG_PILOT_GPU_FUNCTION: dict[str, Any] = {**PILOT_GPU_FUNCTION, "timeout": LONG_PILOT_TIMEOUT_S}
 
 
 def sha256_of(path: str) -> str:
@@ -420,6 +422,19 @@ def pilot(config: str, resume_from: str = ""):
     commit = local_commit()
     print(f"repo state: {commit}; config {config}; timeout {PILOT_TIMEOUT_S}s on {GPU}")
     print(format_result("pilot", pilot_run.remote(commit, config, resume_from)))
+
+
+@app.function(image=IMAGE_VLLM, **LONG_PILOT_GPU_FUNCTION)
+def long_pilot_run(commit: str, config: str, resume_from: str = "") -> dict:
+    return pilot_run.local(commit, config, resume_from)
+
+
+@app.local_entrypoint()
+def long_pilot(config: str, resume_from: str = ""):
+    """Like `pilot`, with a 3 h timeout for 1000-step runs."""
+    commit = local_commit()
+    print(f"repo state: {commit}; config {config}; timeout {LONG_PILOT_TIMEOUT_S}s on {GPU}")
+    print(format_result("pilot", long_pilot_run.remote(commit, config, resume_from)))
 
 
 @app.local_entrypoint()
