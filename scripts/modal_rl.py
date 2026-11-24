@@ -20,6 +20,12 @@ Augmentation texts from a trained attacker (same secret, killed after `GENERATE_
     modal run --detach scripts/modal_rl.py::generate --config configs/m09_rl_generate.yaml
 
 Cost is bounded by `BENCH_TIMEOUT_S` per arm: Modal kills the container at the timeout.
+
+`long`, `pilot`, `long_pilot` and `generate` spawn the run and return at once. Always launch them
+with `modal run --detach`: without it Modal stops the app, and the run, when this client exits.
+With it, the run no longer depends on this machine (a sleeping laptop killed two awaited runs on
+2026-11-22). Results: `summary.json` in the run directory on the volume, or
+    modal run scripts/modal_rl.py::result --call-id <fc-... printed at launch>
 """
 
 import copy
@@ -383,6 +389,18 @@ def format_result(arm: str, result: dict | Exception) -> str:
     )
 
 
+def spawned(call: modal.FunctionCall) -> None:
+    """Report a spawned run; with `modal run --detach` it no longer depends on this client.
+
+    Awaiting a run with `.remote` tied it to the local client: twice on 2026-11-22 the client's
+    "Jwt is expired" error (laptop asleep) stopped the app and killed the run. Spawned runs keep
+    going; each writes `summary.json` in its run directory on the volume, and
+    `modal run scripts/modal_rl.py::result --call-id <id>` prints it once the run is done.
+    """
+    print(f"spawned function call {call.object_id}; the run continues on Modal without this client")
+    print(f"result later: modal run scripts/modal_rl.py::result --call-id {call.object_id}")
+
+
 @app.local_entrypoint()
 def bench(arms: str = "vllm_names,vllm_lm"):
     commit = local_commit()
@@ -413,7 +431,7 @@ def long(resume_from: str = ""):
     """The long run; `--resume-from <run_dir>` continues from the latest checkpoint of a killed run."""
     commit = local_commit()
     print(f"repo state: {commit}; timeout {LONG_TIMEOUT_S}s on {GPU}")
-    print(format_result("long", long_run.remote(commit, resume_from)))
+    spawned(long_run.spawn(commit, resume_from))
 
 
 @app.local_entrypoint()
@@ -421,7 +439,7 @@ def pilot(config: str, resume_from: str = ""):
     """A capped run of any repo config, e.g. `--config configs/m08_rl_opening.yaml`."""
     commit = local_commit()
     print(f"repo state: {commit}; config {config}; timeout {PILOT_TIMEOUT_S}s on {GPU}")
-    print(format_result("pilot", pilot_run.remote(commit, config, resume_from)))
+    spawned(pilot_run.spawn(commit, config, resume_from))
 
 
 @app.function(image=IMAGE_VLLM, **LONG_PILOT_GPU_FUNCTION)
@@ -431,17 +449,10 @@ def long_pilot_run(commit: str, config: str, resume_from: str = "") -> dict:
 
 @app.local_entrypoint()
 def long_pilot(config: str, resume_from: str = ""):
-    """Like `pilot`, with a 3 h timeout for 1000-step runs.
-
-    The run is spawned, not awaited: with `modal run --detach` it keeps going after this client
-    exits. Awaiting it (`.remote`) tied the run to the local client, and twice on 2026-11-22 the
-    client's "Jwt is expired" error (laptop asleep) stopped the app and killed the run. Follow it
-    with `modal app logs <app id>` and read the results from the volume.
-    """
+    """Like `pilot`, with a 3 h timeout for 1000-step runs."""
     commit = local_commit()
     print(f"repo state: {commit}; config {config}; timeout {LONG_PILOT_TIMEOUT_S}s on {GPU}")
-    call = long_pilot_run.spawn(commit, config, resume_from)
-    print(f"spawned function call {call.object_id}; the run continues on Modal")
+    spawned(long_pilot_run.spawn(commit, config, resume_from))
 
 
 @app.local_entrypoint()
@@ -449,6 +460,16 @@ def generate(config: str):
     """Sample a trained RL attacker on fresh names and filter the texts."""
     commit = local_commit()
     print(f"repo state: {commit}; config {config}; timeout {GENERATE_TIMEOUT_S}s on {GPU}")
-    result = generate_run.remote(commit, config)
-    print(format_result("generate", result))
-    print(json.dumps(result.get("counts"), indent=2))
+    spawned(generate_run.spawn(commit, config))
+
+
+@app.local_entrypoint()
+def result(call_id: str):
+    """Summary of a spawned run (`--call-id fc-...`), or a note that it is still running."""
+    try:
+        summary = modal.FunctionCall.from_id(call_id).get(timeout=0)
+    except TimeoutError:
+        print(f"{call_id} is still running")
+        return
+    print(format_result(summary.get("arm", "run"), summary))
+    print(json.dumps(summary.get("counts"), indent=2))
