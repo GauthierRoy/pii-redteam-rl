@@ -431,10 +431,17 @@ def long_pilot_run(commit: str, config: str, resume_from: str = "") -> dict:
 
 @app.local_entrypoint()
 def long_pilot(config: str, resume_from: str = ""):
-    """Like `pilot`, with a 3 h timeout for 1000-step runs."""
+    """Like `pilot`, with a 3 h timeout for 1000-step runs.
+
+    The run is spawned, not awaited: with `modal run --detach` it keeps going after this client
+    exits. Awaiting it (`.remote`) tied the run to the local client, and twice on 2026-11-22 the
+    client's "Jwt is expired" error (laptop asleep) stopped the app and killed the run. Follow it
+    with `modal app logs <app id>` and read the results from the volume.
+    """
     commit = local_commit()
     print(f"repo state: {commit}; config {config}; timeout {LONG_PILOT_TIMEOUT_S}s on {GPU}")
-    print(format_result("pilot", long_pilot_run.remote(commit, config, resume_from)))
+    call = long_pilot_run.spawn(commit, config, resume_from)
+    print(f"spawned function call {call.object_id}; the run continues on Modal")
 
 
 @app.local_entrypoint()
