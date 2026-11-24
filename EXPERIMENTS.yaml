@@ -529,3 +529,33 @@ runs:
       setup: "20 common first names x 6 fixed templates, complete misses per detector (PERSON reading)"
       misses_of_20: { start_comma: { target: 0, template: 0, plain: 1, gf: 1, rl: 2 }, start_verb: { target: 0, template: 0, plain: 0, gf: 0, rl: 1 }, start_wrote: { all: 0 }, hi_comma: { target: 3, others: 0 }, mid_sentence: { target: 3, template: 0, plain: 0, gf: 0, rl: 3 }, dear: { target: 13, template: 3, plain: 0, gf: 0, rl: 0 } }
     outcome: "No real 'bare first name at the start' weakness (hinted by 'James, please...' and 'Olivia arrived...' misses in RL texts): at most 2/20 for any detector. The Dear weakness of the target detector shows clearly (13/20)."
+
+  - run_id: m10-attack-person-modal-20261122-100202
+    kind: rl-training
+    milestone: M10 (pilot)
+    executed: 2026-11-22
+    where: Modal L4 (`modal_rl.py::long_pilot`, 3 h cap)
+    repo_commit: "16a8ad5"
+    config: configs/m10_attack_person_modal.yaml
+    artifacts: "modal volume pii-redteam-rl:/runs/pilot-m10_attack_person_modal-20261122-100133/"
+    checks: { pass: 0, fail: 1 }   # stopped at step 452 of 1000: the app died with the local client ("Jwt is expired"); checkpoint-450 kept
+    metrics:
+      setup: { reward: "D23 log-odds on the D25 PERSON reading", gates: "D21 judge, D20 guard, audit other_person rejects", detector: "retrained detector epoch 3", planned_steps: 1000, step_seconds: "about 12" }
+      training_by_100_steps: { valid: [2708, 2909, 2981, 3008, 1591], misses: [14, 23, 15, 51, 5], median_p: [0.99976, 0.99947, 0.9995, 0.99933, 0.99931], mean_reward: [0.02, 0.16, 0.18, 0.22, 0.21], dear_openings: [328, 79, 43, "<25", "<11"] }
+      misses_total: "108 of 13197 valid texts"
+      cost_usd_estimate: 1.9
+    outcome: "No exploit. The attacker left Dear letters for varied openings; misses stay rare but come in whole groups (all 8 texts of one step) that open with the bare requested name as the first word (Lucia, Olivia, Charles, Taylor...). Resumed from checkpoint-450 on 2026-11-24 after the launcher was changed to spawn the run."
+
+  - run_id: probe-name-swap-20261122
+    kind: evaluation
+    milestone: M10 (pilot)
+    executed: 2026-11-22
+    where: RTX 3090 CPU (GPU lost)
+    repo_commit: "e74c277"
+    artifacts: "rtx3090:~/runs/probe_name_swap_20261122.json (cases: ~/runs/name_cases_20261122.jsonl)"
+    checks: { pass: 1, fail: 0 }
+    metrics:
+      setup: "40 missed training texts of m10-attack-person-modal-20261122 that open with a bare single-word name; per text: original, 'Hi ' prefix, the name swapped for 6 common first names (Maria, Thomas, Sophie, Ahmed, Elena, Peter), name moved to a closing 'Thanks, X.'"
+      misses: { target: { orig: "31/40", hi_prefix: "25/40", swap_name: "90/240", name_at_end: "12/40" }, rl_retrained: { orig: "38/40", hi_prefix: "5/40", swap_name: "55/240", name_at_end: "10/40" }, gf_retrained: { orig: "15/40", hi_prefix: "3/40", swap_name: "34/240", name_at_end: "4/40" } }
+      swap_spread_rl: "20 of 40 contexts miss no swapped name, 20 miss at least one, 2 miss all six"
+    outcome: "A real weakness, not an exploit: a name as the very first word, before certain continuations (often third-person bios: 'X is a well-respected professional...'), is missed with ordinary names too (23% of swaps for the RL-retrained detector, 14% for generate-and-filter, 38% for the target). A word in front ('Hi ') mostly fixes it for the retrained detectors. Half the contexts fail only with the original name. Contradicts probe-first-name-start-20261118 (fixed short templates, <= 2/20): the attacker found continuations those templates did not cover. Selection caveat: the 40 texts were chosen as misses, so the 'orig' row is inflated by design; the swap rows are the fair numbers."
