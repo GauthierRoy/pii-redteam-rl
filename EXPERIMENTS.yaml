@@ -579,3 +579,36 @@ runs:
       max_core_temp_c: 76
       thermal_flag_share: { all_samples: "110/2146", busy_samples: "124/177 (util >= 50%)" }
     outcome: "No crash in 30 minutes, but the pauses took 76% of the time: about 7 minutes of real GPU work, less than the ~10 minutes of load before the earlier drops. Inconclusive on whether pausing prevents the drop. While busy the card still hits a thermal limit within seconds (flags in 70% of busy samples), which supports the overheating diagnosis. Next: a longer test with milder pauses, to accumulate 20+ minutes of GPU work."
+
+  - run_id: m10-attack-person-modal-20261124-064157
+    kind: rl-training
+    milestone: M10 (pilot)
+    executed: 2026-11-24
+    where: Modal L4 (`modal_rl.py::long_pilot`, spawned)
+    repo_commit: "2c8ad85"
+    config: configs/m10_attack_person_modal.yaml
+    resumed_from: "m10-attack-person-modal-20261122-100202 checkpoint-450"
+    artifacts: "modal volume pii-redteam-rl:/runs/pilot-m10_attack_person_modal-20261124-064132/"
+    checks: { pass: 1, fail: 0 }   # 1000 steps, exit 0, no failed checks
+    metrics:
+      steps: "450 -> 1000 (steps 0-452 in the first run)"
+      median_step_seconds: 9.73
+      cost_usd_estimate: 1.94   # plus 1.9 for the first half
+      training_by_100_steps_from_450: { misses: [46, 42, 63, 82, 216, 169], median_p: [0.99887, 0.9987, 0.99798, 0.99766, 0.98666, 0.9678], mean_reward: [0.26, 0.26, 0.32, 0.34, 0.48, 0.55] }
+      heldout_pre_post: { valid: "182/256 -> 240/256", misses: "0 -> 29", median_p: "0.99982 -> 0.96061", name_first_word: "36/182 -> 240/240" }
+    outcome: "The attacker learned to open every text with the bare requested name, mostly followed by a greeting ('Bob, hi there! I hope...'). The gates held: no B/I or second-person trick, judge-valid texts, 0 'other person' among post samples. Held-out misses rose from 0/182 to 29/240 on the attacked detector (the RL-retrained one), across 9 of 32 names."
+
+  - run_id: heldout-person-modal-all-detectors-20261124
+    kind: evaluation
+    milestone: M10 (pilot)
+    executed: 2026-11-24
+    where: RTX 3090 CPU
+    repo_commit: "4d1bf8a"
+    artifacts: "rtx3090:~/runs/heldout_person_modal_all_detectors_20261124.json"
+    checks: { pass: 1, fail: 0 }   # RL-retrained detector reproduces the run's 29 post misses
+    metrics:
+      setup: "pre/post held-out samples of m10-attack-person-modal-20261124 (32 requests x 8), JSON-decoded text, mean PERSON probability over the name tokens, miss < 0.5"
+      misses_pre_of_182: { target: 9, rl: 0, gf: 0, plain: 0, template: 6 }
+      misses_post_of_240: { target: 22, rl: 29, gf: 10, plain: 38, template: 41 }
+      names_with_a_miss_of_32: { target: 6, rl: 9, gf: 5, plain: 14, template: 12 }
+    outcome: "The learned name-first pattern transfers: every detector misses more after RL, including ones the attacker never saw. Generate-and-filter is the most robust (10/240), plain generation and templates the least (38 and 41). Misses cluster on some names for all detectors (Bob, Sothy, Awen, Pham, Sujeepan). First RL finding that no baseline augmentation fixes. Single run, 32 held-out requests: exploratory."
