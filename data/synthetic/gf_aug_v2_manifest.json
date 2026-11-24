@@ -1,0 +1,86 @@
+{
+  "file": "data/synthetic/gf_aug_v2.jsonl",
+  "sha256": "30af00adc78b5c3d67ab8ae0191e3da4521e42a6be33042185b18a797e312251",
+  "rows": 316,
+  "names": 316,
+  "source": {
+    "run_id": "m10-round2-base-generate-20261124-200255",
+    "accepted_sha256": "5d478c0b825c8523e49c9f72f3337fd6d81d005b4f6f672b0fafce6d2f859ed9",
+    "pool": {
+      "generated": 2400,
+      "decisions": {
+        "rejected:invalid:name_not_person": 113,
+        "rejected:invalid:name_missing": 189,
+        "accepted": 1585,
+        "rejected:invalid:json": 216,
+        "rejected:other_person": 191,
+        "rejected:invalid:name_dup": 57,
+        "rejected:invalid:no_content": 1,
+        "rejected:invalid:too_short": 34,
+        "rejected:invalid:truncated": 3,
+        "rejected:invalid:refusal": 3,
+        "rejected:invalid:too_long": 2,
+        "rejected:invalid:name_only": 6
+      },
+      "accepted": 1585,
+      "accepted_names": 578,
+      "accepted_detector_misses": 5,
+      "accepted_misses_by_context": {
+        "support_ticket": 2,
+        "third_person_report": 2,
+        "forwarded_email_thread": 1
+      },
+      "accepted_by_context": {
+        "email_with_signature": 128,
+        "forwarded_email_thread": 153,
+        "meeting_notes": 153,
+        "chat_message": 184,
+        "appointment_reminder": 146,
+        "form_record_line": 164,
+        "list_or_table_row": 172,
+        "informal_text_with_typos": 137,
+        "third_person_report": 181,
+        "support_ticket": 167
+      },
+      "accepted_top_openings": {
+        "dear": 248,
+        "hey": 198,
+        "hi": 161,
+        "the": 99,
+        "hello": 98,
+        "is": 70,
+        "i": 37,
+        "your": 36
+      },
+      "accepted_mean_words": 20.9
+    }
+  },
+  "filters": "validity v2, person judge (mistral-medium-2604), audit other_person false, no exact repeat",
+  "scored_by": "retrained-rl-pilot-20261115-epoch3 (4755db73...)",
+  "detector_misses": 3,
+  "name_first": 102,
+  "top_openings_after_name": {
+    "hey": 30,
+    "dear": 29,
+    "is": 27,
+    "hi": 20,
+    "the": 19,
+    "hello": 15,
+    "please": 11,
+    "our": 8
+  },
+  "by_context": {
+    "third_person_report": 33,
+    "support_ticket": 28,
+    "forwarded_email_thread": 30,
+    "appointment_reminder": 28,
+    "email_with_signature": 32,
+    "list_or_table_row": 39,
+    "form_record_line": 46,
+    "informal_text_with_typos": 27,
+    "chat_message": 28,
+    "meeting_notes": 25
+  },
+  "attacker": "base Qwen3.5-2B (no adapter)",
+  "selection": "lowest retrained-detector p on the name, one per name, <= 48 per type"
+}

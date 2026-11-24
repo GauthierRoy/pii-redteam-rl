@@ -34,6 +34,10 @@ def main() -> None:
         "rl-generate", help="sample a trained RL attacker on fresh names and filter the texts"
     )
     generate.add_argument("--config", required=True, help="path to an RL generation YAML config")
+    llm_attack = sub.add_parser(
+        "llm-attack", help="non-RL arm: an API model writes texts with the detector's feedback"
+    )
+    llm_attack.add_argument("--config", required=True, help="path to an LLM attack YAML config")
     args = parser.parse_args()
 
     if args.command == "probe-base":
@@ -91,6 +95,15 @@ def main() -> None:
 
         report = run_rl_generate(config, repo_dir)
         print(json.dumps({"run_id": report["run_id"], "counts": report["counts"]}, indent=2))
+    elif args.command == "llm-attack":
+        with open(args.config, encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        config.setdefault("repo_commit", os.environ.get("PROBE_REPO_COMMIT", "unrecorded"))
+        repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from pii_redteam.training.llm_attack import run_llm_attack
+
+        report = run_llm_attack(config, repo_dir)
+        print(json.dumps({"run_id": report["run_id"], "stop": report["stop_reason"]}, indent=2))
 
 
 if __name__ == "__main__":

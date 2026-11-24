@@ -612,3 +612,38 @@ runs:
       misses_post_of_240: { target: 22, rl: 29, gf: 10, plain: 38, template: 41 }
       names_with_a_miss_of_32: { target: 6, rl: 9, gf: 5, plain: 14, template: 12 }
     outcome: "The learned name-first pattern transfers: every detector misses more after RL, including ones the attacker never saw. Generate-and-filter is the most robust (10/240), plain generation and templates the least (38 and 41). Misses cluster on some names for all detectors (Bob, Sothy, Awen, Pham, Sujeepan). First RL finding that no baseline augmentation fixes. Single run, 32 held-out requests: exploratory."
+
+  - run_id: m10-round2-generate-20261124
+    kind: augmentation-generation
+    milestone: M10 (round 2)
+    executed: 2026-11-24
+    where: Modal L4 (`modal_rl.py::generate`, spawned)
+    repo_commit: "df11990 + uncommitted (configs/m10_round2_{rl,base}_generate.yaml, scripts/finalize_round2_aug.py)"
+    artifacts: "modal volume pii-redteam-rl:/runs/generate-20261124-195127/ (RL), /runs/generate-20261124-200238/ (base); data/synthetic/{rl,gf,plain}_aug_v2.jsonl (+ manifests)"
+    checks: { pass: 2, fail: 0 }   # both runs exit 0
+    metrics:
+      setup: { requests: "600 fresh names, bank seed 20261124, none from the attack run's 2032 requests", scored_by: "RL-retrained detector (4755db73...), the one the attacker beat" }
+      rl_pool: { attacker: "m10-attack-person-modal-20261124-064157 adapter", samples_per_request: 1, accepted: 569, name_first: "569/569", name_comma: 397, misses: "61/569 (10.7%)", misses_name_comma: "47/397 (11.8%)", cost_usd: 0.10 }
+      base_pool: { samples_per_request: 4, accepted: 1585, name_first: "414/1585 (26%)", name_comma: 75, misses: "5/1585 (0.3%)", misses_name_comma: "1/75 (1.3%)", cost_usd: 0.19 }
+      sets: { rl_aug_v2: "316, request order, 38 misses, 316 name-first", gf_aug_v2: "316, hardest by the detector, 3 misses, 102 name-first", plain_aug_v2: "316, first sample, 1 miss, 73 name-first" }
+    outcome: "Name-first is not rare in base-model text (26%), but the base model's versions are almost never missed; the RL attacker's are (11.8% vs 1.3% for 'Name,' openings). RL found which continuations after the name confuse the detector, which generate-and-filter cannot select because its pool hardly contains them."
+
+  - run_id: m10-round2-retrain-20261124
+    kind: detector-training
+    milestone: M10 (round 2, matched arms)
+    executed: 2026-11-24
+    where: RTX 3090 (ssh rtx3090), scripts/run_round2_3090.sh; scoring on CPU
+    repo_commit: "df11990 + uncommitted (configs/m10_round2_retrain_{rl,gf,plain}.yaml)"
+    artifacts: "rtx3090:~/runs/m10-round2-retrain-{rl-20261124-201358,gf-20261124-201747,plain-20261124-202148}/, ~/runs/m10-round2-scores/{heldout_person_attack,name_swap}.json, ~/runs/m10_round2.log"
+    checks: { pass: 3, fail: 0 }   # per arm: final-eval lock, start dev F1 reproduces (0.965 vs 0.9647), training done
+    metrics:
+      setup: { start: "RL-retrained detector, round 1 (epoch 3, 4755db73...)", recipe: "configs/m10_retrain_gf.yaml unchanged except start and augmentation file; 3 epochs, freeze rule chose epoch 3 for all arms" }
+      held_out_attack_texts: { set: "1000-step attack, 32 held-out names: 182 pre-RL, 240 post-RL texts", start: { pre: 0, post: 29 }, rl: { pre: 2, post: 0 }, gf: { pre: 2, post: 8 }, plain: { pre: 3, post: 11 } }
+      name_swap_probe_misses: { cases: "orig 40 / hi_prefix 40 / swap_name 240 / name_at_end 40", start: [38, 5, 55, 10], rl: [7, 0, 5, 18], gf: [34, 14, 89, 18], plain: [36, 11, 87, 18] }
+      dev: { start: { f1: 0.9647, name_free_rows_flagged: 66 }, rl: [0.9632, 76], gf: [0.9624, 69], plain: [0.9626, 66] }
+      short_eval_v2_recall: { start: 0.98, rl: 0.9867, gf: 0.9867, plain: 0.9667 }
+      short_eval_deepseek_v1_recall: { start: 1.0, rl: 1.0, gf: 1.0, plain: 0.94 }
+      round1_held_out_rl_texts_508: { start: { p: 0.929, r: 0.959, partial: 21, miss: 0 }, rl: { p: 0.833, r: 0.884, partial: 57, miss: 2 }, gf: { p: 0.943, r: 0.982, partial: 1, miss: 8 }, plain: { p: 0.996, r: 0.990, partial: 0, miss: 5 } }
+      round1_held_out_base_texts_200: { start: { f1: 0.968, miss: 0 }, rl: { f1: 0.924, partial: 11, miss: 2 }, gf: { f1: 0.978, miss: 2 }, plain: { f1: 0.963, miss: 3 } }
+      name_free_short_eval_neg_v1_flagged: { start: 4, rl: 9, gf: 4, plain: 5 }   # rl adds capitalised first words: 'Planning', 'Handover', 'Kickoff', 'Site walk', 'my Zoom'
+    outcome: "RL data closes the weakness it found (held-out attack misses 29 -> 0; name swaps 55 -> 5); generate-and-filter and plain only reduce it (8 and 11) and make the name-swap probe worse (89, 87). The cost of RL's narrow set: more boundary errors on round-1 held-out texts (partial overlaps 21 -> 57, precision 0.93 -> 0.83) and more name-free first words flagged (4 -> 9), consistent with a learned 'first word is a name' shortcut. All three arms get worse when the name is moved to the end (10 -> 18/40). First result where RL data beats generate-and-filter on its own weakness by a clear margin; one seed, development sets only. Next: mix (RL + gf data) to keep the fix without the shortcut."

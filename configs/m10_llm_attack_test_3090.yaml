@@ -1,0 +1,62 @@
+# Test of the LLM-writer harness (src/pii_redteam/training/llm_attack.py), 50 steps, before the
+# matched runs: does the loop work, what does a step cost in tokens and dollars, does pacing
+# avoid HTTP 429. Same detector, requests, filters and reward as configs/m10_attack_person_modal.yaml
+# (the 1000-step RL attack). 3090 copy: runs on the PC (detector on CPU, no GPU load); key from ~/.config/pii-redteam/mistral.env.
+# Do not run while a Modal job uses the same key.
+
+run_id_prefix: m10-llm-attack-test
+seed: 20261113
+work_dir: /home/gauthier/runs
+splits_dir: artifacts/splits
+locks:
+  final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
+
+bank:                              # same requests as the RL attack
+  seed: 20261113
+  n_signal: 32
+  n_train: 2000
+  exclude_banks:
+    - banks/v2_prompting/spark_seed20260920_v2_n20.jsonl
+
+detector:                          # retrained detector (round 1), the RL attack's target
+  path: /home/gauthier/runs/m10-retrain-rl-pilot-20261115-174807/d1-epoch3
+  sha256: 4755db737176bc63148531036a9d693457e38bd659974e4004e0a7b17e3d8233
+
+steps: 50
+requests_per_step: 4               # x texts_per_request = 32 detector queries, one GRPO step
+texts_per_request: 8
+post_heldout: true                 # 32 held-out requests x 8 texts with the final board
+
+writer:
+  model: zai-glm-5-3
+  temperature: 1.0
+  max_tokens: 4000                 # 8 texts need about 600; the rest is reasoning room
+  reasoning_effort: low            # GLM 5.3 at the default effort: ~7300 output tokens per call
+                                   # (m10-llm-attack-smoke-20261124-202012, $0.30 per step)
+  timeout_s: 300
+  attempts: 4
+
+board:                             # feedback shown to the writer each step
+  hardest: 8
+  easiest: 4
+  rejected: 6
+  max_chars: 300
+
+api:
+  api_key_env: MISTRAL_API_KEY
+  min_seconds_between_calls: 0.1   # at most 10 call starts per second on the shared key
+  max_usd: 5.0                     # stop the run once the estimated spend reaches this
+  pricing_usd_per_million:         # [input, output]; UNVERIFIED (2026-11-24 web listings)
+    zai-glm-5-3: [1.40, 4.40]          # third-party listing
+    mistral-large-2512: [0.50, 1.50]   # Mistral Large 3 list price
+    deepseek-v4-1-flash-1017: [1.00, 4.00]  # not found; deliberately high placeholder
+    mistral-medium-2604: [1.00, 4.00]  # not found; deliberately high placeholder (judge, audit)
+
+pacing:
+  seconds_between_steps: 2
+
+reward:
+  detector_score: { kind: log_odds, span: 10.0 }
+  opening_share: { full_reward_until: 0.25, zero_reward_from: 0.50, window: 256, min_other_texts: 128 }
+  person_judge: { model: mistral-medium-2604, api_key_env: MISTRAL_API_KEY, timeout_s: 60, max_workers: 16 }
+  audit: { model: mistral-medium-2604, api_key_env: MISTRAL_API_KEY, timeout_s: 30, max_workers: 16, reject_other_person: true }

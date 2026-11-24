@@ -1,0 +1,55 @@
+# M10 round 2, RL arm: the 1000-step person attacker (m10-attack-person-modal-20261124-064157,
+# attacked the RL-retrained detector, learned to open with the bare name) sampled once per
+# request. rl_aug_v2 = the first 316 accepted texts in request order (scripts/finalize_round2_aug.py).
+# The Modal launcher (scripts/modal_rl.py) overrides work_dir and splits_dir; the detector is
+# already on the volume. Same filters as rl_aug_v1 (validity, person judge, no other person by
+# the audit, no exact repeat). Bank seed 20261124: 600 fresh requests, none from the attack
+# run's 2032 (training + 32 held-out) requests, which are the held-out evaluation.
+run_id_prefix: m10-round2-rl-generate
+model_id: Qwen/Qwen3.5-2B
+seed: 20261124
+work_dir: artifacts/m10
+splits_dir: artifacts/splits
+locks:
+  final_eval_sha256: 513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c
+
+attacker:
+  adapter_path: /vol/runs/pilot-m10_attack_person_modal-20261124-064132/m10-attack-person-modal-20261124-064157/adapter  # Modal volume
+
+bank:
+  seed: 20261124
+  n: 600
+  prefix: aug
+  exclude_banks:
+    - banks/v2_prompting/spark_seed20260920_v2_n20.jsonl
+  exclude_rl_bank:                 # the long run's 32 held-out + 2000 training requests
+    seed: 20261113
+    n: 2032
+
+detector:                          # the retrained detector the attacker was trained against
+  path: /vol/detectors/retrained-rl-pilot-20261115-epoch3
+  sha256: 4755db737176bc63148531036a9d693457e38bd659974e4004e0a7b17e3d8233
+
+model:
+  quantize_4bit: false
+
+sampling:
+  temperature: 1.0
+  top_p: 1.0
+  batch_prompts: 16
+
+grpo:                              # read by the shared sampling code
+  num_generations: 1
+  max_completion_length: 192
+
+reward:
+  person_judge:
+    model: mistral-medium-2604
+    api_key_env: MISTRAL_API_KEY
+    timeout_s: 60
+    max_workers: 32
+  audit:
+    model: mistral-medium-2604
+    api_key_env: MISTRAL_API_KEY
+    timeout_s: 30
+    max_workers: 32

@@ -1,0 +1,89 @@
+{
+  "file": "data/synthetic/rl_aug_v2.jsonl",
+  "sha256": "9a09b5e127b1d1192ed0d0eb719e426b2f215e7d800863ff51a8059417edd433",
+  "rows": 316,
+  "names": 316,
+  "source": {
+    "run_id": "m10-round2-rl-generate-20261124-195140",
+    "accepted_sha256": "548227b79fece00144f8e35a4e7b284b221a47b92711a65932f5482c6700db10",
+    "pool": {
+      "generated": 600,
+      "decisions": {
+        "rejected:invalid:name_not_person": 14,
+        "accepted": 569,
+        "rejected:invalid:too_long": 5,
+        "rejected:invalid:name_missing": 5,
+        "rejected:other_person": 3,
+        "rejected:invalid:name_dup": 2,
+        "rejected:invalid:json": 1,
+        "rejected:invalid:refusal": 1
+      },
+      "accepted": 569,
+      "accepted_names": 569,
+      "accepted_detector_misses": 61,
+      "accepted_misses_by_context": {
+        "informal_text_with_typos": 20,
+        "third_person_report": 4,
+        "chat_message": 4,
+        "forwarded_email_thread": 8,
+        "support_ticket": 7,
+        "email_with_signature": 6,
+        "appointment_reminder": 4,
+        "form_record_line": 4,
+        "meeting_notes": 2,
+        "list_or_table_row": 2
+      },
+      "accepted_by_context": {
+        "email_with_signature": 55,
+        "forwarded_email_thread": 57,
+        "meeting_notes": 58,
+        "chat_message": 60,
+        "appointment_reminder": 58,
+        "list_or_table_row": 59,
+        "informal_text_with_typos": 54,
+        "third_person_report": 56,
+        "support_ticket": 56,
+        "form_record_line": 56
+      },
+      "accepted_top_openings": {
+        "is": 143,
+        "hello": 96,
+        "i": 77,
+        "hi": 69,
+        "hey": 68,
+        "a": 25,
+        "good": 24,
+        "hope": 9
+      },
+      "accepted_mean_words": 38.4
+    }
+  },
+  "filters": "validity v2, person judge (mistral-medium-2604), audit other_person false, no exact repeat",
+  "scored_by": "retrained-rl-pilot-20261115-epoch3 (4755db73...)",
+  "detector_misses": 38,
+  "name_first": 316,
+  "top_openings_after_name": {
+    "is": 79,
+    "hello": 48,
+    "hi": 43,
+    "i": 42,
+    "hey": 42,
+    "a": 16,
+    "good": 15,
+    "hope": 6
+  },
+  "by_context": {
+    "email_with_signature": 30,
+    "forwarded_email_thread": 32,
+    "meeting_notes": 34,
+    "chat_message": 33,
+    "appointment_reminder": 31,
+    "list_or_table_row": 33,
+    "informal_text_with_typos": 32,
+    "third_person_report": 30,
+    "support_ticket": 31,
+    "form_record_line": 30
+  },
+  "attacker": "m10-attack-person-modal-20261124-064157 adapter (1000 steps)",
+  "selection": "accepted texts in request order"
+}
