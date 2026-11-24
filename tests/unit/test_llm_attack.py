@@ -2,7 +2,17 @@ import json
 import unittest
 from unittest import mock
 
-from pii_redteam.training.llm_attack import Board, Pacer, UsageMeter, Writer, metered, parse_texts
+from pii_redteam.training.llm_attack import (
+    Board,
+    BoardV2,
+    Pacer,
+    UsageMeter,
+    Writer,
+    metered,
+    name_position,
+    parse_answers,
+    parse_texts,
+)
 
 
 class FakeClock:
@@ -88,6 +98,43 @@ class BoardTest(unittest.TestCase):
         self.assertIn("1 missed", text)
         self.assertIn('"Ana l..."', text)
         self.assertIn("reason=invalid:name_not_person", text)
+
+
+class V2Test(unittest.TestCase):
+    def test_parse_answers(self) -> None:
+        answer = json.dumps({"hypothesis": "h", "answers": [["a"], ["b", "c", "d"]]})
+        self.assertEqual(parse_answers(answer, 2, 2), ("h", [["a", ""], ["b", "c"]]))
+        self.assertIsNone(parse_answers(answer, 3, 2))
+        self.assertIsNone(parse_answers('{"answers": [["a"], [1]]}', 2, 2))
+        objects = json.dumps({"answers": [[{"text": "a"}], ["b"]]})
+        self.assertEqual(parse_answers(objects, 2, 1), ("", [["a"], ["b"]]))
+        nested = json.dumps({"answers": [[json.dumps({"text": "a"})], ["{b"]]})
+        self.assertEqual(parse_answers(nested, 2, 1), ("", [["a"], ["{b"]]))
+
+    def test_name_position(self) -> None:
+        self.assertEqual(name_position('"Bob, hi there', "Bob"), "first word")
+        self.assertEqual(name_position("Hi Bob, see you at noon today", "Bob"), "first third")
+        self.assertEqual(name_position("see you at noon today Bob", "Bob"), "last third")
+        self.assertEqual(name_position("nothing", "Bob"), "absent")
+
+    def test_board_v2_render(self) -> None:
+        board = BoardV2(misses=5, closest=5, easiest=5, rejected=5, max_chars=50)
+        row = {"context": "email", "reward": 0.5}
+        board.add(
+            [
+                {**row, "name": "Ana", "text": "Ana, hi", "status": "valid", "p": 0.2},
+                {**row, "name": "Ana", "text": "Hi Ana", "status": "valid", "p": 0.9},
+                {**row, "name": "Ana", "text": "Ana again", "status": "valid", "p": 0.95},
+                {**row, "name": "Bo", "text": "Bo Bo", "status": "invalid:name_dup", "p": None},
+            ]
+        )
+        text = board.render("names first")
+        self.assertIn("Every miss so far", text)
+        self.assertIn("first word: 2, 1", text)
+        self.assertEqual(text.count("Closest to a miss"), 1)
+        self.assertIn("Your previous round", text)
+        self.assertIn("rejected: invalid:name_dup", text)
+        self.assertIn("Your hypothesis last round: names first", text)
 
 
 if __name__ == "__main__":
