@@ -964,3 +964,13 @@ Findings (read-only analysis of the saved samples, target detector rescoring mat
   split/name policies recorded as R05/R06; pseudo-name filter approved and implemented (R07).
   No training, no paid spend, no final-test use.
   M03.1/M05.1 gate closed (8/8 PASS on the 2026-10-04 re-run).
+
+## Repository housekeeping (2026-11-24)
+
+All work is on `main` and pushed; every other branch was deleted locally and on GitHub (the
+squash-merged PR branches, plus the two below). The D1 training and freeze pipeline that produced
+the target detector (`d1-frozen-d1v2-20261110-075731`: `train_d1.py`, `freeze_d1.py`,
+`freeze_gates.py`, `overnight.py`, `d1_metrics.py`, the m07b configs and Colab notebooks) was never
+merged to `main`. It is kept in the pushed tags `archive/feat-m07b-freeze-d1` (676ce54) and
+`archive/feat-m07b-train-d1` (b8550eb). M13 reproducibility needs it brought back to `main` or
+cited by tag.
