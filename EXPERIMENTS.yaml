@@ -559,3 +559,23 @@ runs:
       misses: { target: { orig: "31/40", hi_prefix: "25/40", swap_name: "90/240", name_at_end: "12/40" }, rl_retrained: { orig: "38/40", hi_prefix: "5/40", swap_name: "55/240", name_at_end: "10/40" }, gf_retrained: { orig: "15/40", hi_prefix: "3/40", swap_name: "34/240", name_at_end: "4/40" } }
       swap_spread_rl: "20 of 40 contexts miss no swapped name, 20 miss at least one, 2 miss all six"
     outcome: "A real weakness, not an exploit: a name as the very first word, before certain continuations (often third-person bios: 'X is a well-respected professional...'), is missed with ordinary names too (23% of swaps for the RL-retrained detector, 14% for generate-and-filter, 38% for the target). A word in front ('Hi ') mostly fixes it for the retrained detectors. Half the contexts fail only with the original name. Contradicts probe-first-name-start-20261118 (fixed short templates, <= 2/20): the attacker found continuations those templates did not cover. Selection caveat: the 40 texts were chosen as misses, so the 'orig' row is inflated by design; the swap rows are the fair numbers."
+
+  - run_id: m10-cooldown-test-20261124-065619
+    kind: infrastructure-test
+    milestone: M10 (3090 workaround)
+    executed: 2026-11-24
+    where: RTX 3090 (alone, uncapped 370 W)
+    repo_commit: "14574f0"
+    config: configs/m10_cooldown_test_3090.yaml
+    artifacts: "rtx3090:~/runs/m10-cooldown-test-20261124-065619/, ~/runs/gpu_telemetry_20261124_cooldown.csv"
+    checks: { pass: 1, fail: 0 }   # survived the 30-minute cap and the post-RL sampling
+    metrics:
+      cooldown_settings: { max_temp_c: 70, resume_temp_c: 50, min_pause_seconds: 10, max_pause_seconds: 120 }
+      steps_done: 76
+      sec_per_step: 23.6   # about 6 without pauses
+      pauses: 76            # after every step
+      paused_seconds: 1357  # of 1791 training seconds (76%)
+      gpu_busy_minutes: "about 7"
+      max_core_temp_c: 76
+      thermal_flag_share: { all_samples: "110/2146", busy_samples: "124/177 (util >= 50%)" }
+    outcome: "No crash in 30 minutes, but the pauses took 76% of the time: about 7 minutes of real GPU work, less than the ~10 minutes of load before the earlier drops. Inconclusive on whether pausing prevents the drop. While busy the card still hits a thermal limit within seconds (flags in 70% of busy samples), which supports the overheating diagnosis. Next: a longer test with milder pauses, to accumulate 20+ minutes of GPU work."
