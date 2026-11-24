@@ -38,6 +38,7 @@ from ..prompt_compare import _device_dtype, _generate
 from ..requests import CONTEXT_TYPE_LABELS, load_person_name_pool
 from ..run_io import write_jsonl
 from .detector_scorer import DetectorScorer
+from .gpu_cooldown import cooldown_from_config
 from .grpo_compat import build_grpo_config
 from .opening_share import OpeningShare
 from .person_judge import AUDIT_FIELDS, MISTRAL_CHAT_URL, PersonJudge, TextAudit, http_transport
@@ -475,6 +476,7 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
         restrict_vllm_to_language_model()
     lora = config["lora"]
     stopper = WallClockStop(config["max_minutes"], config.get("stop_at_step"))
+    cooldown = cooldown_from_config(config)
     trainer = TimedGRPOTrainer(
         model=model,
         reward_funcs=reward,
@@ -489,13 +491,15 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
             target_modules=lora["target_modules"],
             task_type="CAUSAL_LM",
         ),
-        callbacks=[stopper],
+        callbacks=[stopper] + ([cooldown] if cooldown else []),
     )
     if device == "cuda" and dtype == torch.float16:
         print(f"fp16 run: {upcast_trainable_params_to_fp32(model)} trainable tensors cast to fp32")
     started_training = time.time()
     trainer.train(resume_from_checkpoint=config.get("resume_from_checkpoint"))
     train_seconds = time.time() - started_training
+    if cooldown:
+        cooldown.close()
     trainer.save_model(adapter_path)
     steps_done = trainer.state.global_step
     report["training"] = {
@@ -503,6 +507,7 @@ def run_rl_smoke(config: dict, repo_dir: str) -> dict:
         "train_seconds": round(train_seconds, 1),
         "sec_per_step": round(train_seconds / max(steps_done, 1), 2),
         "wall_clock_stop": stopper.triggered,
+        "gpu_cooldown": cooldown.summary() if cooldown else None,
         "timing": timing_summary(
             [e["step_time"] for e in trainer.state.log_history if "step_time" in e],
             trainer.generation_seconds,

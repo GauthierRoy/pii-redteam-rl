@@ -45,6 +45,7 @@ from pii_redteam.train_detector import (  # noqa: E402
     _load_ai4privacy,
     predict_spans,
 )
+from pii_redteam.training.gpu_cooldown import GpuCooldown  # noqa: E402
 
 MODEL_ID = "answerdotai/ModernBERT-base"
 FINAL_EVAL_SHA = "513335badf5752a340698d3c7efa7029a8780c51fde2675c80ef4208ce27d39c"
@@ -79,6 +80,9 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=20260920)
     parser.add_argument("--max-length", type=int, default=512)
     parser.add_argument("--limit", type=int, default=0, help="smoke test: first N train/dev rows")
+    parser.add_argument(
+        "--cooldown", action="store_true", help="pause while the GPU runs hot (gpu_cooldown.py)"
+    )
     args = parser.parse_args()
     os.makedirs(args.out, exist_ok=True)
     random.seed(args.seed)
@@ -148,6 +152,7 @@ def main() -> None:
         "data": {"train_rows": len(train_rows), "dev_rows": len(dev_rows)},
         "epochs": [],
     }
+    cooldown = GpuCooldown() if args.cooldown else None
     best_f1 = -1.0
     started = time.time()
     for epoch in range(1, args.epochs + 1):
@@ -161,6 +166,8 @@ def main() -> None:
             optimizer.step()
             scheduler.step()
             optimizer.zero_grad()
+            if cooldown:
+                cooldown.cool_down()
             if step % 200 == 0:
                 print(f"epoch {epoch} step {step}/{len(loader)} loss {loss.item():.4f}", flush=True)
         model.eval()
@@ -182,6 +189,8 @@ def main() -> None:
             **scored,
             "short_eval_neg_v1_flagged": sum(1 for p in neg_preds if p),
         }
+        if cooldown:
+            entry["gpu_cooldown"] = cooldown.summary()
         report["epochs"].append(entry)
         print(
             json.dumps({k: entry[k] for k in ("epoch", "seconds")} | {"dev_f1": dev["span_f1"]}),
