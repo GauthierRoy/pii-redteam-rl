@@ -647,3 +647,21 @@ runs:
       round1_held_out_base_texts_200: { start: { f1: 0.968, miss: 0 }, rl: { f1: 0.924, partial: 11, miss: 2 }, gf: { f1: 0.978, miss: 2 }, plain: { f1: 0.963, miss: 3 } }
       name_free_short_eval_neg_v1_flagged: { start: 4, rl: 9, gf: 4, plain: 5 }   # rl adds capitalised first words: 'Planning', 'Handover', 'Kickoff', 'Site walk', 'my Zoom'
     outcome: "RL data closes the weakness it found (held-out attack misses 29 -> 0; name swaps 55 -> 5); generate-and-filter and plain only reduce it (8 and 11) and make the name-swap probe worse (89, 87). The cost of RL's narrow set: more boundary errors on round-1 held-out texts (partial overlaps 21 -> 57, precision 0.93 -> 0.83) and more name-free first words flagged (4 -> 9), consistent with a learned 'first word is a name' shortcut. All three arms get worse when the name is moved to the end (10 -> 18/40). First result where RL data beats generate-and-filter on its own weakness by a clear margin; one seed, development sets only. Next: mix (RL + gf data) to keep the fix without the shortcut."
+
+  - run_id: m10-llm-attack-test-20261124-202829
+    kind: llm-attack
+    milestone: M10 (LLM-writer arm, harness test)
+    executed: 2026-11-24
+    where: RTX 3090 PC (CPU scoring), Mistral API
+    repo_commit: "f76b3fb"
+    config: configs/m10_llm_attack_test_3090.yaml
+    artifacts: "rtx3090:~/runs/m10-llm-attack-test-20261124-202829/ (llm_attack_report.json, train_texts.jsonl, samples_post.jsonl), ~/runs/m10_llm_attack_test.log"
+    checks: { pass: 1, fail: 0 }   # 50 steps + held-out, no failed writer call, no HTTP 429
+    metrics:
+      setup: { writer: "zai-glm-5-3, reasoning_effort low, 4 requests x 8 texts per step, board of 8 hardest / 4 easiest / 6 rejected", detector: "RL-retrained (4755db73...), same requests and reward as the 1000-step RL attack", steps: 50 }
+      smoke_runs: "m10-llm-attack-smoke-20261124-202012 (default reasoning: ~7300 output tokens per call, $0.30/step, 8 texts lost to max_tokens); -2033xx (low: $0.02/step)"
+      cost: { estimated_usd: 1.55, writer_usd: 0.91, judge_audit_usd: 0.64, note: "unverified list prices; judge price a high placeholder", writer_tokens: { in: 365884, out: 89696, reasoning: 17818 }, judge_audit_calls: 3566, wall_minutes: "about 13" }
+      train: { texts: 1600, valid: 1406, misses: "14 (1.0%)", misses_by_10_steps: [8, 1, 0, 5, 0], mean_reward_by_10_steps: [-0.007, 0.006, 0.110, 0.122, 0.047], name_not_person_rejected: 101 }
+      post_heldout: { valid: "213/256", misses: "7/213 (3.3%)", names_with_a_miss: "5/32 (Princep 2, Pham 2, Bob, Nergiz, Sothy)", median_p: 0.9996 }
+      compare: { base_model_pool_round2: "5/1585 (0.3%)", rl_attack_heldout: { pre: "0/182", post_1000_steps: "29/240 (12%), 9 names" } }
+    outcome: "The harness works (tokens, price, pacing, cap). GLM 5.3 with feedback finds few misses: 1.0% in training (8 of 14 on one name in one step) and 7/213 held out, mostly on names that are hard for every detector (Pham, Sothy, Bob) inside ticket/table texts. No learned pattern; reward flat after step 30. Better than the base model (0.3%) and than RL at step 50, far below RL after 1000 steps (12%). Full 1000-step budget would cost about $30 at these prices. Single short run."
