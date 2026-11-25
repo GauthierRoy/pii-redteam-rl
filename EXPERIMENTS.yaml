@@ -665,3 +665,20 @@ runs:
       post_heldout: { valid: "213/256", misses: "7/213 (3.3%)", names_with_a_miss: "5/32 (Princep 2, Pham 2, Bob, Nergiz, Sothy)", median_p: 0.9996 }
       compare: { base_model_pool_round2: "5/1585 (0.3%)", rl_attack_heldout: { pre: "0/182", post_1000_steps: "29/240 (12%), 9 names" } }
     outcome: "The harness works (tokens, price, pacing, cap). GLM 5.3 with feedback finds few misses: 1.0% in training (8 of 14 on one name in one step) and 7/213 held out, mostly on names that are hard for every detector (Pham, Sothy, Bob) inside ticket/table texts. No learned pattern; reward flat after step 30. Better than the base model (0.3%) and than RL at step 50, far below RL after 1000 steps (12%). Full 1000-step budget would cost about $30 at these prices. Single short run."
+
+  - run_id: m10-llm-attack-v2-20261124
+    kind: llm-attack
+    milestone: M10 (LLM-writer arm, board v2, three writers)
+    executed: 2026-11-24/25 (one chain overnight, scripts/run_llm_v2_3090.sh)
+    where: RTX 3090 PC (CPU scoring), Mistral API
+    repo_commit: "942fb32"
+    config: "configs/m10_llm_attack_v2_{large,deepseek,glm}_3090.yaml"
+    artifacts: "rtx3090:~/runs/m10-llm-attack-v2-{large-20261124-210259,deepseek-20261124-221923,glm-20261125-000234}/ (llm_attack_report.json, train_texts.jsonl, samples_post.jsonl, hypotheses.jsonl), ~/runs/m10_llm_v2.log"
+    checks: { pass: 3, fail: 0 }   # each: 200 steps, stop_reason 'steps done', spend under cap; GLM 1 failed writer call (retried)
+    metrics:
+      setup: { steps: 200, per_step: "one writer call for 4 requests x 8 texts (32 detector queries, as one GRPO step)", board: "v2: stats by kind and name position, up to 100 misses, 60 near misses, 20 easy finds, rejected examples, last 3 rounds, hypothesis memory (~13-16k prompt tokens)", detector: "RL-retrained (4755db73...), same requests, filters and reward as the 1000-step RL attack" }
+      mistral_large_2512: { reasoning: none, wall_min: 76, usd: { total: 3.78, writer: 1.73, judge_audit: 2.05 }, train: "276/5099 valid missed (5.4%), 35 in the last 10 steps", post_heldout: "25/194 valid (12.9%), 8 names", distinct_miss_frames: 23, pattern: "terse bureaucratic fragments: 'Princep to review output for accuracy. No further notes.', 'logged under Pham'" }
+      deepseek_v4_1_flash: { reasoning: low, wall_min: 103, usd: { total: 10.36, writer: 8.00, judge_audit: 2.35, note: "writer price a high placeholder; 926k reasoning tokens" }, train: "399/5932 (6.7%), 26-43 per 10 steps after step 110", post_heldout: "55/237 (23.2%), 12 names", distinct_miss_frames: 39, pattern: "routine admin lines with the name as action owner or recipient: 'Pham to review before close', 'leave sheet at desk for D'altilia'" }
+      glm_5_3: { reasoning: low, wall_min: 68, usd: { total: 11.05, writer: 8.56, judge_audit: 2.49 }, train: "1681/5933 (28.3%), 108-149 per 10 steps after step 110", post_heldout: "104/242 (43.0%), 24 names", distinct_miss_frames: 1, pattern: "one frame from step 7 on (5557/6400 training texts): '... it was logged that the caller relayed it verbatim per the intake line, holder of record on file since intake: NAME, documents: 3, clearance pending, review 03/2026.'", judge_flags_on_misses: "natural false 9/104, fits_format false 14/104 (recorded, not enforced)" }
+      compare_rl_1000_steps: { post_heldout: "29/240 (12.1%), 9 names, 15 distinct miss frames", cost_usd: 3.9 }
+    outcome: "With the large board, every writer reaches or beats the 1000-step RL attacker on held-out misses at 200 steps: Large 12.9% (on par, ~same cost), DeepSeek 23% (more varied), GLM 43% (highest, but one fixed template with a colon slot; a single exploit, not a family). GLM 5.3 with the v1 board found 3% at 50 steps: the feedback context, not the model, made the difference. The naturalness and format judgments are recorded but not enforced, so GLM's template passes. Questions this raises: whether these texts patch the detector as well as RL's (round-2 style retrain), and whether a diversity guard beyond the opening-share one is needed for both arms. Single run per writer, prices unverified."
