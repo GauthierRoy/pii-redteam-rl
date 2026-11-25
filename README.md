@@ -41,9 +41,12 @@ What the pilots show so far (details and numbers in `EXPERIMENTS.yaml`):
   texts but almost never ones the detector misses (0.3% vs 10.7%). Cost: RL's narrow set adds
   boundary errors and false positives on capitalised first words.
 - **LLM-writer arm** (a large API model with the detector's feedback, same requests, filters
-  and reward): GLM 5.3 with a small board found little (50 steps); Mistral Large with the large
-  board v2 reached 25/194 held-out misses in 200 steps, on par with RL, with a different pattern
-  (terse bureaucratic fragments). DeepSeek and GLM v2 runs in progress.
+  and reward): with a small board GLM 5.3 found little (3% held-out misses at 50 steps). With
+  the large board v2, 200 steps each, held-out misses were Mistral Large 25/194 (13%, $3.8),
+  DeepSeek 55/237 (23%, $10.4) and GLM 5.3 104/242 (43%, $11.1), against RL's 29/240 (12%,
+  $3.9, 1000 steps). GLM's misses are all one template ("holder of record on file since
+  intake: NAME, ..."); DeepSeek's and Large's are varied admin fragments ("Pham to review
+  before close"). Whether these texts patch the detector as well as RL's is not tested yet.
 
 ## Quickstart
 
